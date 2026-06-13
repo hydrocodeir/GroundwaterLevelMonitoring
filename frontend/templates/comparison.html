@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#11395B">
+    <title>مقایسه آبخوان‌ها | سامانه پایش آب زیرزمینی</title>
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}">
+    <script defer src="{{ url_for('assets', path='js/echarts.min.js') }}"></script>
+    <script defer src="{{ url_for('assets', path='js/comparison.js') }}"></script>
+  </head>
+  <body class="relative isolate min-h-screen bg-mist">
+    <div class="fixed inset-x-0 top-0 -z-10 h-[25rem] overflow-hidden bg-gradient-to-bl from-navy via-[#14506d] to-teal">
+      <div class="absolute -left-28 -top-28 h-96 w-96 rounded-full border-[80px] border-white/[0.03]"></div>
+      <div class="absolute right-[18%] top-20 h-72 w-72 rounded-full bg-aqua/[0.06] blur-3xl"></div>
+    </div>
+
+    <header class="mx-auto max-w-[1800px] px-4 pb-8 pt-6 md:px-8 md:pt-8">
+      <div class="flex items-center justify-between text-white">
+        <div class="flex items-center gap-3">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-lg font-bold">D2D</div>
+          <div>
+            <div class="text-sm font-bold">سامانه پایش آب زیرزمینی</div>
+            <div class="mt-0.5 text-[10px] text-slate-300">تحلیل مقایسه‌ای آبخوان‌ها</div>
+          </div>
+        </div>
+        <a class="rounded-xl border border-white/15 bg-white/[0.08] px-4 py-2 text-xs text-slate-100 transition hover:bg-white/15" href="/">بازگشت به داشبورد آبخوان</a>
+      </div>
+
+      <div class="mt-10 flex flex-col justify-between gap-5 text-white lg:flex-row lg:items-end">
+        <div>
+          <div class="mb-3 flex items-center gap-3 text-xs font-medium text-aqua">
+            <span class="h-px w-8 bg-aqua"></span>
+            نمای استانی و مقایسه یکپارچه
+          </div>
+          <h1 class="text-3xl font-bold leading-relaxed tracking-tight md:text-5xl">مقایسه همه آبخوان‌ها</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-200">
+            مقایسه افت مشاهده‌شده ابتدا تا انتهای بازه و نرخ افت خط روند، فقط بر اساس پیزومترهای پوشش‌دهنده کل دوره انتخابی
+          </p>
+        </div>
+        <div id="comparisonPeriodBadge" dir="ltr" class="rounded-xl border border-white/15 bg-white/[0.08] px-5 py-3 text-sm font-bold text-white">
+          در حال آماده‌سازی...
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-[1800px] space-y-6 px-4 pb-16 md:px-8">
+      <form id="comparisonFilters" class="panel overflow-hidden">
+        <div class="flex flex-col justify-between gap-3 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center">
+          <div>
+            <h2 class="text-sm font-bold text-navy">تنظیم بازه و روش محاسبه</h2>
+            <p class="mt-1 text-[11px] leading-5 text-slate-500">
+              دوره قابل انتخاب از کل دامنه واقعی فایل داده ساخته می‌شود؛ آبخوان فاقد پوشش کافی به‌صورت خاکستری مشخص خواهد شد.
+            </p>
+          </div>
+          <div class="rounded-lg bg-teal/5 px-3 py-2 text-[10px] font-medium text-teal">
+            فیلتر پوشش کل بازه همیشه فعال است
+          </div>
+        </div>
+        <div class="grid gap-4 p-5 md:p-6 xl:grid-cols-[1fr_1fr_1.2fr_auto] xl:items-end">
+          <fieldset class="date-fieldset">
+            <legend>شروع بازه</legend>
+            <label>
+              <span class="field-label">سال</span>
+              <select id="comparisonStartYear" class="field year-field"></select>
+            </label>
+            <label>
+              <span class="field-label">ماه</span>
+              <select id="comparisonStartMonth" class="field"></select>
+            </label>
+          </fieldset>
+          <fieldset class="date-fieldset">
+            <legend>پایان بازه</legend>
+            <label>
+              <span class="field-label">سال</span>
+              <select id="comparisonEndYear" class="field year-field"></select>
+            </label>
+            <label>
+              <span class="field-label">ماه</span>
+              <select id="comparisonEndMonth" class="field"></select>
+            </label>
+          </fieldset>
+          <label class="filter-toggle">
+            <input id="comparisonMethod" type="checkbox" class="peer sr-only" checked>
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span>
+              <strong id="comparisonMethodTitle" class="block text-xs font-bold text-navy">میانگین وزنی تیسن</strong>
+              <small class="mt-1 block text-[10px] leading-5 text-slate-500">
+                روشن: تیسن · خاموش: میانگین حسابی
+              </small>
+            </span>
+          </label>
+          <button id="applyComparisonFilters" type="submit" class="primary-button">
+            <span>به‌روزرسانی مقایسه</span>
+            <span aria-hidden="true">←</span>
+          </button>
+        </div>
+      </form>
+
+      <section id="comparisonStats" class="grid grid-cols-2 gap-4 lg:grid-cols-4"></section>
+
+      <section id="comparisonLoading" class="panel flex min-h-72 items-center justify-center p-8 text-center">
+        <div>
+          <span class="mx-auto block h-10 w-10 animate-spin rounded-full border-4 border-teal/20 border-t-teal"></span>
+          <p class="mt-4 text-sm font-medium text-slate-500">در حال محاسبه مقایسه همه آبخوان‌ها...</p>
+        </div>
+      </section>
+
+      <section id="comparisonMaps" class="hidden overflow-hidden rounded-3xl border border-slate-200/70 bg-slate-200 shadow-card">
+        <div class="grid gap-px lg:grid-cols-2">
+          <article class="bg-white">
+            <header class="map-analysis-header min-h-[142px] items-start">
+              <div>
+                <span class="section-kicker">تغییر مشاهده‌شده</span>
+                <h2 class="mt-1 text-base font-bold text-navy">افت تجمعی ابتدا تا انتهای بازه</h2>
+                <p id="observedMapSummary" class="mt-1 text-[10px] leading-5 text-slate-500"></p>
+                <div id="observedClassLegend" class="mt-3 flex flex-wrap gap-1.5 text-[9px]"></div>
+              </div>
+              <div class="flex shrink-0 items-center gap-3">
+                <div class="tab-list" role="tablist" aria-label="نمای افت تجمعی">
+                  <button type="button" class="tab-button is-active" data-comparison-tab="observed" data-view="map">نقشه</button>
+                  <button type="button" class="tab-button" data-comparison-tab="observed" data-view="table">جدول</button>
+                </div>
+                <span class="map-analysis-swatch heat"></span>
+              </div>
+            </header>
+            <div data-comparison-panel="observed-map">
+              <div id="observedComparisonMap" class="h-[680px] w-full"></div>
+            </div>
+            <div data-comparison-panel="observed-table" class="hidden">
+              <div id="observedComparisonTable" class="flex h-[680px] flex-col"></div>
+            </div>
+          </article>
+
+          <article class="bg-white">
+            <header class="map-analysis-header min-h-[142px] items-start">
+              <div>
+                <span class="section-kicker">روند بلندمدت بازه</span>
+                <h2 class="mt-1 text-base font-bold text-navy">نرخ افت روندی آبخوان‌ها</h2>
+                <p id="trendMapSummary" class="mt-1 text-[10px] leading-5 text-slate-500"></p>
+                <div id="trendClassLegend" class="mt-3 flex flex-wrap gap-1.5 text-[9px]"></div>
+              </div>
+              <div class="flex shrink-0 items-center gap-3">
+                <div class="tab-list" role="tablist" aria-label="نمای نرخ افت روندی">
+                  <button type="button" class="tab-button is-active" data-comparison-tab="trend" data-view="map">نقشه</button>
+                  <button type="button" class="tab-button" data-comparison-tab="trend" data-view="table">جدول</button>
+                </div>
+                <span class="map-analysis-swatch heat"></span>
+              </div>
+            </header>
+            <div data-comparison-panel="trend-map">
+              <div id="trendComparisonMap" class="h-[680px] w-full"></div>
+            </div>
+            <div data-comparison-panel="trend-table" class="hidden">
+              <div id="trendComparisonTable" class="flex h-[680px] flex-col"></div>
+            </div>
+          </article>
+        </div>
+        <div class="border-t border-slate-100 bg-white px-5 py-4 text-[10px] leading-6 text-slate-500">
+          مقدار مثبت و قرمز نشان‌دهنده افت، مقدار منفی و آبی نشان‌دهنده افزایش تراز و سفید نشان‌دهنده تغییر تقریباً صفر است. آبخوان خاکستری داده کافی برای شاخص انتخابی ندارد.
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

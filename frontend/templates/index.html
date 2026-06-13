@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#11395B">
+    <title>داشبورد پایش آب زیرزمینی</title>
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/leaflet.css') }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}">
+    <script defer src="{{ url_for('assets', path='js/htmx.min.js') }}"></script>
+    <script defer src="{{ url_for('assets', path='js/leaflet.js') }}"></script>
+    <script defer src="{{ url_for('assets', path='js/echarts.min.js') }}"></script>
+    <script defer src="{{ url_for('assets', path='js/app.js') }}"></script>
+  </head>
+  <body class="relative isolate min-h-screen bg-mist">
+    <div class="fixed inset-x-0 top-0 -z-10 h-[30rem] overflow-hidden bg-gradient-to-bl from-navy via-[#14506d] to-teal">
+      <div class="absolute -left-28 -top-28 h-96 w-96 rounded-full border-[80px] border-white/[0.03]"></div>
+      <div class="absolute right-[18%] top-24 h-72 w-72 rounded-full bg-aqua/[0.06] blur-3xl"></div>
+    </div>
+    <header class="mx-auto max-w-[1600px] px-4 pb-9 pt-6 md:px-8 md:pt-8">
+      <div class="mb-10 flex items-center justify-between text-white">
+        <div class="flex items-center gap-3">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-lg font-bold">D2D</div>
+          <div>
+            <div class="text-sm font-bold">سامانه پایش آب زیرزمینی</div>
+            <div class="mt-0.5 text-[10px] text-slate-300">داشبورد تحلیلی پیزومترها</div>
+          </div>
+        </div>
+        <div class="flex gap-3 text-xs text-slate-200">
+          <a class="rounded-xl border border-white/15 bg-white/[0.08] px-4 py-2 transition hover:bg-white/15" href="/comparison">مقایسه همه آبخوان‌ها</a>
+          <!-- <span class="hidden rounded-xl border border-white/15 bg-white/[0.08] px-4 py-2 md:inline-block">کاملاً آفلاین</span> -->
+          <span class="rounded-xl border border-white/15 bg-white/[0.08] px-4 py-2">به‌روزرسانی داینامیک تیسن</span>
+        </div>
+      </div>
+
+      <div class="flex flex-col justify-between gap-6 text-white lg:flex-row lg:items-end">
+        <div>
+          <div class="mb-3 flex items-center gap-3 text-xs font-medium text-aqua">
+            <span class="h-px w-8 bg-aqua"></span>
+            تحلیل زمانی و مکانی آبخوان‌ها
+          </div>
+          <h1 class="text-3xl font-bold leading-relaxed tracking-tight md:text-5xl">پایش تراز آب زیرزمینی</h1>
+          <p class="mt-3 max-w-2xl text-sm leading-7 text-slate-200">
+            نمای کلی آبخوان
+          </p>
+        </div>
+      </div>
+
+      <form
+        id="aquiferSelectionForm"
+        class="mt-8 overflow-hidden rounded-3xl border border-white/20 bg-white shadow-2xl shadow-navy/25"
+        hx-get="/partials/dashboard"
+        hx-target="#dashboardContent"
+        hx-swap="innerHTML"
+        hx-indicator="#loadingIndicator"
+      >
+        <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4 md:px-6">
+          <div>
+            <h2 class="text-sm font-bold text-navy">انتخاب محدوده گزارش</h2>
+            <p class="mt-1 text-[10px] text-slate-400">برای ورود به داشبورد، محدوده و آبخوان را مشخص کنید.</p>
+          </div>
+          <span class="hidden rounded-lg bg-teal/5 px-3 py-2 text-[10px] text-teal md:inline-block">{{ group_count }} گروه آبخوانی</span>
+        </div>
+        <input id="selectedAquiferId" type="hidden" name="aquifer_id">
+        <div class="border-b border-slate-100 px-5 pt-4 md:px-6">
+          <div class="selection-tab-list" role="tablist" aria-label="روش انتخاب آبخوان">
+            <button class="selection-tab-button is-active" type="button" data-selection-tab="map">انتخاب از روی نقشه</button>
+            <button class="selection-tab-button" type="button" data-selection-tab="dropdown">انتخاب از فهرست</button>
+          </div>
+        </div>
+        <div data-selection-panel="map" class="p-5 md:p-6">
+          <div class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+            <div class="flex flex-col justify-between gap-3 border-b border-slate-100 bg-white px-4 py-3 md:flex-row md:items-center">
+              <div>
+                <div class="text-xs font-bold text-navy">روی پلیگون آبخوان کلیک کنید</div>
+                <div class="mt-1 text-[10px] text-slate-500">محدوده‌های مطالعاتی در لایه زیرین و آبخوان‌ها در لایه انتخابی نمایش داده شده‌اند.</div>
+              </div>
+              <div id="selectedAquiferBadge" class="selection-badge">هنوز آبخوانی انتخاب نشده است</div>
+            </div>
+            <div id="aquiferSelectionMap" class="h-[500px] w-full"></div>
+          </div>
+        </div>
+        <div data-selection-panel="dropdown" class="hidden p-5 md:p-6">
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="block">
+              <span class="mb-2 block text-xs font-medium text-slate-500">محدوده مطالعاتی</span>
+              <select
+                class="field"
+                id="mahdoudeSelect"
+                name="mahdoude"
+                hx-get="/partials/aquifers"
+                hx-target="#aquiferSelect"
+                hx-trigger="change"
+                hx-swap="innerHTML"
+              >
+                {% for item in navigation %}
+                  <option value="{{ item.key }}">{{ item.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="block">
+              <span class="mb-2 block text-xs font-medium text-slate-500">آبخوان</span>
+              <select class="field" id="aquiferSelect">
+                {% if navigation %}
+                  {% for aquifer in navigation[0].aquifers %}
+                    <option value="{{ aquifer.id }}">{{ aquifer.name }} · {{ aquifer.well_count }} چاه</option>
+                  {% endfor %}
+                {% endif %}
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="flex justify-end border-t border-slate-100 bg-slate-50/60 p-5 md:px-6">
+          <button
+            id="showDashboardButton"
+            type="submit"
+            disabled
+            class="flex h-[50px] items-center justify-center gap-3 rounded-xl bg-coral px-7 text-sm font-bold text-white shadow-lg shadow-coral/20 transition hover:-translate-y-0.5 hover:bg-[#d95e41] focus:outline-none focus:ring-4 focus:ring-coral/20 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            نمایش داشبورد
+            <span aria-hidden="true">←</span>
+          </button>
+        </div>
+      </form>
+    </header>
+
+    <main class="mx-auto max-w-[1600px] px-4 pb-16 md:px-8">
+      <div id="loadingIndicator" class="htmx-indicator mb-5 flex items-center gap-3 rounded-2xl bg-white p-4 text-sm text-teal shadow-card">
+        <span class="h-3 w-3 animate-pulse rounded-full bg-teal"></span>
+        در حال آماده‌سازی داده‌های آبخوان...
+      </div>
+      <section id="dashboardContent">
+        <div class="panel flex min-h-64 flex-col items-center justify-center p-8 text-center">
+          <div class="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal/10 text-3xl text-teal">⌁</div>
+          <h2 class="text-xl font-bold text-navy">یک محدوده و آبخوان انتخاب کنید</h2>
+          <p class="mt-3 max-w-lg text-sm leading-7 text-slate-500">
+            نقشه موقعیت، آمار پایش، هیدروگراف معرف با روش میانگین حسابی و تیسن و نمودار تمام چاه‌ها نمایش داده می‌شود.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,396 @@
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn-arabic-400.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn-latin-400.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn-arabic-500.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn-latin-500.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn-arabic-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn-latin-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: "Vazirmatn", sans-serif;
+    background: #f4f8f8;
+  }
+
+  body {
+    color: #172a3a;
+    background-image:
+      radial-gradient(circle at 10% 20%, rgba(84, 198, 196, 0.08), transparent 26rem),
+      linear-gradient(180deg, #f4f8f8 0%, #f8fafc 100%);
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-3xl border border-slate-200/70 bg-white shadow-card;
+  }
+
+  .field {
+    @apply h-[50px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none transition hover:border-slate-300 focus:border-teal focus:ring-4 focus:ring-teal/10;
+  }
+
+  .field-label {
+    @apply mb-2 block text-[11px] font-medium text-slate-500;
+  }
+
+  .year-field {
+    direction: ltr;
+    font-variant-numeric: tabular-nums;
+    @apply text-left font-medium tracking-wide;
+  }
+
+  .date-fieldset {
+    @apply relative grid grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 pt-5;
+  }
+
+  .date-fieldset legend {
+    @apply absolute right-3 top-0 -translate-y-1/2 rounded-lg border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-navy shadow-sm;
+  }
+
+  .filter-toggle {
+    @apply flex min-h-[50px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 transition hover:border-teal/30 hover:bg-teal/[0.03];
+  }
+
+  .toggle-track {
+    @apply relative h-6 w-11 shrink-0 rounded-full bg-slate-300 transition peer-checked:bg-teal;
+  }
+
+  .toggle-thumb {
+    @apply absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition;
+  }
+
+  .primary-button {
+    @apply flex h-[50px] items-center justify-center gap-3 rounded-xl bg-navy px-6 text-sm font-bold text-white shadow-lg shadow-navy/15 transition hover:-translate-y-0.5 hover:bg-[#0b304e] disabled:cursor-wait disabled:opacity-60;
+  }
+
+  .secondary-button {
+    @apply rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 transition hover:border-teal/30 hover:text-teal;
+  }
+
+  .manual-well-panel {
+    @apply overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/50;
+  }
+
+  .manual-well-search {
+    @apply h-9 min-w-52 rounded-lg border border-slate-200 bg-white px-3 text-[11px] outline-none transition focus:border-teal focus:ring-4 focus:ring-teal/10;
+  }
+
+  .manual-well-list {
+    @apply grid max-h-72 grid-cols-1 gap-2 overflow-auto p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  }
+
+  .manual-well-option {
+    @apply flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-600 transition hover:border-teal/30;
+  }
+
+  .manual-well-option:has(input:checked) {
+    @apply border-teal/40 bg-teal/[0.05] text-navy;
+  }
+
+  .manual-well-option.is-disabled {
+    @apply cursor-not-allowed bg-slate-100 opacity-55;
+  }
+
+  .manual-well-option input {
+    accent-color: #087e8b;
+    @apply mt-0.5 h-4 w-4 shrink-0;
+  }
+
+  .stat-card {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-lg;
+  }
+
+  .chart-box {
+    @apply h-80 w-full;
+  }
+
+  .section-heading {
+    @apply flex min-h-[105px] flex-col justify-between gap-4 border-b border-slate-100 px-5 py-5 md:flex-row md:items-center md:px-6;
+  }
+
+  .section-kicker {
+    @apply text-[10px] font-bold uppercase tracking-wider text-teal;
+  }
+
+  .section-title {
+    @apply mt-1 text-base font-bold text-navy;
+  }
+
+  .section-description {
+    @apply mt-1 text-[11px] leading-5 text-slate-500;
+  }
+
+  .legend-item {
+    @apply flex items-center gap-1.5 whitespace-nowrap;
+  }
+
+  .legend-item i {
+    @apply h-2.5 w-2.5 rounded-full;
+  }
+
+  .map-filter-toggle {
+    @apply inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-medium text-slate-600 transition hover:border-teal/30 hover:bg-teal/[0.03];
+  }
+
+  .map-filter-toggle input {
+    accent-color: #087e8b;
+    @apply h-3.5 w-3.5 cursor-pointer;
+  }
+
+  .map-analysis-header {
+    @apply flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4;
+  }
+
+  .map-analysis-header h4 {
+    @apply text-sm font-bold text-navy;
+  }
+
+  .map-analysis-header p {
+    @apply mt-1 text-[10px] text-slate-500;
+  }
+
+  #contourInterval {
+    direction: ltr;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .map-analysis-swatch {
+    @apply h-8 w-8 shrink-0 rounded-xl border border-white shadow-sm ring-1 ring-slate-200;
+  }
+
+  .map-analysis-swatch.contour {
+    background: repeating-linear-gradient(135deg, #111827 0 2px, #ffffff 2px 7px);
+  }
+
+  .map-analysis-swatch.heat {
+    background: linear-gradient(135deg, #2563eb, #ffffff 50%, #dc2626);
+  }
+
+  .month-control-button {
+    @apply rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold text-slate-600 shadow-sm transition hover:border-teal/30 hover:text-teal disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .month-play-button {
+    @apply min-w-24 rounded-xl bg-navy px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-navy/15 transition hover:bg-[#0b304e];
+  }
+
+  .well-modal {
+    @apply fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-8;
+  }
+
+  .well-modal-backdrop {
+    @apply absolute inset-0 cursor-default bg-navy/55 backdrop-blur-sm;
+  }
+
+  .well-modal-card {
+    @apply relative z-10 max-h-[92vh] w-full max-w-5xl overflow-auto;
+  }
+
+  .modal-close-button {
+    @apply flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-2xl leading-none text-slate-500 transition hover:border-coral/30 hover:text-coral;
+  }
+
+  .tab-list {
+    @apply inline-flex shrink-0 rounded-xl bg-slate-100 p-1;
+  }
+
+  .selection-tab-list {
+    @apply inline-flex rounded-t-xl bg-slate-100 p-1;
+  }
+
+  .selection-tab-button {
+    @apply rounded-lg px-5 py-2.5 text-xs font-medium text-slate-500 transition hover:text-navy;
+  }
+
+  .selection-tab-button.is-active {
+    @apply bg-white font-bold text-teal shadow-sm;
+  }
+
+  .selection-badge {
+    @apply rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-medium text-slate-500 transition;
+  }
+
+  .selection-badge.is-selected {
+    @apply border-teal/30 bg-teal/[0.06] text-teal;
+  }
+
+  .tab-button {
+    @apply rounded-lg px-4 py-2 text-[11px] font-medium text-slate-500 transition hover:text-navy;
+  }
+
+  .tab-button.is-active {
+    @apply bg-white font-bold text-teal shadow-sm;
+  }
+
+  .table-scroll {
+    @apply overflow-auto;
+    scrollbar-color: #94a3b8 transparent;
+    scrollbar-width: thin;
+  }
+
+  .data-table {
+    @apply w-full min-w-max border-separate border-spacing-0 text-right text-xs;
+  }
+
+  .data-table th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 font-bold text-slate-600;
+  }
+
+  .data-table td {
+    @apply whitespace-nowrap border-b border-slate-100 px-4 py-3 text-slate-600;
+  }
+
+  .data-table tbody tr {
+    @apply transition hover:bg-teal/[0.03];
+  }
+
+  .data-table .group-heading {
+    @apply border-b-0 bg-navy px-4 py-2 text-center text-[10px] font-bold text-white;
+  }
+
+  .comparison-pagination {
+    @apply flex flex-col items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row;
+  }
+
+  .comparison-page-button {
+    @apply flex h-8 min-w-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-500 transition hover:border-teal/30 hover:text-teal disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .comparison-page-button.is-active {
+    @apply border-teal bg-teal text-white hover:text-white;
+  }
+
+  .metric-positive {
+    @apply font-bold text-coral;
+  }
+
+  .metric-negative {
+    @apply font-bold text-teal;
+  }
+
+  .trend-chip {
+    @apply inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px] font-medium;
+  }
+
+  .trend-chip.decline {
+    @apply border-coral/20 bg-coral/[0.06] text-coral;
+  }
+
+  .trend-chip.rise {
+    @apply border-teal/20 bg-teal/[0.06] text-teal;
+  }
+
+  .trend-chip.stable,
+  .trend-chip.insufficient {
+    @apply border-slate-200 bg-slate-50 text-slate-500;
+  }
+}
+
+.peer:checked + .toggle-track .toggle-thumb {
+  transform: translateX(1.25rem);
+}
+
+.leaflet-container {
+  font-family: "Vazirmatn", sans-serif;
+  background: #dcebea;
+}
+
+.leaflet-bar,
+.leaflet-control-layers {
+  border: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(17, 57, 91, 0.14) !important;
+}
+
+.well-marker {
+  border: 2px solid white;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(17, 57, 91, 0.35);
+}
+
+.well-marker.has-data {
+  background: #087e8b;
+}
+
+.well-marker.no-data {
+  background: #e76f51;
+}
+
+.precipitation-station-icon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 2px solid #7c3aed;
+  border-radius: 7px;
+  box-shadow: 0 3px 10px rgba(76, 29, 149, 0.3);
+  color: #6d28d9;
+  display: flex;
+  font-family: Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  justify-content: center;
+  line-height: 18px;
+}
+
+.precipitation-station-icon span {
+  transform: translateY(-1px);
+}
+
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 180ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}

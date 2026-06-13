@@ -1,0 +1,17 @@
+{
+  "name": "groundwater-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "assets": "node scripts/copy-assets.mjs && node node_modules/tailwindcss/lib/cli.js -i frontend/src/input.css -o frontend/assets/css/app.css --minify"
+  },
+  "dependencies": {
+    "@fontsource/vazirmatn": "^5.2.8",
+    "echarts": "6.1.0",
+    "htmx.org": "2.0.10",
+    "leaflet": "1.9.4"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.19"
+  }
+}

@@ -1,0 +1,5 @@
+{% for aquifer in aquifers %}
+  <option value="{{ aquifer.id }}">{{ aquifer.name }} · {{ aquifer.well_count }} چاه</option>
+{% else %}
+  <option value="">آبخوانی یافت نشد</option>
+{% endfor %}

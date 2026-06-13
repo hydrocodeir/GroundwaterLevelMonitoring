@@ -1,0 +1,267 @@
+<div class="space-y-6" data-dashboard data-aquifer-id="{{ group.id }}">
+  <section class="panel relative overflow-hidden p-6 md:p-7">
+    <div class="absolute inset-y-0 right-0 w-1.5 bg-gradient-to-b from-teal to-aqua"></div>
+    <div class="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+      <div class="pr-3">
+        <div class="mb-2 flex items-center gap-2 text-xs font-medium text-teal">
+          <span class="inline-block h-2 w-2 rounded-full bg-teal"></span>
+          محدوده مطالعاتی {{ group.mahdoude }}
+        </div>
+        <h2 class="text-2xl font-bold tracking-tight text-navy md:text-3xl">آبخوان {{ group.aquifer }}</h2>
+        <p class="mt-2 text-xs leading-6 text-slate-500">
+          تحلیل یکپارچه تراز آب، افت سالانه، شبکه پایش و پهنه‌بندی تیسن
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span id="periodBadge" class="rounded-xl border border-teal/15 bg-teal/5 px-4 py-2.5 text-xs font-medium text-teal">
+          در حال خواندن دوره آماری...
+        </span>
+        <span class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
+          واحد تراز و افت: متر
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <form id="analysisFilters" class="panel overflow-hidden">
+    <div class="flex flex-col justify-between gap-3 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center">
+      <div>
+        <h3 class="text-sm font-bold text-navy">تنظیم بازه تحلیل</h3>
+        <p class="mt-1 text-[11px] leading-5 text-slate-500">
+          سال و ماه شروع و پایان را مستقل انتخاب کنید؛ محاسبات تیسن با هر تغییر بازسازی خواهند شد.
+        </p>
+      </div>
+      <div class="rounded-lg bg-slate-100 px-3 py-2 text-[10px] text-slate-500">
+        جدول افت: بر مبنای سال آبی مهر تا شهریور
+      </div>
+    </div>
+    <div class="grid gap-4 p-5 md:p-6 xl:grid-cols-[1fr_1fr_1.25fr_auto] xl:items-end">
+      <fieldset class="date-fieldset">
+        <legend>شروع بازه</legend>
+        <label>
+          <span class="field-label">سال</span>
+          <select id="startYear" class="field year-field" name="start_year"></select>
+        </label>
+        <label>
+          <span class="field-label">ماه</span>
+          <select id="startMonth" class="field" name="start_month"></select>
+        </label>
+      </fieldset>
+      <fieldset class="date-fieldset">
+        <legend>پایان بازه</legend>
+        <label>
+          <span class="field-label">سال</span>
+          <select id="endYear" class="field year-field" name="end_year"></select>
+        </label>
+        <label>
+          <span class="field-label">ماه</span>
+          <select id="endMonth" class="field" name="end_month"></select>
+        </label>
+      </fieldset>
+      <label class="filter-toggle">
+        <input id="continuousOnly" type="checkbox" class="peer sr-only" checked>
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span>
+          <strong class="block text-xs font-bold text-navy">فقط چاه‌های پوشش‌دهنده کل بازه</strong>
+          <small class="mt-1 block text-[10px] leading-5 text-slate-500">
+            سابقه چاه باید از ابتدای تا انتهای بازه انتخابی امتداد داشته باشد.
+          </small>
+        </span>
+      </label>
+      <button id="applyAnalysisFilters" type="submit" class="primary-button">
+        <span>به‌روزرسانی تحلیل</span>
+        <span aria-hidden="true">←</span>
+      </button>
+    </div>
+    <div class="border-t border-slate-100 px-5 py-5 md:px-6">
+      <label class="filter-toggle max-w-xl">
+        <input id="manualWellSelection" type="checkbox" class="peer sr-only">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span>
+          <strong class="block text-xs font-bold text-navy">انتخاب دستی چاه‌های محاسباتی</strong>
+          <small class="mt-1 block text-[10px] leading-5 text-slate-500">
+            هیدروگراف حسابی، تیسن و پهنه‌بندی فقط بر اساس چاه‌های انتخاب‌شده بازسازی می‌شوند.
+          </small>
+        </span>
+      </label>
+      <div id="manualWellPanel" class="manual-well-panel mt-4 hidden">
+        <div class="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div class="text-xs font-bold text-navy">چاه‌های مورد استفاده در محاسبات</div>
+            <div id="manualWellCount" class="mt-1 text-[10px] text-slate-500"></div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="manualWellSearch" type="search" class="manual-well-search" placeholder="جست‌وجوی نام چاه...">
+            <button id="selectAllEligibleWells" type="button" class="secondary-button">انتخاب همه دارای داده</button>
+            <button id="clearSelectedWells" type="button" class="secondary-button">پاک‌کردن انتخاب</button>
+          </div>
+        </div>
+        <div id="manualWellList" class="manual-well-list"></div>
+      </div>
+    </div>
+  </form>
+
+  <section id="statsGrid" class="grid grid-cols-2 gap-4 lg:grid-cols-5"></section>
+
+  <section class="grid gap-6 xl:grid-cols-12">
+    <article class="panel overflow-hidden xl:col-span-5">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">نمای مکانی</span>
+          <h3 class="section-title">شبکه پایش و پهنه‌های تیسن</h3>
+          <p class="section-description">مرزها، وضعیت ورود چاه‌ها به محاسبات و وزن مکانی ایستگاه‌ها</p>
+        </div>
+        <div class="flex flex-col items-start gap-2 md:items-end">
+          <div class="flex flex-wrap justify-end gap-3 text-[10px] text-slate-500">
+            <span class="legend-item"><i class="bg-teal"></i> داخل محاسبات</span>
+            <span class="legend-item"><i class="bg-amber-400"></i> خارج از محاسبات</span>
+            <span class="legend-item"><i class="bg-coral"></i> فاقد داده</span>
+            <span class="legend-item"><b class="text-base leading-none text-violet-700">×</b> ایستگاه بارش منتخب</span>
+          </div>
+          <div class="flex flex-wrap gap-2" aria-label="فیلتر نمایش چاه‌ها روی نقشه">
+            <label class="map-filter-toggle">
+              <input id="showExcludedWells" type="checkbox" checked>
+              <span>نمایش خارج از محاسبات</span>
+            </label>
+            <label class="map-filter-toggle">
+              <input id="showNoDataWells" type="checkbox" checked>
+              <span>نمایش فاقد داده</span>
+            </label>
+            <label class="map-filter-toggle">
+              <input id="showPrecipitationStations" type="checkbox" checked>
+              <span>نمایش ایستگاه‌های بارش</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div id="map" class="h-[520px] w-full"></div>
+    </article>
+
+    <article class="panel overflow-hidden xl:col-span-7">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">تحلیل آبخوان</span>
+          <h3 class="section-title">هیدروگراف معرف و افت سالانه</h3>
+          <p class="section-description">مقایسه روش میانگین حسابی و میانگین وزنی تیسن</p>
+          <div id="aquiferTrendSummary" class="mt-3 flex flex-wrap gap-2"></div>
+        </div>
+        <div class="tab-list" role="tablist" aria-label="نمای تحلیل آبخوان">
+          <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">نمودار</button>
+          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
+        </div>
+      </div>
+      <div data-tab-panel="aquifer-chart">
+        <div id="aquiferChart" class="h-[430px] w-full px-2 pb-2"></div>
+        <div id="precipitationSource" class="mx-5 mb-3 rounded-xl border border-sky-100 bg-sky-50/70 px-4 py-2.5 text-[10px] leading-6 text-slate-600"></div>
+        <div class="mx-5 mb-5 rounded-2xl border border-sand bg-sand/30 px-4 py-3 text-[10px] leading-6 text-slate-600">
+          خط‌چین‌ها شیب رگرسیون بازه انتخابی را نشان می‌دهند. جدول فقط از ماه‌های داخل همین بازه استفاده می‌کند؛ افت سالانه از مهر تا مهر بعد و برای سال پایانی تا شهریور محاسبه می‌شود.
+        </div>
+      </div>
+      <div class="hidden" data-tab-panel="aquifer-table">
+        <div id="aquiferAnnualTable" class="table-scroll max-h-[510px]"></div>
+      </div>
+    </article>
+  </section>
+
+  <section class="panel overflow-hidden">
+    <div class="section-heading">
+      <div>
+        <span class="section-kicker">پویایی مکانی سال‌به‌سال</span>
+        <h3 class="section-title">خطوط تراز و پهنه تغییرات افت</h3>
+        <p class="section-description">مقایسه تراز ماه منتخب با همان ماه در سال قبل؛ ماه پیش‌فرض مهر است.</p>
+      </div>
+      <div class="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[17rem_7rem_7rem_8rem]">
+        <label class="block">
+          <span class="field-label">مبنای انتخاب پیزومترها</span>
+          <select id="spatialWellMode" class="field h-11">
+            <option value="calculation">چاه‌های داخل محاسبات / انتخاب دستی</option>
+            <option value="all">همه پیزومترهای دارای مقدار ماه جاری</option>
+            <option value="comparable">فقط چاه‌های دارای داده ماه منتخب و سال قبل</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="field-label">سال نمایش</span>
+          <select id="spatialYear" class="field h-11 year-field"></select>
+        </label>
+        <label class="block">
+          <span class="field-label">ماه نمایش</span>
+          <select id="spatialMonth" class="field h-11"></select>
+        </label>
+        <label class="block">
+          <span class="field-label">فاصله خطوط (متر)</span>
+          <input id="contourInterval" class="field h-11 text-left" type="number" min="0.01" step="0.01" inputmode="decimal">
+        </label>
+      </div>
+    </div>
+    <div class="grid gap-px bg-slate-200 lg:grid-cols-2">
+      <article class="bg-white">
+        <header class="map-analysis-header">
+          <div>
+            <h4>خطوط هم‌تراز آب زیرزمینی</h4>
+            <p id="contourMapSummary">در حال آماده‌سازی...</p>
+          </div>
+          <span class="map-analysis-swatch contour"></span>
+        </header>
+        <div id="contourMapChart" class="h-[500px] w-full"></div>
+      </article>
+      <article class="bg-white">
+        <header class="map-analysis-header">
+          <div>
+            <h4>پهنه‌بندی تغییرات تراز سال‌به‌سال</h4>
+            <p id="declineMapSummary">در حال آماده‌سازی...</p>
+            <div id="declineClassLegend" class="mt-2 flex flex-wrap gap-1.5 text-[9px]"></div>
+          </div>
+          <span class="map-analysis-swatch heat"></span>
+        </header>
+        <div id="declineMapChart" class="h-[500px] w-full"></div>
+      </article>
+    </div>
+    <div class="flex flex-col items-center justify-center gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4 md:flex-row">
+      <button id="spatialPreviousMonth" type="button" class="month-control-button">سال قبل</button>
+      <button id="spatialPlay" type="button" class="month-play-button" aria-label="پخش تغییرات سال‌به‌سال ماه منتخب">پخش</button>
+      <button id="spatialNextMonth" type="button" class="month-control-button">سال بعد</button>
+      <div id="spatialMonthLabel" dir="ltr" class="min-w-40 rounded-xl border border-teal/20 bg-white px-4 py-2 text-center text-sm font-bold text-teal shadow-sm"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="mb-5 flex flex-col justify-between gap-3 px-1 md:flex-row md:items-end">
+      <div>
+        <span class="section-kicker">جزئیات ایستگاه‌ها</span>
+        <h3 class="mt-1 text-xl font-bold text-navy">پیزومترهای مشاهده‌ای</h3>
+        <p class="mt-1 text-xs leading-6 text-slate-500">
+          برای هر چاه می‌توانید هیدروگراف یا جدول افت سالانه و تجمعی را مشاهده کنید.
+        </p>
+      </div>
+      <div id="wellCountLabel" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-500 shadow-sm"></div>
+    </div>
+    <div id="wellCharts" class="grid grid-cols-1 gap-5 xl:grid-cols-2"></div>
+  </section>
+
+  <div id="wellDetailModal" class="well-modal hidden" role="dialog" aria-modal="true" aria-labelledby="wellModalTitle">
+    <button type="button" class="well-modal-backdrop" data-close-well-modal aria-label="بستن پنجره"></button>
+    <article class="well-modal-card panel">
+      <header class="flex flex-col justify-between gap-4 border-b border-slate-100 px-5 py-4 md:flex-row md:items-center">
+        <div>
+          <div class="section-kicker">جزئیات پیزومتر</div>
+          <h3 id="wellModalTitle" class="mt-1 text-lg font-bold text-navy"></h3>
+          <div id="wellModalMeta" class="mt-1 text-[10px] text-slate-500"></div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="tab-list" role="tablist" aria-label="نمای جزئیات پیزومتر">
+            <button class="tab-button is-active" type="button" data-tab-group="modal-well" data-tab="chart">نمودار</button>
+            <button class="tab-button" type="button" data-tab-group="modal-well" data-tab="table">جدول افت</button>
+          </div>
+          <button type="button" class="modal-close-button" data-close-well-modal aria-label="بستن">×</button>
+        </div>
+      </header>
+      <div data-tab-panel="modal-well-chart">
+        <div id="wellModalTrend" class="px-5 pt-4"></div>
+        <div id="wellModalChart" class="h-[420px] w-full"></div>
+      </div>
+      <div class="hidden" data-tab-panel="modal-well-table">
+        <div id="wellModalTable" class="table-scroll max-h-[500px]"></div>
+      </div>
+    </article>
+  </div>
+</div>

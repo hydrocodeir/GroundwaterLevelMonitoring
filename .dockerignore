@@ -1,0 +1,17 @@
+.git
+.gitignore
+.pytest_cache
+.cache
+.venv
+.venv-win
+node_modules
+__pycache__
+*.py[cod]
+*.log
+.env
+.DS_Store
+tests
+deploy
+README.md
+run.sh
+run.bat
