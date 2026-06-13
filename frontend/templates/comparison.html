@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#11395B">
     <title>مقایسه آبخوان‌ها | سامانه پایش آب زیرزمینی</title>
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/leaflet.css') }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}">
+    <script defer src="{{ url_for('assets', path='js/leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/echarts.min.js') }}"></script>
+    <script defer src="{{ url_for('assets', path='js/echarts-extension-leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/comparison.js') }}"></script>
   </head>
   <body class="relative isolate min-h-screen bg-mist">

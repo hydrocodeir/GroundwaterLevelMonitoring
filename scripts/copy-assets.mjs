@@ -4,6 +4,7 @@ import path from "node:path";
 const copies = [
   ["node_modules/htmx.org/dist/htmx.min.js", "frontend/assets/js/htmx.min.js"],
   ["node_modules/echarts/dist/echarts.min.js", "frontend/assets/js/echarts.min.js"],
+  ["node_modules/@joakimono/echarts-extension-leaflet/dist/echarts-extension-leaflet.js", "frontend/assets/js/echarts-extension-leaflet.js"],
   ["node_modules/leaflet/dist/leaflet.js", "frontend/assets/js/leaflet.js"],
   ["node_modules/leaflet/dist/leaflet.css", "frontend/assets/css/leaflet.css"],
   ["node_modules/leaflet/dist/images/marker-icon.png", "frontend/assets/css/images/marker-icon.png"],

@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@fontsource/vazirmatn": "^5.2.8",
+    "@joakimono/echarts-extension-leaflet": "^1.1.0",
     "echarts": "6.1.0",
     "htmx.org": "2.0.10",
     "leaflet": "1.9.4"
