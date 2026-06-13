@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .cache/
 .env
+ee-hydrocode.json

@@ -12,6 +12,7 @@
     spatialContourSeriesIds: [],
     contourIntervalInitialized: false,
     modalChart: null,
+    aquiferNdviChart: null,
     observer: null,
     requestToken: 0,
     currentData: null
@@ -712,11 +713,9 @@
     const yearSelect = document.getElementById("spatialYear");
     const monthSelect = document.getElementById("spatialMonth");
     const years = [...new Set(labels.map(label => Number(label.slice(0, 4))))];
-    if (!yearSelect.options.length) {
-      yearSelect.innerHTML = years
-        .map(value => `<option value="${value}">${value}</option>`)
-        .join("");
-    }
+    yearSelect.innerHTML = years
+      .map(value => `<option value="${value}">${value}</option>`)
+      .join("");
     yearSelect.value = String(year);
     const availableMonths = labels
       .filter(label => Number(label.slice(0, 4)) === year)
@@ -1074,6 +1073,7 @@
       state.modalChart.dispose();
       state.modalChart = null;
     }
+    state.aquiferNdviChart = null;
     document.getElementById("wellDetailModal")?.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
     if (state.map) {
@@ -1161,6 +1161,40 @@
       tooltip: {
         valueFormatter: value => (
           value == null ? "بدون داده" : `${faNumber.format(value)} میلی‌متر`
+        )
+      },
+      z: 1
+    };
+  }
+
+  function ndviMetricLabel(metric) {
+    return {
+      mean: "میانگین",
+      median: "میانه",
+      max: "بیشینه"
+    }[metric] || "میانه";
+  }
+
+  function ndviBarSeries(ndvi, metric) {
+    const series = ndvi.metrics[metric] || ndvi.metrics.median;
+    return {
+      name: `NDVI ${ndviMetricLabel(metric)}`,
+      type: "bar",
+      yAxisIndex: 1,
+      data: series.map(item => item[1]),
+      barMaxWidth: 14,
+      itemStyle: {
+        color: "rgba(16, 185, 129, 0.34)",
+        borderColor: "rgba(5, 150, 105, 0.7)",
+        borderWidth: 0.8,
+        borderRadius: [3, 3, 0, 0]
+      },
+      emphasis: {
+        itemStyle: { color: "rgba(5, 150, 105, 0.6)" }
+      },
+      tooltip: {
+        valueFormatter: value => (
+          value == null ? "بدون داده" : faNumber.format(value)
         )
       },
       z: 1
@@ -1549,6 +1583,86 @@
     `;
   }
 
+  function renderAquiferNdviChart(data) {
+    const element = document.getElementById("aquiferNdviChart");
+    const metricSelect = document.getElementById("ndviMetric");
+    if (!element || !metricSelect || element.closest(".hidden")) return;
+    const metric = metricSelect.value || data.ndvi.default_metric;
+    if (!state.aquiferNdviChart) {
+      state.aquiferNdviChart = echarts.init(element);
+      state.charts.push(state.aquiferNdviChart);
+    }
+
+    const option = baseChartOption();
+    option.xAxis.data = data.hydrographs.arithmetic.map(item => item[0]);
+    option.yAxis[1] = {
+      type: "value",
+      name: "NDVI",
+      scale: true,
+      nameTextStyle: {
+        fontFamily: "Vazirmatn",
+        fontSize: 10,
+        padding: [0, 0, 8, 0],
+        color: "#059669"
+      },
+      axisLine: { show: true, lineStyle: { color: "#10B981" } },
+      axisTick: { show: true, lineStyle: { color: "#10B981" } },
+      splitLine: { show: false },
+      axisLabel: {
+        formatter: value => faNumber.format(value),
+        fontSize: 9,
+        color: "#059669"
+      }
+    };
+    option.legend = {
+      top: 4,
+      right: 0,
+      textStyle: { fontFamily: "Vazirmatn", fontSize: 11 },
+      itemWidth: 18,
+      selected: {
+        "میانگین حسابی": false,
+        "میانگین تیسن": true,
+        [`NDVI ${ndviMetricLabel(metric)}`]: true
+      }
+    };
+    option.grid.top = 76;
+    option.series = [
+      ndviBarSeries(data.ndvi, metric),
+      {
+        name: "میانگین حسابی",
+        type: "line",
+        data: data.hydrographs.arithmetic.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#11395B" },
+        itemStyle: { color: "#11395B" },
+        tooltip: {
+          valueFormatter: value => (
+            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          )
+        },
+        z: 3
+      },
+      {
+        name: "میانگین تیسن",
+        type: "line",
+        data: data.hydrographs.thiessen.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#E76F51" },
+        itemStyle: { color: "#E76F51" },
+        tooltip: {
+          valueFormatter: value => (
+            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          )
+        },
+        z: 3
+      }
+    ];
+    state.aquiferNdviChart.setOption(option, true);
+    state.aquiferNdviChart.resize();
+  }
+
   function renderAquiferAnnualTable(data) {
     const container = document.getElementById("aquiferAnnualTable");
     const rows = data.annual_decline.map(row => `
@@ -1803,6 +1917,9 @@
     bindWellModal();
     renderMap(data);
     renderAquiferChart(data);
+    const ndviMetric = document.getElementById("ndviMetric");
+    ndviMetric.value = data.ndvi.default_metric;
+    ndviMetric.onchange = () => renderAquiferNdviChart(data);
     renderAquiferAnnualTable(data);
     renderSpatialAnalysis(data);
     renderWellCharts(data);
@@ -1819,9 +1936,12 @@
     scope.querySelectorAll(`[data-tab-panel^="${group}-"]`).forEach(panel => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== `${group}-${tab}`);
     });
-    if (tab === "chart") {
+    if (tab === "chart" || tab === "ndvi") {
       const chartElement = scope.querySelector("[data-well-chart]");
       if (chartElement && state.observer) state.observer.observe(chartElement);
+      if (group === "aquifer" && tab === "ndvi") {
+        window.requestAnimationFrame(() => renderAquiferNdviChart(state.currentData));
+      }
       window.setTimeout(() => state.charts.forEach(chart => chart.resize()), 50);
       window.setTimeout(() => state.modalChart?.resize(), 50);
     }
@@ -1916,7 +2036,15 @@
     }
     if (event.detail.target.id !== "dashboardContent") return;
     const root = event.detail.target.querySelector("[data-dashboard]");
-    if (root) initializeDashboard(root);
+    if (root) {
+      initializeDashboard(root);
+      window.requestAnimationFrame(() => {
+        root.querySelector("#analysisFilters")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      });
+    }
   });
 
   document.body.addEventListener("click", event => {

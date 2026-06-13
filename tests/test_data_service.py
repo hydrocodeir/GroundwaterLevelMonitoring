@@ -7,6 +7,7 @@ from app.data_service import (
     WATER_YEAR_END_MONTH,
     WATER_YEAR_START_MONTH,
     GroundwaterData,
+    normalize_name,
 )
 
 
@@ -180,6 +181,63 @@ class GroundwaterDataTests(unittest.TestCase):
             all(
                 value is None or value >= 0
                 for _, value in precipitation["series"]
+            )
+        )
+
+    def test_ndvi_series_matches_hydrograph_period(self) -> None:
+        payload = self.service.dashboard(next(iter(self.service.groups)))
+        ndvi = payload["ndvi"]
+        hydrograph_months = [
+            item[0] for item in payload["hydrographs"]["thiessen"]
+        ]
+
+        self.assertEqual(ndvi["default_metric"], "median")
+        self.assertEqual(set(ndvi["metrics"]), {"mean", "median", "max"})
+        for series in ndvi["metrics"].values():
+            self.assertEqual([item[0] for item in series], hydrograph_months)
+            self.assertTrue(
+                all(
+                    value is None or -1 <= value <= 1
+                    for _, value in series
+                )
+            )
+
+    def test_ndvi_matches_the_aquifer_boundary_names(self) -> None:
+        group_id = next(
+            group_id
+            for group_id, group in self.service.groups.items()
+            if group["aquifer_key"]
+            != normalize_name(
+                self.service.boundary_matches[group_id]["aquifer"].properties[
+                    "AQUIFER"
+                ]
+            )
+        )
+        properties = self.service.boundary_matches[group_id][
+            "aquifer"
+        ].properties
+        selected = self.service.ndvi[
+            (
+                self.service.ndvi["_mahdoude_key"]
+                == normalize_name(properties["MAHDOUDE"])
+            )
+            & (
+                self.service.ndvi["_aquifer_key"]
+                == normalize_name(properties["AQUIFER"])
+            )
+        ].dropna(subset=["NDVI_MEAN", "NDVI_MEDIAN", "NDVI_MAX"], how="all")
+        month_index = int(selected.iloc[0]["_month_index"])
+        year, month = self.year_month(month_index)
+        payload = self.service._ndvi_payload(
+            group_id,
+            [(month_index, f"{year}-{month:02d}")],
+        )
+
+        self.assertTrue(
+            any(
+                value is not None
+                for series in payload["metrics"].values()
+                for _, value in series
             )
         )
 

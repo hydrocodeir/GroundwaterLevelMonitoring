@@ -23,7 +23,7 @@
     </div>
   </section>
 
-  <form id="analysisFilters" class="panel overflow-hidden">
+  <form id="analysisFilters" class="panel scroll-mt-5 overflow-hidden">
     <div class="flex flex-col justify-between gap-3 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center">
       <div>
         <h3 class="text-sm font-bold text-navy">تنظیم بازه تحلیل</h3>
@@ -146,7 +146,8 @@
           <div id="aquiferTrendSummary" class="mt-3 flex flex-wrap gap-2"></div>
         </div>
         <div class="tab-list" role="tablist" aria-label="نمای تحلیل آبخوان">
-          <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">نمودار</button>
+          <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">تراز + بارش</button>
+          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="ndvi">تراز + NDVI</button>
           <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
         </div>
       </div>
@@ -159,6 +160,22 @@
       </div>
       <div class="hidden" data-tab-panel="aquifer-table">
         <div id="aquiferAnnualTable" class="table-scroll max-h-[510px]"></div>
+      </div>
+      <div class="hidden" data-tab-panel="aquifer-ndvi">
+        <div class="flex justify-end border-b border-slate-100 bg-slate-50/70 px-5 py-3">
+          <label class="flex items-center gap-3 text-[11px] font-medium text-slate-600">
+            شاخص آماری NDVI
+            <select id="ndviMetric" class="field h-10 w-36">
+              <option value="median">میانه</option>
+              <option value="mean">میانگین</option>
+              <option value="max">بیشینه</option>
+            </select>
+          </label>
+        </div>
+        <div id="aquiferNdviChart" class="h-[430px] w-full px-2 pb-2"></div>
+        <div class="mx-5 mb-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-[10px] leading-6 text-slate-600">
+          ستون‌ها NDVI ماهانه آبخوان را از Landsat 8 نشان می‌دهند. شاخص آماری از فهرست بالا قابل تغییر است.
+        </div>
       </div>
     </article>
   </section>
