@@ -645,6 +645,17 @@
     const map = component?.getLeaflet();
     if (!map || map._hydroSpatialConfigured) return;
     map._hydroSpatialConfigured = true;
+    const echartsLayer = component.getEChartsLayer();
+    if (echartsLayer) {
+      echartsLayer.style.zIndex = "450";
+      const container = echartsLayer.parentElement;
+      if (container) {
+        container.style.position = "absolute";
+        container.style.inset = "0";
+        container.style.zIndex = "450";
+        container.style.pointerEvents = "none";
+      }
+    }
     addBaseMap(map);
     map.createPane("aquiferBoundaryPane");
     map.getPane("aquiferBoundaryPane").style.zIndex = "350";
@@ -660,7 +671,11 @@
       }
     }).addTo(map);
     fitLeafletBoundsAndLockZoom(map, boundary.getBounds(), [24, 24]);
+    const center = map.getCenter();
+    component.setCenterAndZoom([center.lat, center.lng], map.getZoom());
+    map.fire("moveend");
     map.on("resize", () => refreshLeafletMinimumZoom(map));
+    window.requestAnimationFrame(() => chart.resize());
   }
 
   function geometryOuterRings(geometry) {
@@ -884,6 +899,7 @@
         }
       ]
     });
+    charts.contour.dispatchAction({ type: "lmapRoam" });
 
     const declineValues = declinePoints.map(point => point[2]).filter(Number.isFinite);
     const minimumDecline = declineValues.length ? Math.min(...declineValues) : 0;
@@ -935,6 +951,7 @@
         }
       ]
     });
+    charts.decline.dispatchAction({ type: "lmapRoam" });
     window.requestAnimationFrame(applyHeatmapClip);
 
     document.getElementById("spatialMonthLabel").textContent = persianDate(month);
