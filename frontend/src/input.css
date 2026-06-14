@@ -97,6 +97,58 @@
     @apply absolute right-3 top-0 -translate-y-1/2 rounded-lg border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-navy shadow-sm;
   }
 
+  .analysis-filter-grid {
+    @apply grid items-center gap-3 p-4 md:grid-cols-2 xl:grid-cols-[1fr_auto_1fr_1.1fr_auto];
+  }
+
+  .compact-date-group {
+    @apply grid grid-cols-[auto_minmax(5.5rem,0.85fr)_minmax(6.5rem,1.15fr)] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2;
+  }
+
+  .compact-date-label {
+    @apply px-1 text-[10px] font-bold text-slate-500;
+  }
+
+  .field.compact-field {
+    @apply h-9 rounded-lg px-2 text-xs;
+  }
+
+  .compact-filter-toggle {
+    @apply flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 transition hover:border-teal/30 hover:bg-teal/[0.03];
+  }
+
+  .analysis-options {
+    @apply border-t border-slate-100;
+  }
+
+  .analysis-options > summary {
+    @apply flex cursor-pointer list-none items-center justify-between px-5 py-3 text-[10px] text-slate-500 transition hover:bg-slate-50;
+  }
+
+  .analysis-options > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .analysis-options > summary b {
+    @apply ml-2 text-[11px] text-navy;
+  }
+
+  .analysis-options > summary small {
+    @apply text-[9px] text-slate-400;
+  }
+
+  .analysis-options-arrow {
+    @apply text-lg leading-none text-slate-400 transition;
+  }
+
+  .analysis-options[open] .analysis-options-arrow {
+    transform: rotate(180deg);
+  }
+
+  .analysis-option-card {
+    @apply rounded-xl border border-slate-200 bg-slate-50/60 p-3;
+  }
+
   .filter-toggle {
     @apply flex min-h-[50px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 transition hover:border-teal/30 hover:bg-teal/[0.03];
   }
@@ -241,7 +293,7 @@
   }
 
   .tab-list {
-    @apply inline-flex shrink-0 rounded-xl bg-slate-100 p-1;
+    @apply inline-flex max-w-full shrink-0 flex-wrap rounded-xl bg-slate-100 p-1;
   }
 
   .selection-tab-list {

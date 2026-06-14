@@ -1064,11 +1064,19 @@ class GroundwaterData:
                 (year + 1) * MONTHS_PER_YEAR + WATER_YEAR_END_MONTH
             )
             start_level = values.get(start_index)
-            end_index = (
-                next_mehr_index
-                if values.get(next_mehr_index) is not None
-                else shahrivar_index
-            )
+            if values.get(next_mehr_index) is not None:
+                end_index = next_mehr_index
+            elif year == end_year:
+                fallback_indexes = [
+                    index
+                    for index, value in values.items()
+                    if start_index < index <= shahrivar_index
+                    and value is not None
+                    and np.isfinite(value)
+                ]
+                end_index = max(fallback_indexes, default=shahrivar_index)
+            else:
+                end_index = shahrivar_index
             end_level = values.get(end_index)
             displayed_start_level = finite_or_none(start_level)
             displayed_end_level = finite_or_none(end_level)
@@ -1089,7 +1097,10 @@ class GroundwaterData:
                     "end_month": (
                         f"{year + 1}-{WATER_YEAR_START_MONTH:02d}"
                         if end_index == next_mehr_index
-                        else f"{year + 1}-{WATER_YEAR_END_MONTH:02d}"
+                        else (
+                            f"{(end_index - 1) // MONTHS_PER_YEAR}-"
+                            f"{((end_index - 1) % MONTHS_PER_YEAR) + 1:02d}"
+                        )
                     ),
                     "start_level": displayed_start_level,
                     "end_level": displayed_end_level,
@@ -1184,6 +1195,89 @@ class GroundwaterData:
             )
         return rows
 
+    def _annual_change_rows(
+        self,
+        months: list[tuple[int, str]],
+        annual_decline: list[dict[str, Any]],
+        precipitation: dict[str, Any],
+        aet: dict[str, Any],
+        ndvi: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        month_indexes = {label: index for index, label in months}
+        selected_indexes = set(month_indexes.values())
+        precipitation_values = dict(precipitation["series"])
+        aet_values = dict(aet["series"])
+        ndvi_mean_values = dict(ndvi["metrics"]["mean"])
+        ndvi_median_values = dict(ndvi["metrics"]["median"])
+        decline_by_year = {
+            row["water_year"]: row
+            for row in annual_decline
+        }
+        water_years = sorted({
+            self._water_year_for_month(
+                (index - 1) // MONTHS_PER_YEAR,
+                (index - 1) % MONTHS_PER_YEAR + 1,
+            )
+            for index in selected_indexes
+        })
+        rows: list[dict[str, Any]] = []
+        for water_year in water_years:
+            expected_indexes = set(range(
+                water_year * MONTHS_PER_YEAR + WATER_YEAR_START_MONTH,
+                (water_year + 1) * MONTHS_PER_YEAR + WATER_YEAR_END_MONTH + 1,
+            ))
+            indexes = sorted(selected_indexes & expected_indexes)
+            labels = [
+                f"{(index - 1) // MONTHS_PER_YEAR}-"
+                f"{((index - 1) % MONTHS_PER_YEAR) + 1:02d}"
+                for index in indexes
+            ]
+
+            def valid_values(series: dict[str, Any]) -> list[float]:
+                return [
+                    float(series[label])
+                    for label in labels
+                    if series.get(label) is not None
+                    and np.isfinite(series[label])
+                ]
+
+            precipitation_items = valid_values(precipitation_values)
+            aet_items = valid_values(aet_values)
+            ndvi_mean_items = valid_values(ndvi_mean_values)
+            ndvi_median_items = valid_values(ndvi_median_values)
+            water_year_label = f"{water_year}-{water_year + 1}"
+            decline = decline_by_year.get(water_year_label, {})
+            rows.append({
+                "water_year": water_year_label,
+                "is_complete": len(indexes) == MONTHS_PER_YEAR,
+                "selected_month_count": len(indexes),
+                "precipitation_month_count": len(precipitation_items),
+                "aet_month_count": len(aet_items),
+                "ndvi_mean_month_count": len(ndvi_mean_items),
+                "ndvi_median_month_count": len(ndvi_median_items),
+                "decline": {
+                    "arithmetic": decline.get("arithmetic", {}).get("decline"),
+                    "thiessen": decline.get("thiessen", {}).get("decline"),
+                },
+                "precipitation_total": finite_or_none(
+                    sum(precipitation_items)
+                    if precipitation_items
+                    else None,
+                ),
+                "aet_total": finite_or_none(
+                    sum(aet_items) if aet_items else None,
+                ),
+                "ndvi_mean": finite_or_none(
+                    np.mean(ndvi_mean_items) if ndvi_mean_items else None,
+                    4,
+                ),
+                "ndvi_median": finite_or_none(
+                    np.mean(ndvi_median_items) if ndvi_median_items else None,
+                    4,
+                ),
+            })
+        return rows
+
     def _hydrographs(
         self,
         frame: pd.DataFrame,
@@ -1221,6 +1315,7 @@ class GroundwaterData:
         selected_join_keys: set[str],
         continuous_only: bool,
         manual_selection: bool,
+        comparison_enabled: bool,
         start_water_year: int,
         end_water_year: int,
     ) -> list[dict[str, Any]]:
@@ -1303,9 +1398,10 @@ class GroundwaterData:
                     "exclusion_reason": exclusion_reason,
                     "series": series,
                     "trend": self._trend(display_values, months),
-                    "comparison_trend": self._trend(
-                        comparison_values,
-                        comparison_months,
+                    "comparison_trend": (
+                        self._trend(comparison_values, comparison_months)
+                        if comparison_enabled
+                        else None
                     ),
                     "annual_decline": self._annual_decline_rows(
                         values,
@@ -1327,6 +1423,7 @@ class GroundwaterData:
         comparison_start_month: int | None = None,
         comparison_end_year: int | None = None,
         comparison_end_month: int | None = None,
+        comparison_enabled: bool = False,
         continuous_only: bool = True,
         manual_selection: bool = False,
         selected_well_ids: list[str] | None = None,
@@ -1451,12 +1548,20 @@ class GroundwaterData:
             selected_join_keys,
             continuous_only,
             manual_selection,
+            comparison_enabled,
             start_water_year,
             annual_end_water_year,
         )
         precipitation = self._precipitation_payload(group_id, months)
         ndvi = self._ndvi_payload(group_id, months)
         aet = self._aet_payload(group_id, months)
+        annual_changes = self._annual_change_rows(
+            months,
+            aquifer_annual_decline,
+            precipitation,
+            aet,
+            ndvi,
+        )
         group_minimum = int(group_monthly["_month_index"].min())
         group_maximum = int(group_monthly["_month_index"].max())
         active_wells = sum(well["has_range_data"] for well in wells)
@@ -1503,6 +1608,7 @@ class GroundwaterData:
                 "comparison_start_month": comparison_start_month_value,
                 "comparison_end_year": comparison_end_year_value,
                 "comparison_end_month": comparison_end_month_value,
+                "comparison_enabled": comparison_enabled,
                 "start_water_year": start_water_year,
                 "end_water_year": end_water_year,
                 "continuous_only": continuous_only,
@@ -1527,16 +1633,19 @@ class GroundwaterData:
                 "thiessen": thiessen,
                 "arithmetic_trend": self._trend(arithmetic_values, months),
                 "thiessen_trend": self._trend(thiessen_values, months),
-                "arithmetic_comparison_trend": self._trend(
-                    comparison_arithmetic_values,
-                    comparison_months,
+                "arithmetic_comparison_trend": (
+                    self._trend(comparison_arithmetic_values, comparison_months)
+                    if comparison_enabled
+                    else None
                 ),
-                "thiessen_comparison_trend": self._trend(
-                    comparison_thiessen_values,
-                    comparison_months,
+                "thiessen_comparison_trend": (
+                    self._trend(comparison_thiessen_values, comparison_months)
+                    if comparison_enabled
+                    else None
                 ),
             },
             "annual_decline": aquifer_annual_decline,
+            "annual_changes": annual_changes,
             "precipitation": precipitation,
             "ndvi": ndvi,
             "aet": aet,

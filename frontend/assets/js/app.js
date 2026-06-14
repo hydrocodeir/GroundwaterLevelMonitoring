@@ -16,6 +16,7 @@
     precipitationModalChart: null,
     aquiferNdviChart: null,
     aquiferAetChart: null,
+    aquiferAnnualChangesChart: null,
     observer: null,
     requestToken: 0,
     currentData: null
@@ -980,18 +981,6 @@
           symbolSize: 7,
           data: declinePoints.map(point => ({ value: point })),
           itemStyle: { color: "#FFFFFF", borderColor: "#11395B", borderWidth: 1.4 },
-          label: {
-            show: true,
-            position: "right",
-            formatter: parameters => formatSignedNumber(parameters.value[2]),
-            fontFamily: "Vazirmatn",
-            fontSize: 9,
-            fontWeight: 700,
-            color: "#11395B",
-            backgroundColor: "rgba(255,255,255,0.84)",
-            borderRadius: 4,
-            padding: [2, 4]
-          },
           z: 10,
           animation: false
         }
@@ -1180,6 +1169,7 @@
     }
     state.aquiferNdviChart = null;
     state.aquiferAetChart = null;
+    state.aquiferAnnualChangesChart = null;
     document.getElementById("wellDetailModal")?.classList.add("hidden");
     document.getElementById("precipitationDetailModal")?.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
@@ -1358,7 +1348,17 @@
     renderMonthOptions("comparisonStart", data.filters.comparison_start_month);
     renderMonthOptions("comparisonEnd", data.filters.comparison_end_month);
     document.getElementById("continuousOnly").checked = data.filters.continuous_only;
+    document.getElementById("comparisonTrendEnabled").checked =
+      Boolean(data.filters.comparison_enabled);
+    syncComparisonTrendUI();
     renderManualWellSelector(data);
+  }
+
+  function syncComparisonTrendUI() {
+    const toggle = document.getElementById("comparisonTrendEnabled");
+    const panel = document.getElementById("comparisonTrendPanel");
+    if (!toggle || !panel) return;
+    panel.classList.toggle("hidden", !toggle.checked);
   }
 
   function selectedManualWellIds() {
@@ -1649,10 +1649,39 @@
     window.setTimeout(() => map.invalidateSize(), 100);
   }
 
+  function syncAquiferPanelHeights() {
+    const mapElement = document.getElementById("map");
+    const mapPanel = document.querySelector("[data-aquifer-map-panel]");
+    const mapHeading = document.querySelector("[data-aquifer-map-heading]");
+    const analysisPanel = document.querySelector("[data-aquifer-analysis-panel]");
+    if (!mapElement || !mapPanel || !mapHeading || !analysisPanel) return;
+
+    mapElement.style.height = "";
+    window.requestAnimationFrame(() => {
+      if (window.innerWidth >= 1280) {
+        const panelHeight = Math.max(
+          mapPanel.getBoundingClientRect().height,
+          analysisPanel.getBoundingClientRect().height
+        );
+        const mapHeight = Math.max(
+          520,
+          panelHeight - mapHeading.getBoundingClientRect().height
+        );
+        mapElement.style.height = `${mapHeight}px`;
+      }
+      window.requestAnimationFrame(() => {
+        if (!state.map) return;
+        state.map.invalidateSize({ animate: false, pan: false });
+        refreshLeafletMinimumZoom(state.map);
+      });
+    });
+  }
+
   function renderAquiferChart(data) {
     const chart = echarts.init(document.getElementById("aquiferChart"));
     const option = baseChartOption();
     const categories = data.hydrographs.arithmetic.map(item => item[0]);
+    const comparisonEnabled = data.filters.comparison_enabled;
     option.xAxis.data = categories;
     option.legend = {
       top: 4,
@@ -1662,10 +1691,12 @@
       selected: {
         "میانگین حسابی": false,
         "روند حسابی (بازه اصلی)": false,
-        "روند حسابی (مقایسه‌ای)": false,
         "میانگین تیسن": true,
         "روند تیسن (بازه اصلی)": true,
-        "روند تیسن (مقایسه‌ای)": true,
+        ...(comparisonEnabled ? {
+          "روند حسابی (مقایسه‌ای)": false,
+          "روند تیسن (مقایسه‌ای)": true
+        } : {}),
         "بارش ماهانه": true
       }
     };
@@ -1693,20 +1724,20 @@
         itemStyle: { color: "#DC2626" },
         z: 4
       },
-      {
-        name: "روند حسابی (مقایسه‌ای)",
-        type: "line",
-        data: alignedTrendSeries(
-          data.hydrographs.arithmetic_comparison_trend,
-          categories
-        ),
-        showSymbol: false,
-        silent: true,
-        connectNulls: false,
-        lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
-        itemStyle: { color: "#111827" },
-        z: 5
-      },
+      ...(comparisonEnabled ? [{
+          name: "روند حسابی (مقایسه‌ای)",
+          type: "line",
+          data: alignedTrendSeries(
+            data.hydrographs.arithmetic_comparison_trend,
+            categories
+          ),
+          showSymbol: false,
+          silent: true,
+          connectNulls: false,
+          lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+          itemStyle: { color: "#111827" },
+          z: 5
+        }] : []),
       {
         name: "میانگین تیسن",
         type: "line",
@@ -1728,36 +1759,38 @@
         itemStyle: { color: "#DC2626" },
         z: 4
       },
-      {
-        name: "روند تیسن (مقایسه‌ای)",
-        type: "line",
-        data: alignedTrendSeries(
-          data.hydrographs.thiessen_comparison_trend,
-          categories
-        ),
-        showSymbol: false,
-        silent: true,
-        connectNulls: false,
-        lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
-        itemStyle: { color: "#111827" },
-        z: 5
-      }
+      ...(comparisonEnabled ? [{
+          name: "روند تیسن (مقایسه‌ای)",
+          type: "line",
+          data: alignedTrendSeries(
+            data.hydrographs.thiessen_comparison_trend,
+            categories
+          ),
+          showSymbol: false,
+          silent: true,
+          connectNulls: false,
+          lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+          itemStyle: { color: "#111827" },
+          z: 5
+        }] : [])
     ];
     chart.setOption(option);
     state.charts.push(chart);
     document.getElementById("aquiferTrendSummary").innerHTML = [
       trendChip("حسابی اصلی", data.hydrographs.arithmetic_trend),
       trendChip("تیسن اصلی", data.hydrographs.thiessen_trend),
-      trendChip(
-        "حسابی مقایسه‌ای",
-        data.hydrographs.arithmetic_comparison_trend,
-        "comparison"
-      ),
-      trendChip(
-        "تیسن مقایسه‌ای",
-        data.hydrographs.thiessen_comparison_trend,
-        "comparison"
-      )
+      ...(comparisonEnabled ? [
+        trendChip(
+          "حسابی مقایسه‌ای",
+          data.hydrographs.arithmetic_comparison_trend,
+          "comparison"
+        ),
+        trendChip(
+          "تیسن مقایسه‌ای",
+          data.hydrographs.thiessen_comparison_trend,
+          "comparison"
+        )
+      ] : [])
     ].join("");
     const stationNames = data.precipitation.stations
       .map(station => station.name)
@@ -1927,6 +1960,186 @@
     state.aquiferAetChart.resize();
   }
 
+  function renderAquiferAnnualChanges(data) {
+    const element = document.getElementById("aquiferAnnualChangesChart");
+    const methodSelect = document.getElementById("annualDeclineMethod");
+    const ndviSelect = document.getElementById("annualNdviMetric");
+    if (!element || !methodSelect || !ndviSelect || element.closest(".hidden")) return;
+    const method = methodSelect.value || "thiessen";
+    const ndviMetric = ndviSelect.value || "median";
+    const rows = data.annual_changes || [];
+    const methodLabel = method === "thiessen" ? "تیسن" : "حسابی";
+    const ndviLabel = ndviMetric === "median" ? "میانه" : "میانگین";
+    if (!state.aquiferAnnualChangesChart) {
+      state.aquiferAnnualChangesChart = echarts.init(element);
+      state.charts.push(state.aquiferAnnualChangesChart);
+    }
+
+    state.aquiferAnnualChangesChart.setOption({
+      animationDuration: 450,
+      textStyle: { fontFamily: "Vazirmatn", color: "#475569" },
+      tooltip: {
+        trigger: "axis",
+        textStyle: { fontFamily: "Vazirmatn" }
+      },
+      legend: {
+        top: 8,
+        right: 12,
+        textStyle: { fontFamily: "Vazirmatn", fontSize: 10 },
+        itemWidth: 16
+      },
+      grid: { top: 68, right: 132, bottom: 62, left: 64 },
+      xAxis: {
+        type: "category",
+        data: rows.map(row => row.water_year),
+        axisLabel: {
+          fontSize: 9,
+          formatter: (value, index) => (
+            rows[index]?.is_complete ? value : `${value}\nناقص`
+          )
+        },
+        axisLine: { lineStyle: { color: "#CBD5E1" } }
+      },
+      yAxis: [
+        {
+          type: "value",
+          name: "افت (متر)",
+          min: range => Math.min(0, range.min),
+          max: range => Math.max(0, range.max),
+          nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, color: "#DC2626" },
+          axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
+          splitLine: { lineStyle: { color: "#E9EFF2", type: "dashed" } }
+        },
+        {
+          type: "value",
+          name: "بارش / AET (mm)",
+          min: 0,
+          position: "right",
+          nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, color: "#0284C7" },
+          axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
+          splitLine: { show: false }
+        },
+        {
+          type: "value",
+          name: "NDVI",
+          scale: true,
+          position: "right",
+          offset: 66,
+          nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, color: "#059669" },
+          axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
+          splitLine: { show: false }
+        }
+      ],
+      dataZoom: [
+        { type: "inside", xAxisIndex: 0 },
+        {
+          type: "slider",
+          xAxisIndex: 0,
+          height: 16,
+          bottom: 8,
+          borderColor: "transparent",
+          fillerColor: "rgba(8, 126, 139, 0.12)",
+          handleStyle: { color: "#087E8B" }
+        }
+      ],
+      series: [
+        {
+          name: `افت ${methodLabel}`,
+          type: "bar",
+          yAxisIndex: 0,
+          data: rows.map(row => row.decline?.[method] ?? null),
+          barMaxWidth: 18,
+          itemStyle: { color: "#E76F51", borderRadius: [4, 4, 0, 0] },
+          tooltip: {
+            valueFormatter: value => value == null
+              ? "بدون داده"
+              : `${faNumber.format(value)} متر`
+          }
+        },
+        {
+          name: "مجموع بارش",
+          type: "bar",
+          yAxisIndex: 1,
+          data: rows.map(row => row.precipitation_total),
+          barMaxWidth: 18,
+          itemStyle: { color: "#38BDF8", borderRadius: [4, 4, 0, 0] },
+          tooltip: {
+            valueFormatter: value => value == null
+              ? "بدون داده"
+              : `${faNumber.format(value)} میلی‌متر`
+          }
+        },
+        {
+          name: "مجموع AET",
+          type: "bar",
+          yAxisIndex: 1,
+          data: rows.map(row => row.aet_total),
+          barMaxWidth: 18,
+          itemStyle: { color: "#F59E0B", borderRadius: [4, 4, 0, 0] },
+          tooltip: {
+            valueFormatter: value => value == null
+              ? "بدون داده"
+              : `${faNumber.format(value)} میلی‌متر`
+          }
+        },
+        {
+          name: `NDVI ${ndviLabel}`,
+          type: "line",
+          yAxisIndex: 2,
+          data: rows.map(row => row[`ndvi_${ndviMetric}`]),
+          symbolSize: 7,
+          connectNulls: false,
+          lineStyle: { width: 2.5, color: "#059669" },
+          itemStyle: { color: "#059669", borderColor: "#FFFFFF", borderWidth: 1.5 },
+          tooltip: {
+            valueFormatter: value => value == null
+              ? "بدون داده"
+              : faNumber.format(value)
+          },
+          z: 5
+        }
+      ]
+    }, true);
+    state.aquiferAnnualChangesChart.resize();
+
+    const table = document.getElementById("aquiferAnnualChangesTable");
+    table.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>سال آبی</th>
+            <th>افت ${methodLabel} (متر)</th>
+            <th>بارش (میلی‌متر)</th>
+            <th>AET (میلی‌متر)</th>
+            <th>NDVI ${ndviLabel}</th>
+            <th>پوشش زمانی</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => `
+            <tr>
+              <td dir="ltr" class="font-bold text-navy">${row.water_year}</td>
+              <td>${numberCell(row.decline?.[method])}</td>
+              <td>${numberCell(row.precipitation_total)}</td>
+              <td>${numberCell(row.aet_total)}</td>
+              <td>${numberCell(row[`ndvi_${ndviMetric}`])}</td>
+              <td>
+                <span class="${row.is_complete ? "text-teal" : "text-amber-600"}">
+                  ${row.is_complete ? "کامل" : "ناقص"} · ${faNumber.format(row.selected_month_count)} ماه
+                </span>
+                <div class="mt-1 text-[9px] text-slate-400">
+                  بارش ${faNumber.format(row.precipitation_month_count)} ·
+                  AET ${faNumber.format(row.aet_month_count)} ·
+                  NDVI ${faNumber.format(row[`ndvi_${ndviMetric}_month_count`])}
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
   function renderAquiferAnnualTable(data) {
     const container = document.getElementById("aquiferAnnualTable");
     const rows = data.annual_decline.map(row => `
@@ -1964,7 +2177,7 @@
         <tbody>${rows}</tbody>
       </table>
       <div class="border-t border-slate-100 bg-slate-50 px-5 py-3 text-[10px] leading-5 text-slate-500">
-        پایان سال به‌طور معمول مهر بعد است؛ اگر مهر موجود نباشد، شهریور به‌عنوان پایان جایگزین می‌شود.
+        پایان سال مهر بعد است؛ برای آخرین سال ناقص، آخرین مقدار موجود تا شهریور به‌عنوان پایان استفاده می‌شود.
       </div>
     `;
   }
@@ -2078,7 +2291,9 @@
       `${status} · ارتفاع چاه: ${formatNumber(well.elevation, " متر")}`;
     document.getElementById("wellModalTrend").innerHTML = [
       trendChip("شیب بازه اصلی", well.trend),
-      trendChip("شیب بازه مقایسه‌ای", well.comparison_trend, "comparison")
+      ...(state.currentData.filters.comparison_enabled ? [
+        trendChip("شیب بازه مقایسه‌ای", well.comparison_trend, "comparison")
+      ] : [])
     ].join(" ");
     document.getElementById("wellModalTable").innerHTML = wellAnnualTable(well);
     modal.querySelectorAll('[data-tab-group="modal-well"]').forEach(button => {
@@ -2127,20 +2342,20 @@
           itemStyle: { color: "#DC2626" },
           z: 4
         },
-        {
-          name: "روند بازه مقایسه‌ای",
-          type: "line",
-          data: alignedTrendSeries(
-            well.comparison_trend,
-            well.series.map(item => item[0])
-          ),
-          showSymbol: false,
-          silent: true,
-          connectNulls: false,
-          lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
-          itemStyle: { color: "#111827" },
-          z: 5
-        }
+        ...(state.currentData.filters.comparison_enabled ? [{
+            name: "روند بازه مقایسه‌ای",
+            type: "line",
+            data: alignedTrendSeries(
+              well.comparison_trend,
+              well.series.map(item => item[0])
+            ),
+            showSymbol: false,
+            silent: true,
+            connectNulls: false,
+            lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+            itemStyle: { color: "#111827" },
+            z: 5
+          }] : [])
       ];
       state.modalChart.setOption(option);
     });
@@ -2173,7 +2388,9 @@
             ${well.exclusion_reason ? `<div class="mt-1 text-[10px] leading-5 text-amber-600">${escapeHtml(well.exclusion_reason)}</div>` : ""}
             <div class="mt-2 flex flex-wrap gap-2">
               ${trendChip("روند اصلی", well.trend)}
-              ${trendChip("روند مقایسه‌ای", well.comparison_trend, "comparison")}
+              ${state.currentData.filters.comparison_enabled
+                ? trendChip("روند مقایسه‌ای", well.comparison_trend, "comparison")
+                : ""}
             </div>
           </div>
           <span class="shrink-0 rounded-full px-3 py-1 text-[10px] ${statusClass}">${statusText}</span>
@@ -2247,20 +2464,20 @@
             itemStyle: { color: "#DC2626" },
             z: 4
           },
-          {
-            name: "روند بازه مقایسه‌ای",
-            type: "line",
-            data: alignedTrendSeries(
-              well.comparison_trend,
-              well.series.map(item => item[0])
-            ),
-            showSymbol: false,
-            silent: true,
-            connectNulls: false,
-            lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
-            itemStyle: { color: "#111827" },
-            z: 5
-          }
+          ...(data.filters.comparison_enabled ? [{
+              name: "روند بازه مقایسه‌ای",
+              type: "line",
+              data: alignedTrendSeries(
+                well.comparison_trend,
+                well.series.map(item => item[0])
+              ),
+              showSymbol: false,
+              silent: true,
+              connectNulls: false,
+              lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+              itemStyle: { color: "#111827" },
+              z: 5
+            }] : [])
         ];
         chart.setOption(option);
         state.charts.push(chart);
@@ -2270,7 +2487,20 @@
     container.querySelectorAll("[data-well-chart]").forEach(element => state.observer.observe(element));
   }
 
-  function renderDashboardData(data) {
+  function activeAquiferTab() {
+    return document.querySelector(
+      '[data-tab-group="aquifer"].is-active'
+    )?.dataset.tab || "chart";
+  }
+
+  function restoreAquiferTab(tab) {
+    const button = document.querySelector(
+      `[data-tab-group="aquifer"][data-tab="${tab}"]`
+    );
+    if (button) switchTab(button);
+  }
+
+  function renderDashboardData(data, activeTab = "chart") {
     disposeVisuals();
     renderFilterControls(data);
     renderStats(data);
@@ -2280,9 +2510,18 @@
     const ndviMetric = document.getElementById("ndviMetric");
     ndviMetric.value = data.ndvi.default_metric;
     ndviMetric.onchange = () => renderAquiferNdviChart(data);
+    const annualDeclineMethod = document.getElementById("annualDeclineMethod");
+    const annualNdviMetric = document.getElementById("annualNdviMetric");
+    annualDeclineMethod.onchange = () => renderAquiferAnnualChanges(data);
+    annualNdviMetric.onchange = () => renderAquiferAnnualChanges(data);
     renderAquiferAnnualTable(data);
     renderSpatialAnalysis(data);
     renderWellCharts(data);
+    if (activeTab !== "chart") {
+      window.requestAnimationFrame(() => restoreAquiferTab(activeTab));
+    } else {
+      syncAquiferPanelHeights();
+    }
   }
 
   function switchTab(button) {
@@ -2296,7 +2535,7 @@
     scope.querySelectorAll(`[data-tab-panel^="${group}-"]`).forEach(panel => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== `${group}-${tab}`);
     });
-    if (tab === "chart" || tab === "ndvi" || tab === "aet") {
+    if (tab === "chart" || tab === "ndvi" || tab === "aet" || tab === "annual") {
       const chartElement = scope.querySelector("[data-well-chart]");
       if (chartElement && state.observer) state.observer.observe(chartElement);
       if (group === "aquifer" && tab === "ndvi") {
@@ -2305,8 +2544,14 @@
       if (group === "aquifer" && tab === "aet") {
         window.requestAnimationFrame(() => renderAquiferAetChart(state.currentData));
       }
+      if (group === "aquifer" && tab === "annual") {
+        window.requestAnimationFrame(() => renderAquiferAnnualChanges(state.currentData));
+      }
       window.setTimeout(() => state.charts.forEach(chart => chart.resize()), 50);
       window.setTimeout(() => state.modalChart?.resize(), 50);
+    }
+    if (group === "aquifer") {
+      syncAquiferPanelHeights();
     }
   }
 
@@ -2314,6 +2559,7 @@
     const aquiferId = root.dataset.aquiferId;
     if (!aquiferId) return;
     const token = ++state.requestToken;
+    const activeTab = activeAquiferTab();
     const button = root.querySelector("#applyAnalysisFilters");
     if (button) {
       button.disabled = true;
@@ -2326,10 +2572,13 @@
         params.set("start_month", filters.startMonth);
         params.set("end_year", filters.endYear);
         params.set("end_month", filters.endMonth);
-        params.set("comparison_start_year", filters.comparisonStartYear);
-        params.set("comparison_start_month", filters.comparisonStartMonth);
-        params.set("comparison_end_year", filters.comparisonEndYear);
-        params.set("comparison_end_month", filters.comparisonEndMonth);
+        params.set("comparison_enabled", String(filters.comparisonEnabled));
+        if (filters.comparisonEnabled) {
+          params.set("comparison_start_year", filters.comparisonStartYear);
+          params.set("comparison_start_month", filters.comparisonStartMonth);
+          params.set("comparison_end_year", filters.comparisonEndYear);
+          params.set("comparison_end_month", filters.comparisonEndMonth);
+        }
         params.set("continuous_only", String(filters.continuousOnly));
         params.set("manual_selection", String(filters.manualSelection));
         filters.selectedWellIds.forEach(wellId => {
@@ -2344,7 +2593,7 @@
       }
       const data = await response.json();
       if (token !== state.requestToken) return;
-      renderDashboardData(data);
+      renderDashboardData(data, activeTab);
     } catch (error) {
       console.error("Dashboard rendering failed:", error);
       window.alert(error.message);
@@ -2369,6 +2618,10 @@
       "change",
       () => renderMonthOptions("comparisonEnd")
     );
+    root.querySelector("#comparisonTrendEnabled").addEventListener(
+      "change",
+      syncComparisonTrendUI
+    );
     form.addEventListener("submit", event => {
       event.preventDefault();
       const startYear = Number(root.querySelector("#startYear").value);
@@ -2387,6 +2640,9 @@
       const comparisonEndMonth = Number(
         root.querySelector("#comparisonEndMonth").value
       );
+      const comparisonEnabled = root.querySelector(
+        "#comparisonTrendEnabled"
+      ).checked;
       const monthsPerYear = state.currentData?.calendar?.months_per_year
         || monthNames.length;
       if (
@@ -2404,14 +2660,14 @@
       const comparisonEndIndex = (
         comparisonEndYear * monthsPerYear + comparisonEndMonth
       );
-      if (comparisonStartIndex > comparisonEndIndex) {
+      if (comparisonEnabled && comparisonStartIndex > comparisonEndIndex) {
         window.alert("تاریخ شروع بازه مقایسه باید قبل از تاریخ پایان باشد.");
         return;
       }
-      if (
+      if (comparisonEnabled && (
         comparisonEndIndex < analysisStartIndex
         || comparisonStartIndex > analysisEndIndex
-      ) {
+      )) {
         window.alert("بازه مقایسه شیب باید با بازه تحلیل هم‌پوشانی داشته باشد.");
         return;
       }
@@ -2430,6 +2686,7 @@
         comparisonStartMonth,
         comparisonEndYear,
         comparisonEndMonth,
+        comparisonEnabled,
         continuousOnly: root.querySelector("#continuousOnly").checked,
         manualSelection,
         selectedWellIds
@@ -2464,6 +2721,7 @@
 
   window.addEventListener("resize", () => {
     syncSpatialMapHeaderHeights();
+    syncAquiferPanelHeights();
     state.charts.forEach(chart => chart.resize());
     state.modalChart?.resize();
     state.precipitationModalChart?.resize();

@@ -24,48 +24,31 @@
   </section>
 
   <form id="analysisFilters" class="panel scroll-mt-5 overflow-hidden">
-    <div class="flex flex-col justify-between gap-3 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center">
+    <div class="flex flex-col justify-between gap-2 border-b border-slate-100 px-5 py-4 md:flex-row md:items-center">
       <div>
         <h3 class="text-sm font-bold text-navy">تنظیم بازه تحلیل</h3>
-        <p class="mt-1 text-[11px] leading-5 text-slate-500">
-          سال و ماه شروع و پایان را مستقل انتخاب کنید؛ محاسبات تیسن با هر تغییر بازسازی خواهند شد.
-        </p>
+        <p class="mt-1 text-[10px] text-slate-500">بازه اصلی و چاه‌های مورد استفاده در محاسبات</p>
       </div>
-      <div class="rounded-lg bg-slate-100 px-3 py-2 text-[10px] text-slate-500">
-        جدول افت: بر مبنای سال آبی مهر تا شهریور
-      </div>
+      <span class="text-[10px] text-slate-400">سال آبی: مهر تا شهریور</span>
     </div>
-    <div class="grid gap-4 p-5 md:p-6 xl:grid-cols-[1fr_1fr_1.25fr_auto] xl:items-end">
-      <fieldset class="date-fieldset">
-        <legend>شروع بازه</legend>
-        <label>
-          <span class="field-label">سال</span>
-          <select id="startYear" class="field year-field" name="start_year"></select>
-        </label>
-        <label>
-          <span class="field-label">ماه</span>
-          <select id="startMonth" class="field" name="start_month"></select>
-        </label>
-      </fieldset>
-      <fieldset class="date-fieldset">
-        <legend>پایان بازه</legend>
-        <label>
-          <span class="field-label">سال</span>
-          <select id="endYear" class="field year-field" name="end_year"></select>
-        </label>
-        <label>
-          <span class="field-label">ماه</span>
-          <select id="endMonth" class="field" name="end_month"></select>
-        </label>
-      </fieldset>
-      <label class="filter-toggle">
+    <div class="analysis-filter-grid">
+      <div class="compact-date-group">
+        <span class="compact-date-label">از</span>
+        <select id="startYear" class="field compact-field year-field" name="start_year" aria-label="سال شروع"></select>
+        <select id="startMonth" class="field compact-field" name="start_month" aria-label="ماه شروع"></select>
+      </div>
+      <span class="hidden text-slate-300 xl:block" aria-hidden="true">←</span>
+      <div class="compact-date-group">
+        <span class="compact-date-label">تا</span>
+        <select id="endYear" class="field compact-field year-field" name="end_year" aria-label="سال پایان"></select>
+        <select id="endMonth" class="field compact-field" name="end_month" aria-label="ماه پایان"></select>
+      </div>
+      <label class="compact-filter-toggle">
         <input id="continuousOnly" type="checkbox" class="peer sr-only" checked>
         <span class="toggle-track"><span class="toggle-thumb"></span></span>
         <span>
-          <strong class="block text-xs font-bold text-navy">فقط چاه‌های پوشش‌دهنده کل بازه</strong>
-          <small class="mt-1 block text-[10px] leading-5 text-slate-500">
-            سابقه چاه باید از ابتدای تا انتهای بازه انتخابی امتداد داشته باشد.
-          </small>
+          <strong class="block text-[11px] font-bold text-navy">پوشش کامل بازه</strong>
+          <small class="block text-[9px] text-slate-400">فقط چاه‌های پیوسته</small>
         </span>
       </label>
       <button id="applyAnalysisFilters" type="submit" class="primary-button">
@@ -73,46 +56,54 @@
         <span aria-hidden="true">←</span>
       </button>
     </div>
-    <div class="grid gap-4 border-t border-slate-100 px-5 py-5 md:grid-cols-2 md:px-6 xl:grid-cols-[1fr_1fr_2.25fr] xl:items-end">
-      <fieldset class="date-fieldset">
-        <legend>شروع بازه مقایسه شیب</legend>
-        <label>
-          <span class="field-label">سال</span>
-          <select id="comparisonStartYear" class="field year-field" name="comparison_start_year"></select>
-        </label>
-        <label>
-          <span class="field-label">ماه</span>
-          <select id="comparisonStartMonth" class="field" name="comparison_start_month"></select>
-        </label>
-      </fieldset>
-      <fieldset class="date-fieldset">
-        <legend>پایان بازه مقایسه شیب</legend>
-        <label>
-          <span class="field-label">سال</span>
-          <select id="comparisonEndYear" class="field year-field" name="comparison_end_year"></select>
-        </label>
-        <label>
-          <span class="field-label">ماه</span>
-          <select id="comparisonEndMonth" class="field" name="comparison_end_month"></select>
-        </label>
-      </fieldset>
-      <div class="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-[10px] leading-6 text-slate-500">
-        این بازه فقط برای شیب مقایسه‌ای است و داده‌ها یا محاسبات بازه اصلی را تغییر نمی‌دهد.
-        پیش‌فرض آن از مهر آخرین سال آبی تا پایان بازه تحلیل است.
-      </div>
-    </div>
-    <div class="border-t border-slate-100 px-5 py-5 md:px-6">
-      <label class="filter-toggle max-w-xl">
-        <input id="manualWellSelection" type="checkbox" class="peer sr-only">
-        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+    <details class="analysis-options">
+      <summary>
         <span>
-          <strong class="block text-xs font-bold text-navy">انتخاب دستی چاه‌های محاسباتی</strong>
-          <small class="mt-1 block text-[10px] leading-5 text-slate-500">
-            هیدروگراف حسابی، تیسن و پهنه‌بندی فقط بر اساس چاه‌های انتخاب‌شده بازسازی می‌شوند.
-          </small>
+          <b>تنظیمات تکمیلی</b>
+          <small>مقایسه شیب و انتخاب دستی پیزومترها</small>
         </span>
-      </label>
-      <div id="manualWellPanel" class="manual-well-panel mt-4 hidden">
+        <span class="analysis-options-arrow" aria-hidden="true">⌄</span>
+      </summary>
+      <div class="grid gap-3 p-4 lg:grid-cols-2">
+        <div class="analysis-option-card">
+          <label class="compact-filter-toggle border-0 bg-transparent p-0">
+            <input id="comparisonTrendEnabled" type="checkbox" class="peer sr-only">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span>
+              <strong class="block text-[11px] font-bold text-navy">مقایسه شیب با بازه دوم</strong>
+              <small class="block text-[9px] text-slate-400">خط‌چین مشکی و مقدار مقایسه‌ای</small>
+            </span>
+          </label>
+          <div id="comparisonTrendPanel" class="mt-3 hidden border-t border-slate-100 pt-3">
+            <div class="grid gap-2 sm:grid-cols-2">
+              <div class="compact-date-group">
+                <span class="compact-date-label">از</span>
+                <select id="comparisonStartYear" class="field compact-field year-field" name="comparison_start_year" aria-label="سال شروع مقایسه"></select>
+                <select id="comparisonStartMonth" class="field compact-field" name="comparison_start_month" aria-label="ماه شروع مقایسه"></select>
+              </div>
+              <div class="compact-date-group">
+                <span class="compact-date-label">تا</span>
+                <select id="comparisonEndYear" class="field compact-field year-field" name="comparison_end_year" aria-label="سال پایان مقایسه"></select>
+                <select id="comparisonEndMonth" class="field compact-field" name="comparison_end_month" aria-label="ماه پایان مقایسه"></select>
+              </div>
+            </div>
+            <p class="mt-2 text-[9px] leading-5 text-slate-400">
+              پیش‌فرض: مهر آخرین سال آبی تا پایان بازه اصلی
+            </p>
+          </div>
+        </div>
+        <div class="analysis-option-card">
+          <label class="compact-filter-toggle border-0 bg-transparent p-0">
+            <input id="manualWellSelection" type="checkbox" class="peer sr-only">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span>
+              <strong class="block text-[11px] font-bold text-navy">انتخاب دستی چاه‌ها</strong>
+              <small class="block text-[9px] text-slate-400">بازسازی هیدروگراف و تیسن با چاه‌های منتخب</small>
+            </span>
+          </label>
+        </div>
+      </div>
+      <div id="manualWellPanel" class="manual-well-panel mx-4 mb-4 hidden">
         <div class="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div class="text-xs font-bold text-navy">چاه‌های مورد استفاده در محاسبات</div>
@@ -126,14 +117,14 @@
         </div>
         <div id="manualWellList" class="manual-well-list"></div>
       </div>
-    </div>
+    </details>
   </form>
 
   <section id="statsGrid" class="grid grid-cols-2 gap-4 lg:grid-cols-5"></section>
 
   <section class="grid gap-6 xl:grid-cols-12">
-    <article class="panel overflow-hidden xl:col-span-5">
-      <div class="section-heading">
+    <article class="panel overflow-hidden xl:col-span-5" data-aquifer-map-panel>
+      <div class="section-heading" data-aquifer-map-heading>
         <div>
           <span class="section-kicker">نمای مکانی</span>
           <h3 class="section-title">شبکه پایش و پهنه‌های تیسن</h3>
@@ -165,7 +156,7 @@
       <div id="map" class="h-[520px] w-full"></div>
     </article>
 
-    <article class="panel overflow-hidden xl:col-span-7">
+    <article class="panel overflow-hidden xl:col-span-7" data-aquifer-analysis-panel>
       <div class="section-heading">
         <div>
           <span class="section-kicker">تحلیل آبخوان</span>
@@ -177,6 +168,7 @@
           <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">تراز + بارش</button>
           <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="ndvi">تراز + NDVI</button>
           <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="aet">تراز + AET</button>
+          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="annual">تغییرات سالانه</button>
           <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
         </div>
       </div>
@@ -184,11 +176,34 @@
         <div id="aquiferChart" class="h-[430px] w-full px-2 pb-2"></div>
         <div id="precipitationSource" class="mx-5 mb-3 rounded-xl border border-sky-100 bg-sky-50/70 px-4 py-2.5 text-[10px] leading-6 text-slate-600"></div>
         <div class="mx-5 mb-5 rounded-2xl border border-sand bg-sand/30 px-4 py-3 text-[10px] leading-6 text-slate-600">
-          خط‌چین قرمز شیب بازه اصلی و خط‌چین مشکی شیب بازه مقایسه‌ای را نشان می‌دهد. جدول فقط از ماه‌های بازه اصلی استفاده می‌کند؛ افت سالانه از مهر تا مهر بعد و برای سال پایانی تا شهریور محاسبه می‌شود.
+          خط‌چین قرمز شیب بازه اصلی است؛ با فعال‌کردن مقایسه، خط‌چین مشکی بازه دوم نیز اضافه می‌شود. جدول فقط از ماه‌های بازه اصلی استفاده می‌کند.
         </div>
       </div>
       <div class="hidden" data-tab-panel="aquifer-table">
         <div id="aquiferAnnualTable" class="table-scroll max-h-[510px]"></div>
+      </div>
+      <div class="hidden" data-tab-panel="aquifer-annual">
+        <div class="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
+          <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
+            روش محاسبه افت
+            <select id="annualDeclineMethod" class="field h-9 w-32 text-xs">
+              <option value="thiessen">تیسن</option>
+              <option value="arithmetic">حسابی</option>
+            </select>
+          </label>
+          <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
+            شاخص NDVI
+            <select id="annualNdviMetric" class="field h-9 w-32 text-xs">
+              <option value="median">میانه</option>
+              <option value="mean">میانگین</option>
+            </select>
+          </label>
+        </div>
+        <div id="aquiferAnnualChangesChart" class="h-[460px] w-full px-2"></div>
+        <div id="aquiferAnnualChangesTable" class="table-scroll max-h-72 border-t border-slate-100"></div>
+        <div class="mx-5 mb-5 mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[9px] leading-5 text-slate-500">
+          بارش و AET مجموع ماه‌های موجود در سال آبی هستند. NDVI میانگین ماهانه شاخص انتخابی است؛ سال‌های کمتر از ۱۲ ماه با برچسب «ناقص» مشخص شده‌اند.
+        </div>
       </div>
       <div class="hidden" data-tab-panel="aquifer-ndvi">
         <div class="flex justify-end border-b border-slate-100 bg-slate-50/70 px-5 py-3">

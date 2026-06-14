@@ -117,6 +117,13 @@ class GroundwaterDataTests(unittest.TestCase):
         self.assertEqual(filters["comparison_start_month"], start_month)
         self.assertEqual(filters["comparison_end_year"], end_year)
         self.assertEqual(filters["comparison_end_month"], end_month)
+        self.assertFalse(filters["comparison_enabled"])
+        self.assertIsNone(
+            payload["hydrographs"]["thiessen_comparison_trend"]
+        )
+        self.assertTrue(
+            all(well["comparison_trend"] is None for well in payload["wells"])
+        )
 
     def test_custom_trend_comparison_is_returned_for_aquifer_and_wells(self) -> None:
         group_id, minimum, maximum = self.group_with_span(24)
@@ -138,6 +145,7 @@ class GroundwaterDataTests(unittest.TestCase):
             comparison_start_month=comparison_start_month,
             comparison_end_year=end_year,
             comparison_end_month=end_month,
+            comparison_enabled=True,
             continuous_only=False,
         )
         expected_labels = [
@@ -160,7 +168,60 @@ class GroundwaterDataTests(unittest.TestCase):
             expected_labels,
         )
         self.assertTrue(
-            all("comparison_trend" in well for well in payload["wells"])
+            all(
+                well["comparison_trend"] is not None
+                for well in payload["wells"]
+            )
+        )
+        self.assertTrue(payload["filters"]["comparison_enabled"])
+
+    def test_annual_changes_aggregate_water_year_metrics(self) -> None:
+        payload = self.service.dashboard(next(iter(self.service.groups)))
+        self.assertTrue(payload["annual_changes"])
+        for row in payload["annual_changes"]:
+            self.assertIn("arithmetic", row["decline"])
+            self.assertIn("thiessen", row["decline"])
+            self.assertLessEqual(
+                row["selected_month_count"],
+                MONTHS_PER_YEAR,
+            )
+            self.assertEqual(
+                row["is_complete"],
+                row["selected_month_count"] == MONTHS_PER_YEAR,
+            )
+            self.assertTrue(
+                row["precipitation_total"] is None
+                or row["precipitation_total"] >= 0
+            )
+            self.assertTrue(
+                row["aet_total"] is None or row["aet_total"] >= 0
+            )
+            self.assertTrue(
+                row["ndvi_mean"] is None
+                or -1 <= row["ndvi_mean"] <= 1
+            )
+            self.assertTrue(
+                row["ndvi_median"] is None
+                or -1 <= row["ndvi_median"] <= 1
+            )
+
+    def test_partial_water_year_is_marked_incomplete(self) -> None:
+        group_id, minimum, maximum = self.group_with_span(6)
+        end_index = min(maximum, minimum + 5)
+        start_year, start_month = self.year_month(minimum)
+        end_year, end_month = self.year_month(end_index)
+        payload = self.service.dashboard(
+            group_id,
+            start_year=start_year,
+            start_month=start_month,
+            end_year=end_year,
+            end_month=end_month,
+            continuous_only=False,
+        )
+
+        self.assertTrue(payload["annual_changes"])
+        self.assertTrue(
+            all(not row["is_complete"] for row in payload["annual_changes"])
         )
 
     def test_comparison_default_period_uses_full_dynamic_data_domain(self) -> None:
@@ -596,6 +657,22 @@ class GroundwaterDataTests(unittest.TestCase):
             f"{base_year + 1}-{WATER_YEAR_END_MONTH:02d}",
         )
         self.assertEqual(rows[0]["decline"], 2.0)
+
+    def test_final_incomplete_water_year_uses_latest_available_month(self) -> None:
+        base_year = 1
+        latest_month = 10
+        rows = self.service._annual_decline_rows(
+            {
+                base_year * MONTHS_PER_YEAR + WATER_YEAR_START_MONTH: 100.0,
+                base_year * MONTHS_PER_YEAR + latest_month: 98.5,
+            },
+            base_year,
+            base_year,
+        )
+
+        self.assertEqual(rows[0]["end_month"], f"{base_year}-{latest_month:02d}")
+        self.assertEqual(rows[0]["end_level"], 98.5)
+        self.assertEqual(rows[0]["decline"], 1.5)
 
     def test_final_annual_decline_matches_selected_chart_period(self) -> None:
         payload = next(
