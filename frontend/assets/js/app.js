@@ -649,13 +649,6 @@
     const echartsLayer = component.getEChartsLayer();
     if (echartsLayer) {
       echartsLayer.style.zIndex = "450";
-      const container = echartsLayer.parentElement;
-      if (container) {
-        container.style.position = "absolute";
-        container.style.inset = "0";
-        container.style.zIndex = "450";
-        container.style.pointerEvents = "none";
-      }
     }
     addBaseMap(map);
     map.createPane("aquiferBoundaryPane");

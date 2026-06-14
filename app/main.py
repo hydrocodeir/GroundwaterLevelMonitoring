@@ -15,6 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 app = FastAPI(title="داشبورد پایش آب زیرزمینی")
 app.mount("/assets", StaticFiles(directory=ROOT / "frontend" / "assets"), name="assets")
 templates = Jinja2Templates(directory=ROOT / "frontend" / "templates")
+templates.env.globals["asset_version"] = max(
+    (ROOT / "frontend" / "assets" / "css" / "app.css").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "app.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "comparison.js").stat().st_mtime_ns,
+)
 
 
 @app.on_event("startup")

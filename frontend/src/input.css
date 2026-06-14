@@ -343,6 +343,7 @@
 .leaflet-container {
   font-family: "Vazirmatn", sans-serif;
   background: #dcebea;
+  direction: ltr;
 }
 
 .leaflet-bar,

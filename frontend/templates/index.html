@@ -9,12 +9,12 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('assets', path='img/favicon-192.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('assets', path='img/favicon-192.png') }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/leaflet.css') }}">
-    <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}?v={{ asset_version }}">
     <script defer src="{{ url_for('assets', path='js/htmx.min.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/echarts.min.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/echarts-extension-leaflet.js') }}"></script>
-    <script defer src="{{ url_for('assets', path='js/app.js') }}"></script>
+    <script defer src="{{ url_for('assets', path='js/app.js') }}?v={{ asset_version }}"></script>
   </head>
   <body class="relative isolate min-h-screen bg-mist">
     <div class="fixed inset-x-0 top-0 -z-10 h-[30rem] overflow-hidden bg-gradient-to-bl from-navy via-[#14506d] to-teal">
