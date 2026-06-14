@@ -18,6 +18,10 @@ import jdatetime
 
 
 COLLECTION_ID = "LANDSAT/LC08/C02/T1_L2"
+WORLD_COVER_COLLECTION_ID = "ESA/WorldCover/v200"
+WORLD_COVER_YEAR = 2021
+WORLD_COVER_CROPLAND_CLASS = 40
+RUN_METADATA_VERSION = 1
 CSV_FIELDS = [
     "MAHDOUDE",
     "AQUIFER",
@@ -83,6 +87,16 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=6,
         help="Solar Hijri months per Earth Engine request (default: 6)",
+    )
+    parser.add_argument(
+        "--land-cover-mask",
+        choices=("worldcover", "none"),
+        default="worldcover",
+        help=(
+            "Pixel mask applied before polygon statistics: worldcover keeps "
+            "only ESA WorldCover 2021 cropland class 40; none keeps the full "
+            "aquifer (default: worldcover)"
+        ),
     )
     parser.add_argument(
         "--overwrite",
@@ -203,12 +217,28 @@ def mask_and_calculate_ndvi(image: ee.Image) -> ee.Image:
     )
 
 
+def build_land_cover_mask(mask_name: str) -> ee.Image | None:
+    if mask_name == "none":
+        return None
+    if mask_name == "worldcover":
+        return (
+            ee.ImageCollection(WORLD_COVER_COLLECTION_ID)
+            .first()
+            .select("Map")
+            .eq(WORLD_COVER_CROPLAND_CLASS)
+            .selfMask()
+            .rename("cropland")
+        )
+    raise ValueError(f"Unsupported land-cover mask: {mask_name}")
+
+
 def monthly_statistics_collection(
     aquifers: ee.FeatureCollection,
     period_start: date,
     period_end: date,
     scale: float,
     tile_scale: float,
+    land_cover_mask: ee.Image | None,
 ) -> ee.FeatureCollection:
     images = (
         ee.ImageCollection(COLLECTION_ID)
@@ -232,6 +262,8 @@ def monthly_statistics_collection(
     monthly_images = ee.Image(
         ee.Algorithms.If(images.size().gt(0), composites, empty)
     )
+    if land_cover_mask is not None:
+        monthly_images = monthly_images.updateMask(land_cover_mask)
     reducer = (
         ee.Reducer.mean()
         .combine(ee.Reducer.median(), sharedInputs=False)
@@ -255,9 +287,47 @@ def finite_or_blank(value: Any) -> float | str:
     return round(number, 6)
 
 
-def read_existing_rows(path: Path, overwrite: bool) -> list[dict[str, Any]]:
+def metadata_path(path: Path) -> Path:
+    return path.with_suffix(path.suffix + ".metadata.json")
+
+
+def run_metadata(mask_name: str) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "version": RUN_METADATA_VERSION,
+        "landsat_collection": COLLECTION_ID,
+        "land_cover_mask": mask_name,
+    }
+    if mask_name == "worldcover":
+        metadata.update(
+            {
+                "land_cover_collection": WORLD_COVER_COLLECTION_ID,
+                "land_cover_year": WORLD_COVER_YEAR,
+                "cropland_class": WORLD_COVER_CROPLAND_CLASS,
+            }
+        )
+    return metadata
+
+
+def read_existing_rows(
+    path: Path,
+    overwrite: bool,
+    expected_metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
     if overwrite or not path.exists():
         return []
+    run_metadata_path = metadata_path(path)
+    if not run_metadata_path.exists():
+        raise ValueError(
+            f"{path} has no run metadata and may contain full-aquifer NDVI. "
+            "Use --overwrite to recalculate it with the selected land-cover mask."
+        )
+    with run_metadata_path.open(encoding="utf-8") as source:
+        existing_metadata = json.load(source)
+    if existing_metadata != expected_metadata:
+        raise ValueError(
+            f"{path} was created with different mask settings. "
+            "Use --overwrite to replace it."
+        )
     with path.open(encoding="utf-8-sig", newline="") as source:
         reader = csv.DictReader(source)
         if reader.fieldnames != CSV_FIELDS:
@@ -281,16 +351,31 @@ def write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
     temporary.replace(path)
 
 
+def write_metadata(path: Path, metadata: dict[str, Any]) -> None:
+    run_metadata_path = metadata_path(path)
+    temporary = run_metadata_path.with_suffix(run_metadata_path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as destination:
+        json.dump(metadata, destination, ensure_ascii=False, indent=2)
+        destination.write("\n")
+    temporary.replace(run_metadata_path)
+
+
 def batch_statistics(
     aquifers: ee.FeatureCollection,
     periods: list[tuple[str, date, date, bool]],
     scale: float,
     tile_scale: float,
+    land_cover_mask: ee.Image | None,
 ) -> list[dict[str, Any]]:
     merged = ee.FeatureCollection([])
     for jalali_date, period_start, period_end, _ in periods:
         reduced = monthly_statistics_collection(
-            aquifers, period_start, period_end, scale, tile_scale
+            aquifers,
+            period_start,
+            period_end,
+            scale,
+            tile_scale,
+            land_cover_mask,
         ).map(lambda feature: feature.set("DATE", jalali_date))
         merged = merged.merge(reduced)
 
@@ -303,11 +388,18 @@ def fetch_with_retries(
     periods: list[tuple[str, date, date, bool]],
     scale: float,
     tile_scale: float,
+    land_cover_mask: ee.Image | None,
     attempts: int = 5,
 ) -> list[dict[str, Any]]:
     for attempt in range(1, attempts + 1):
         try:
-            return batch_statistics(aquifers, periods, scale, tile_scale)
+            return batch_statistics(
+                aquifers,
+                periods,
+                scale,
+                tile_scale,
+                land_cover_mask,
+            )
         except Exception:
             if attempt == attempts:
                 raise
@@ -322,11 +414,21 @@ def main() -> None:
     if args.batch_size < 1:
         raise ValueError("--batch-size must be at least 1")
 
+    expected_metadata = run_metadata(args.land_cover_mask)
+    rows = read_existing_rows(
+        args.output,
+        args.overwrite,
+        expected_metadata,
+    )
+
     initialize_earth_engine(args.credentials)
     aquifers, identities = load_aquifers(args.geojson)
+    land_cover_mask = build_land_cover_mask(args.land_cover_mask)
     periods = iter_jalali_months(args.start, args.end)
 
-    rows = read_existing_rows(args.output, args.overwrite)
+    if args.overwrite:
+        write_rows(args.output, [])
+        write_metadata(args.output, expected_metadata)
     date_counts = Counter(row["DATE"] for row in rows)
     completed_dates = {
         output_date
@@ -355,6 +457,7 @@ def main() -> None:
             batch,
             args.scale,
             args.tile_scale,
+            land_cover_mask,
         )
         expected_features = len(batch) * len(identities)
         if len(properties) != expected_features:
@@ -377,6 +480,7 @@ def main() -> None:
                 }
             )
         write_rows(args.output, rows)
+        write_metadata(args.output, expected_metadata)
 
     print(f"Wrote {len(rows)} rows to {args.output}")
 

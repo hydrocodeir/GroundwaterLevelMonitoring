@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "landsat_collection": "LANDSAT/LC08/C02/T1_L2",
+  "land_cover_mask": "worldcover",
+  "land_cover_collection": "ESA/WorldCover/v200",
+  "land_cover_year": 2021,
+  "cropland_class": 40
+}
