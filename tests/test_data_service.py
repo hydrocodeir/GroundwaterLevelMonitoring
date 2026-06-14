@@ -214,6 +214,22 @@ class GroundwaterDataTests(unittest.TestCase):
                 )
             )
 
+    def test_aet_series_matches_hydrograph_period(self) -> None:
+        payload = self.service.dashboard(next(iter(self.service.groups)))
+        aet = payload["aet"]
+        hydrograph_months = [
+            item[0] for item in payload["hydrographs"]["thiessen"]
+        ]
+
+        self.assertEqual(aet["unit"], "میلی‌متر در ماه")
+        self.assertEqual([item[0] for item in aet["series"]], hydrograph_months)
+        self.assertTrue(
+            all(
+                value is None or value >= 0
+                for _, value in aet["series"]
+            )
+        )
+
     def test_ndvi_matches_the_aquifer_boundary_names(self) -> None:
         group_id = next(
             group_id

@@ -15,6 +15,7 @@
     modalChart: null,
     precipitationModalChart: null,
     aquiferNdviChart: null,
+    aquiferAetChart: null,
     observer: null,
     requestToken: 0,
     currentData: null
@@ -1171,6 +1172,7 @@
       state.precipitationModalChart = null;
     }
     state.aquiferNdviChart = null;
+    state.aquiferAetChart = null;
     document.getElementById("wellDetailModal")?.classList.add("hidden");
     document.getElementById("precipitationDetailModal")?.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
@@ -1293,6 +1295,31 @@
       tooltip: {
         valueFormatter: value => (
           value == null ? "بدون داده" : faNumber.format(value)
+        )
+      },
+      z: 1
+    };
+  }
+
+  function aetBarSeries(aet) {
+    return {
+      name: "AET ماهانه",
+      type: "bar",
+      yAxisIndex: 1,
+      data: aet.series.map(item => item[1]),
+      barMaxWidth: 14,
+      itemStyle: {
+        color: "rgba(245, 158, 11, 0.38)",
+        borderColor: "rgba(217, 119, 6, 0.78)",
+        borderWidth: 0.8,
+        borderRadius: [3, 3, 0, 0]
+      },
+      emphasis: {
+        itemStyle: { color: "rgba(217, 119, 6, 0.66)" }
+      },
+      tooltip: {
+        valueFormatter: value => (
+          value == null ? "بدون داده" : `${faNumber.format(value)} میلی‌متر`
         )
       },
       z: 1
@@ -1766,6 +1793,84 @@
     state.aquiferNdviChart.resize();
   }
 
+  function renderAquiferAetChart(data) {
+    const element = document.getElementById("aquiferAetChart");
+    if (!element || element.closest(".hidden")) return;
+    if (!state.aquiferAetChart) {
+      state.aquiferAetChart = echarts.init(element);
+      state.charts.push(state.aquiferAetChart);
+    }
+
+    const option = baseChartOption();
+    option.xAxis.data = data.hydrographs.arithmetic.map(item => item[0]);
+    option.yAxis[1] = {
+      type: "value",
+      name: "AET (mm/month)",
+      min: 0,
+      nameTextStyle: {
+        fontFamily: "Vazirmatn",
+        fontSize: 10,
+        padding: [0, 0, 8, 0],
+        color: "#D97706"
+      },
+      axisLine: { show: true, lineStyle: { color: "#F59E0B" } },
+      axisTick: { show: true, lineStyle: { color: "#F59E0B" } },
+      splitLine: { show: false },
+      axisLabel: {
+        formatter: value => faNumber.format(value),
+        fontSize: 9,
+        color: "#D97706"
+      }
+    };
+    option.legend = {
+      top: 4,
+      right: 0,
+      textStyle: { fontFamily: "Vazirmatn", fontSize: 11 },
+      itemWidth: 18,
+      selected: {
+        "میانگین حسابی": false,
+        "میانگین تیسن": true,
+        "AET ماهانه": true
+      }
+    };
+    option.grid.top = 76;
+    option.series = [
+      aetBarSeries(data.aet),
+      {
+        name: "میانگین حسابی",
+        type: "line",
+        data: data.hydrographs.arithmetic.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#11395B" },
+        itemStyle: { color: "#11395B" },
+        tooltip: {
+          valueFormatter: value => (
+            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          )
+        },
+        z: 3
+      },
+      {
+        name: "میانگین تیسن",
+        type: "line",
+        data: data.hydrographs.thiessen.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#E76F51" },
+        itemStyle: { color: "#E76F51" },
+        tooltip: {
+          valueFormatter: value => (
+            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          )
+        },
+        z: 3
+      }
+    ];
+    state.aquiferAetChart.setOption(option, true);
+    state.aquiferAetChart.resize();
+  }
+
   function renderAquiferAnnualTable(data) {
     const container = document.getElementById("aquiferAnnualTable");
     const rows = data.annual_decline.map(row => `
@@ -2101,11 +2206,14 @@
     scope.querySelectorAll(`[data-tab-panel^="${group}-"]`).forEach(panel => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== `${group}-${tab}`);
     });
-    if (tab === "chart" || tab === "ndvi") {
+    if (tab === "chart" || tab === "ndvi" || tab === "aet") {
       const chartElement = scope.querySelector("[data-well-chart]");
       if (chartElement && state.observer) state.observer.observe(chartElement);
       if (group === "aquifer" && tab === "ndvi") {
         window.requestAnimationFrame(() => renderAquiferNdviChart(state.currentData));
+      }
+      if (group === "aquifer" && tab === "aet") {
+        window.requestAnimationFrame(() => renderAquiferAetChart(state.currentData));
       }
       window.setTimeout(() => state.charts.forEach(chart => chart.resize()), 50);
       window.setTimeout(() => state.modalChart?.resize(), 50);

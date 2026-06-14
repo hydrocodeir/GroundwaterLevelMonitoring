@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export monthly Landsat 8 NDVI statistics for the aquifer polygons."""
+"""Export Solar Hijri monthly WaPOR actual evapotranspiration by aquifer."""
 
 from __future__ import annotations
 
@@ -17,26 +17,20 @@ import ee
 import jdatetime
 
 
-COLLECTION_ID = "LANDSAT/LC08/C02/T1_L2"
-GFSAD_LGRIP30_ASSET_ID = "projects/sat-io/open-datasets/GFSAD/LGRIP30"
-GFSAD_IRRIGATED_CROPLAND_CLASS = 2
-RUN_METADATA_VERSION = 2
-CSV_FIELDS = [
-    "MAHDOUDE",
-    "AQUIFER",
-    "DATE",
-    "NDVI_MEAN",
-    "NDVI_MEDIAN",
-    "NDVI_MAX",
-]
+COLLECTION_ID = "FAO/WAPOR/3/L1_AETI_D"
+BAND_NAME = "L1-AETI-D"
+BAND_SCALE_FACTOR = 0.1
+DATASET_START = date(2018, 1, 1)
+RUN_METADATA_VERSION = 1
+CSV_FIELDS = ["MAHDOUDE", "AQUIFER", "DATE", "AET"]
 
 
 def parse_args() -> argparse.Namespace:
     today = date.today()
     parser = argparse.ArgumentParser(
         description=(
-            "Calculate Landsat 8 monthly NDVI statistics inside each aquifer. "
-            "DATE values are Solar Hijri month starts."
+            "Calculate mean monthly actual evapotranspiration and interception "
+            "inside each aquifer. DATE values are Solar Hijri month starts."
         )
     )
     parser.add_argument(
@@ -54,14 +48,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("Data/Monthly_NDVI.csv"),
-        help="Output CSV path (default: Data/Monthly_NDVI.csv)",
+        default=Path("Data/Monthly_AET.csv"),
+        help="Output CSV path (default: Data/Monthly_AET.csv)",
     )
     parser.add_argument(
         "--start",
         type=date.fromisoformat,
-        default=date(2013, 3, 18),
-        help="Inclusive Gregorian start date (default: Landsat 8 availability)",
+        default=DATASET_START,
+        help="Inclusive Gregorian start date (default: 2018-01-01)",
     )
     parser.add_argument(
         "--end",
@@ -72,8 +66,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scale",
         type=float,
-        default=30,
-        help="Earth Engine reduction scale in meters (default: 30)",
+        default=250,
+        help="Earth Engine reduction scale in meters (default: 250)",
     )
     parser.add_argument(
         "--tile-scale",
@@ -84,18 +78,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=6,
-        help="Solar Hijri months per Earth Engine request (default: 6)",
-    )
-    parser.add_argument(
-        "--land-cover-mask",
-        choices=("gfsad-irrigated", "none"),
-        default="gfsad-irrigated",
-        help=(
-            "Pixel mask applied before polygon statistics: gfsad-irrigated "
-            "keeps only class 2 (irrigated croplands) from GFSAD LGRIP30; "
-            "none keeps the full aquifer (default: gfsad-irrigated)"
-        ),
+        default=12,
+        help="Solar Hijri months per Earth Engine request (default: 12)",
     )
     parser.add_argument(
         "--overwrite",
@@ -202,32 +186,50 @@ def initialize_earth_engine(credentials_path: Path) -> None:
         raise
 
 
-def mask_and_calculate_ndvi(image: ee.Image) -> ee.Image:
-    qa_pixel = image.select("QA_PIXEL")
-    clear = qa_pixel.bitwiseAnd(0b111111).eq(0)
-    unsaturated = image.select("QA_RADSAT").eq(0)
-
-    red = image.select("SR_B4").multiply(0.0000275).add(-0.2)
-    nir = image.select("SR_B5").multiply(0.0000275).add(-0.2)
-    valid_reflectance = red.gte(0).And(nir.gte(0))
-    ndvi = nir.subtract(red).divide(nir.add(red)).rename("NDVI")
-    return ndvi.updateMask(clear.And(unsaturated).And(valid_reflectance)).copyProperties(
-        image, ["system:time_start"]
+def dekad_end(image_start: ee.Date) -> ee.Date:
+    day_of_month = ee.Number.parse(image_start.format("d"))
+    month_start = ee.Date.fromYMD(
+        image_start.get("year"),
+        image_start.get("month"),
+        1,
+    )
+    return ee.Date(
+        ee.Algorithms.If(
+            day_of_month.lt(21),
+            image_start.advance(10, "day"),
+            month_start.advance(1, "month"),
+        )
     )
 
 
-def build_land_cover_mask(mask_name: str) -> ee.Image | None:
-    if mask_name == "none":
-        return None
-    if mask_name == "gfsad-irrigated":
-        return (
-            ee.Image(GFSAD_LGRIP30_ASSET_ID)
-            .select([0])
-            .eq(GFSAD_IRRIGATED_CROPLAND_CLASS)
-            .selfMask()
-            .rename("irrigated_cropland")
+def monthly_contribution(
+    image: ee.Image,
+    period_start: ee.Date,
+    period_end: ee.Date,
+) -> ee.Image:
+    image_start = ee.Date(image.get("system:time_start"))
+    fallback_end = dekad_end(image_start)
+    image_end = ee.Date(
+        ee.Algorithms.If(
+            image.propertyNames().contains("system:time_end"),
+            image.get("system:time_end"),
+            fallback_end.millis(),
         )
-    raise ValueError(f"Unsupported land-cover mask: {mask_name}")
+    )
+    overlap_start = ee.Date(
+        ee.Number(image_start.millis()).max(period_start.millis())
+    )
+    overlap_end = ee.Date(
+        ee.Number(image_end.millis()).min(period_end.millis())
+    )
+    overlap_days = ee.Number(overlap_end.difference(overlap_start, "day")).max(0)
+    contribution = (
+        image.select(BAND_NAME)
+        .multiply(BAND_SCALE_FACTOR)
+        .multiply(overlap_days)
+        .rename("AET")
+    )
+    return contribution.set("_overlap_days", overlap_days)
 
 
 def monthly_statistics_collection(
@@ -236,44 +238,30 @@ def monthly_statistics_collection(
     period_end: date,
     scale: float,
     tile_scale: float,
-    land_cover_mask: ee.Image | None,
 ) -> ee.FeatureCollection:
-    images = (
+    start = ee.Date(period_start.isoformat())
+    end = ee.Date(period_end.isoformat())
+    contributions = (
         ee.ImageCollection(COLLECTION_ID)
         .filterBounds(aquifers.geometry())
-        .filterDate(period_start.isoformat(), period_end.isoformat())
-        .map(mask_and_calculate_ndvi)
+        .filterDate(start.advance(-11, "day"), end)
+        .map(lambda image: monthly_contribution(image, start, end))
+        .filter(ee.Filter.gt("_overlap_days", 0))
     )
-
-    empty_mask = ee.Image.constant(0)
-    empty = (
-        ee.Image.constant([0, 0, 0])
-        .rename(["NDVI_MEAN", "NDVI_MEDIAN", "NDVI_MAX"])
-        .updateMask(empty_mask)
+    empty = ee.Image.constant(0).rename("AET").updateMask(ee.Image.constant(0))
+    monthly_total = ee.Image(
+        ee.Algorithms.If(
+            contributions.size().gt(0),
+            contributions.sum().rename("AET"),
+            empty,
+        )
     )
-    composites = (
-        images.mean()
-        .rename("NDVI_MEAN")
-        .addBands(images.median().rename("NDVI_MEDIAN"))
-        .addBands(images.max().rename("NDVI_MAX"))
-    )
-    monthly_images = ee.Image(
-        ee.Algorithms.If(images.size().gt(0), composites, empty)
-    )
-    if land_cover_mask is not None:
-        monthly_images = monthly_images.updateMask(land_cover_mask)
-    reducer = (
-        ee.Reducer.mean()
-        .combine(ee.Reducer.median(), sharedInputs=False)
-        .combine(ee.Reducer.max(), sharedInputs=False)
-    )
-    reduced = monthly_images.reduceRegions(
+    return monthly_total.reduceRegions(
         collection=aquifers,
-        reducer=reducer,
+        reducer=ee.Reducer.mean(),
         scale=scale,
         tileScale=tile_scale,
     )
-    return reduced
 
 
 def finite_or_blank(value: Any) -> float | str:
@@ -282,29 +270,24 @@ def finite_or_blank(value: Any) -> float | str:
     number = float(value)
     if not math.isfinite(number):
         return ""
-    return round(number, 6)
+    return round(number, 3)
 
 
 def metadata_path(path: Path) -> Path:
     return path.with_suffix(path.suffix + ".metadata.json")
 
 
-def run_metadata(mask_name: str) -> dict[str, Any]:
-    metadata: dict[str, Any] = {
+def run_metadata() -> dict[str, Any]:
+    return {
         "version": RUN_METADATA_VERSION,
-        "landsat_collection": COLLECTION_ID,
-        "land_cover_mask": mask_name,
+        "collection": COLLECTION_ID,
+        "band": BAND_NAME,
+        "source_unit": "mm/day",
+        "output_unit": "mm/month",
+        "scale_factor": BAND_SCALE_FACTOR,
+        "temporal_aggregation": "sum_daily_rate_weighted_by_solar_month_overlap",
+        "spatial_aggregation": "mean_inside_aquifer",
     }
-    if mask_name == "gfsad-irrigated":
-        metadata.update(
-            {
-                "land_cover_asset": GFSAD_LGRIP30_ASSET_ID,
-                "land_cover_product": "LGRIP30",
-                "cropland_class": GFSAD_IRRIGATED_CROPLAND_CLASS,
-                "cropland_label": "Irrigated croplands",
-            }
-        )
-    return metadata
 
 
 def read_existing_rows(
@@ -317,14 +300,13 @@ def read_existing_rows(
     run_metadata_path = metadata_path(path)
     if not run_metadata_path.exists():
         raise ValueError(
-            f"{path} has no run metadata and may contain full-aquifer NDVI. "
-            "Use --overwrite to recalculate it with the selected land-cover mask."
+            f"{path} has no run metadata. Use --overwrite to recalculate it."
         )
     with run_metadata_path.open(encoding="utf-8") as source:
         existing_metadata = json.load(source)
     if existing_metadata != expected_metadata:
         raise ValueError(
-            f"{path} was created with different mask settings. "
+            f"{path} was created with different settings. "
             "Use --overwrite to replace it."
         )
     with path.open(encoding="utf-8-sig", newline="") as source:
@@ -364,7 +346,6 @@ def batch_statistics(
     periods: list[tuple[str, date, date, bool]],
     scale: float,
     tile_scale: float,
-    land_cover_mask: ee.Image | None,
 ) -> list[dict[str, Any]]:
     merged = ee.FeatureCollection([])
     for jalali_date, period_start, period_end, _ in periods:
@@ -374,7 +355,6 @@ def batch_statistics(
             period_end,
             scale,
             tile_scale,
-            land_cover_mask,
         ).map(lambda feature: feature.set("DATE", jalali_date))
         merged = merged.merge(reduced)
 
@@ -387,7 +367,6 @@ def fetch_with_retries(
     periods: list[tuple[str, date, date, bool]],
     scale: float,
     tile_scale: float,
-    land_cover_mask: ee.Image | None,
     attempts: int = 5,
 ) -> list[dict[str, Any]]:
     for attempt in range(1, attempts + 1):
@@ -397,7 +376,6 @@ def fetch_with_retries(
                 periods,
                 scale,
                 tile_scale,
-                land_cover_mask,
             )
         except Exception:
             if attempt == attempts:
@@ -412,8 +390,13 @@ def main() -> None:
     args = parse_args()
     if args.batch_size < 1:
         raise ValueError("--batch-size must be at least 1")
+    if args.start < DATASET_START:
+        raise ValueError(
+            f"WaPOR 3.0 starts on {DATASET_START.isoformat()}; "
+            "choose a later --start date"
+        )
 
-    expected_metadata = run_metadata(args.land_cover_mask)
+    expected_metadata = run_metadata()
     rows = read_existing_rows(
         args.output,
         args.overwrite,
@@ -422,7 +405,6 @@ def main() -> None:
 
     initialize_earth_engine(args.credentials)
     aquifers, identities = load_aquifers(args.geojson)
-    land_cover_mask = build_land_cover_mask(args.land_cover_mask)
     periods = iter_jalali_months(args.start, args.end)
 
     if args.overwrite:
@@ -434,7 +416,6 @@ def main() -> None:
         for output_date, count in date_counts.items()
         if count == len(identities)
     }
-
     pending = [
         period
         for period in periods
@@ -456,7 +437,6 @@ def main() -> None:
             batch,
             args.scale,
             args.tile_scale,
-            land_cover_mask,
         )
         expected_features = len(batch) * len(identities)
         if len(properties) != expected_features:
@@ -473,9 +453,7 @@ def main() -> None:
                     "MAHDOUDE": item["MAHDOUDE"],
                     "AQUIFER": item["AQUIFER"],
                     "DATE": item["DATE"],
-                    "NDVI_MEAN": finite_or_blank(item.get("mean")),
-                    "NDVI_MEDIAN": finite_or_blank(item.get("median")),
-                    "NDVI_MAX": finite_or_blank(item.get("max")),
+                    "AET": finite_or_blank(item.get("mean")),
                 }
             )
         write_rows(args.output, rows)

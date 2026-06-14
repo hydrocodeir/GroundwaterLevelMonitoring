@@ -148,6 +148,7 @@
         <div class="tab-list" role="tablist" aria-label="نمای تحلیل آبخوان">
           <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">تراز + بارش</button>
           <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="ndvi">تراز + NDVI</button>
+          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="aet">تراز + AET</button>
           <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
         </div>
       </div>
@@ -175,6 +176,12 @@
         <div id="aquiferNdviChart" class="h-[430px] w-full px-2 pb-2"></div>
         <div class="mx-5 mb-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-[10px] leading-6 text-slate-600">
           ستون‌ها NDVI ماهانه آبخوان را از Landsat 8 نشان می‌دهند. شاخص آماری از فهرست بالا قابل تغییر است.
+        </div>
+      </div>
+      <div class="hidden" data-tab-panel="aquifer-aet">
+        <div id="aquiferAetChart" class="h-[430px] w-full px-2 pb-2"></div>
+        <div class="mx-5 mb-5 rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-[10px] leading-6 text-slate-600">
+          ستون‌ها میانگین مکانی تبخیر و تعرق واقعی و تبخیر آب رهگیری‌شده ماهانه آبخوان را از WaPOR 3 نشان می‌دهند. واحد مقادیر میلی‌متر در ماه است.
         </div>
       </div>
     </article>

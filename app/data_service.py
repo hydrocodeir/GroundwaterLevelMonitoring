@@ -72,6 +72,7 @@ class GroundwaterData:
         self.groups = self._build_groups()
         self.boundary_matches = self._match_boundaries()
         self.ndvi = self._load_ndvi()
+        self.aet = self._load_aet()
         self.precipitation = self._load_precipitation()
         self.precipitation_stations = self._precipitation_station_metadata()
         self.precipitation_selections = {
@@ -249,6 +250,60 @@ class GroundwaterData:
             )
         )
 
+    @staticmethod
+    def _load_aet() -> pd.DataFrame:
+        path = DATA_DIR / "Monthly_AET.csv"
+        result_columns = [
+            "_mahdoude_key",
+            "_aquifer_key",
+            "_month_index",
+            "AET",
+        ]
+        if not path.exists():
+            return pd.DataFrame(columns=result_columns)
+
+        frame = pd.read_csv(path, encoding="utf-8-sig")
+        required = {"MAHDOUDE", "AQUIFER", "DATE", "AET"}
+        missing = required.difference(frame.columns)
+        if missing:
+            raise ValueError(
+                f"ستون‌های فایل AET کامل نیستند: {', '.join(sorted(missing))}"
+            )
+
+        date_parts = frame["DATE"].astype(str).str.extract(
+            r"^(?P<year>\d{4})-(?P<month>\d{1,2})-\d{1,2}$"
+        )
+        frame["_year"] = pd.to_numeric(date_parts["year"], errors="coerce")
+        frame["_month_number"] = pd.to_numeric(
+            date_parts["month"],
+            errors="coerce",
+        )
+        frame["AET"] = pd.to_numeric(frame["AET"], errors="coerce")
+        frame = frame.dropna(
+            subset=["MAHDOUDE", "AQUIFER", "_year", "_month_number"]
+        ).copy()
+        frame = frame[
+            frame["_month_number"].between(1, MONTHS_PER_YEAR)
+            & (frame["AET"].isna() | frame["AET"].ge(0))
+        ].copy()
+        frame["_year"] = frame["_year"].astype(int)
+        frame["_month_number"] = frame["_month_number"].astype(int)
+        frame["_month_index"] = (
+            frame["_year"] * MONTHS_PER_YEAR + frame["_month_number"]
+        )
+        frame["_mahdoude_key"] = frame["MAHDOUDE"].map(normalize_name)
+        frame["_aquifer_key"] = frame["AQUIFER"].map(normalize_name)
+        return (
+            frame.groupby(
+                ["_mahdoude_key", "_aquifer_key", "_month_index"],
+                as_index=False,
+            )[["AET"]]
+            .mean()
+            .sort_values(
+                ["_mahdoude_key", "_aquifer_key", "_month_index"]
+            )
+        )
+
     def _station_mahdoude_name(self, point: Point) -> str | None:
         matches = [
             feature.properties.get("MAHDOUDE", "")
@@ -405,6 +460,34 @@ class GroundwaterData:
                 ]
                 for metric, column in metric_columns.items()
             },
+        }
+
+    def _aet_payload(
+        self,
+        group_id: str,
+        months: list[tuple[int, str]],
+    ) -> dict[str, Any]:
+        properties = self.boundary_matches[group_id]["aquifer"].properties
+        mahdoude_key = normalize_name(properties.get("MAHDOUDE", ""))
+        aquifer_key = normalize_name(properties.get("AQUIFER", ""))
+        selected = self.aet[
+            (self.aet["_mahdoude_key"] == mahdoude_key)
+            & (self.aet["_aquifer_key"] == aquifer_key)
+        ].set_index("_month_index")
+        return {
+            "unit": "میلی‌متر در ماه",
+            "series": [
+                [
+                    label,
+                    finite_or_none(
+                        selected.at[index, "AET"]
+                        if index in selected.index
+                        else None,
+                        2,
+                    ),
+                ]
+                for index, label in months
+            ],
         }
 
     def _build_groups(self) -> dict[str, dict[str, Any]]:
@@ -1255,6 +1338,7 @@ class GroundwaterData:
         )
         precipitation = self._precipitation_payload(group_id, months)
         ndvi = self._ndvi_payload(group_id, months)
+        aet = self._aet_payload(group_id, months)
         group_minimum = int(group_monthly["_month_index"].min())
         group_maximum = int(group_monthly["_month_index"].max())
         active_wells = sum(well["has_range_data"] for well in wells)
@@ -1325,6 +1409,7 @@ class GroundwaterData:
             "annual_decline": aquifer_annual_decline,
             "precipitation": precipitation,
             "ndvi": ndvi,
+            "aet": aet,
             "wells": wells,
         }
 

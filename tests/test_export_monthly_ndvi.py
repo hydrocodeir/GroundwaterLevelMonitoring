@@ -66,7 +66,7 @@ class MonthlyNdviExportTests(unittest.TestCase):
                 read_existing_rows(
                     output,
                     overwrite=False,
-                    expected_metadata=run_metadata("worldcover"),
+                    expected_metadata=run_metadata("gfsad-irrigated"),
                 )
 
             write_metadata(output, run_metadata("none"))
@@ -74,15 +74,15 @@ class MonthlyNdviExportTests(unittest.TestCase):
                 read_existing_rows(
                     output,
                     overwrite=False,
-                    expected_metadata=run_metadata("worldcover"),
+                    expected_metadata=run_metadata("gfsad-irrigated"),
                 )
 
-            write_metadata(output, run_metadata("worldcover"))
+            write_metadata(output, run_metadata("gfsad-irrigated"))
             self.assertEqual(
                 read_existing_rows(
                     output,
                     overwrite=False,
-                    expected_metadata=run_metadata("worldcover"),
+                    expected_metadata=run_metadata("gfsad-irrigated"),
                 ),
                 [],
             )
