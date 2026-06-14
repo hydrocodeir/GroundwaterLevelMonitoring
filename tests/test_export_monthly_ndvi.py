@@ -1,11 +1,14 @@
 from datetime import date
 import math
 import unittest
+from unittest.mock import patch
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from scripts.export_monthly_ndvi import (
+    GFSAD_LGRIP30_ASSET_ID,
+    build_land_cover_mask,
     finite_or_blank,
     iter_jalali_months,
     read_existing_rows,
@@ -16,6 +19,20 @@ from scripts.export_monthly_ndvi import (
 
 
 class MonthlyNdviExportTests(unittest.TestCase):
+    @patch("scripts.export_monthly_ndvi.ee.ImageCollection")
+    def test_gfsad_mask_mosaics_the_image_collection(self, image_collection):
+        collection = image_collection.return_value
+
+        result = build_land_cover_mask("gfsad-irrigated")
+
+        image_collection.assert_called_once_with(GFSAD_LGRIP30_ASSET_ID)
+        collection.mosaic.assert_called_once_with()
+        self.assertIs(
+            result,
+            collection.mosaic.return_value.select.return_value.eq.return_value
+            .selfMask.return_value.rename.return_value,
+        )
+
     def test_month_boundaries_use_solar_hijri_calendar(self):
         periods = iter_jalali_months(date(2024, 3, 20), date(2024, 5, 21))
 

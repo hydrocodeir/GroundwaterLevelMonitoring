@@ -1,8 +1,9 @@
 {
-  "version": 1,
+  "version": 2,
   "landsat_collection": "LANDSAT/LC08/C02/T1_L2",
-  "land_cover_mask": "worldcover",
-  "land_cover_collection": "ESA/WorldCover/v200",
-  "land_cover_year": 2021,
-  "cropland_class": 40
+  "land_cover_mask": "gfsad-irrigated",
+  "land_cover_asset": "projects/sat-io/open-datasets/GFSAD/LGRIP30",
+  "land_cover_product": "LGRIP30",
+  "cropland_class": 2,
+  "cropland_label": "Irrigated croplands"
 }

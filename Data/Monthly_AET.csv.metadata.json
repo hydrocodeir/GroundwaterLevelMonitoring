@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "collection": "FAO/WAPOR/3/L1_AETI_D",
+  "band": "L1-AETI-D",
+  "source_unit": "mm/day",
+  "output_unit": "mm/month",
+  "scale_factor": 0.1,
+  "temporal_aggregation": "sum_daily_rate_weighted_by_solar_month_overlap",
+  "spatial_aggregation": "mean_inside_aquifer"
+}

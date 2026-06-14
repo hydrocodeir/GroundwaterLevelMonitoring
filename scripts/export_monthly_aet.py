@@ -228,6 +228,7 @@ def monthly_contribution(
         .multiply(BAND_SCALE_FACTOR)
         .multiply(overlap_days)
         .rename("AET")
+        .toFloat()
     )
     return contribution.set("_overlap_days", overlap_days)
 
@@ -248,7 +249,12 @@ def monthly_statistics_collection(
         .map(lambda image: monthly_contribution(image, start, end))
         .filter(ee.Filter.gt("_overlap_days", 0))
     )
-    empty = ee.Image.constant(0).rename("AET").updateMask(ee.Image.constant(0))
+    empty = (
+        ee.Image.constant(0)
+        .rename("AET")
+        .toFloat()
+        .updateMask(ee.Image.constant(0))
+    )
     monthly_total = ee.Image(
         ee.Algorithms.If(
             contributions.size().gt(0),
@@ -377,11 +383,14 @@ def fetch_with_retries(
                 scale,
                 tile_scale,
             )
-        except Exception:
+        except Exception as exc:
             if attempt == attempts:
                 raise
             wait_seconds = 2**attempt
-            print(f"  Earth Engine request failed; retrying in {wait_seconds}s")
+            print(
+                f"  Earth Engine request failed: {exc}; "
+                f"retrying in {wait_seconds}s"
+            )
             time.sleep(wait_seconds)
     raise RuntimeError("unreachable")
 

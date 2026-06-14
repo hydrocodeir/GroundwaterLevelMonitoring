@@ -221,7 +221,8 @@ def build_land_cover_mask(mask_name: str) -> ee.Image | None:
         return None
     if mask_name == "gfsad-irrigated":
         return (
-            ee.Image(GFSAD_LGRIP30_ASSET_ID)
+            ee.ImageCollection(GFSAD_LGRIP30_ASSET_ID)
+            .mosaic()
             .select([0])
             .eq(GFSAD_IRRIGATED_CROPLAND_CLASS)
             .selfMask()
@@ -399,11 +400,14 @@ def fetch_with_retries(
                 tile_scale,
                 land_cover_mask,
             )
-        except Exception:
+        except Exception as exc:
             if attempt == attempts:
                 raise
             wait_seconds = 2**attempt
-            print(f"  Earth Engine request failed; retrying in {wait_seconds}s")
+            print(
+                f"  Earth Engine request failed: {exc}; "
+                f"retrying in {wait_seconds}s"
+            )
             time.sleep(wait_seconds)
     raise RuntimeError("unreachable")
 
