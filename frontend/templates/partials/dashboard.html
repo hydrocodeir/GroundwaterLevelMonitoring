@@ -210,19 +210,19 @@
         </label>
       </div>
     </div>
-    <div class="grid gap-px bg-slate-200 lg:grid-cols-2">
-      <article class="bg-white">
-        <header class="map-analysis-header">
+    <div class="grid items-stretch gap-px bg-slate-200 lg:grid-cols-2">
+      <article class="flex flex-col bg-white">
+        <header class="map-analysis-header" data-spatial-map-header="contour">
           <div>
             <h4>خطوط هم‌تراز آب زیرزمینی</h4>
             <p id="contourMapSummary">در حال آماده‌سازی...</p>
           </div>
           <span class="map-analysis-swatch contour"></span>
         </header>
-        <div id="contourMapChart" class="h-[500px] w-full"></div>
+        <div id="contourMapChart" class="h-[500px] w-full shrink-0"></div>
       </article>
-      <article class="bg-white">
-        <header class="map-analysis-header">
+      <article class="flex flex-col bg-white">
+        <header class="map-analysis-header" data-spatial-map-header="decline">
           <div>
             <h4>پهنه‌بندی تغییرات تراز سال‌به‌سال</h4>
             <p id="declineMapSummary">در حال آماده‌سازی...</p>
@@ -230,7 +230,7 @@
           </div>
           <span class="map-analysis-swatch heat"></span>
         </header>
-        <div id="declineMapChart" class="h-[500px] w-full"></div>
+        <div id="declineMapChart" class="h-[500px] w-full shrink-0"></div>
       </article>
     </div>
     <div class="flex flex-col items-center justify-center gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4 md:flex-row">

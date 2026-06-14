@@ -11,6 +11,7 @@
     spatialCharts: null,
     spatialContourSeriesIds: [],
     contourIntervalInitialized: false,
+    spatialViewInitialized: false,
     modalChart: null,
     precipitationModalChart: null,
     aquiferNdviChart: null,
@@ -76,7 +77,7 @@
     if (!bounds?.isValid()) return;
     map._dataFitBounds = bounds;
     map._dataFitPadding = padding;
-    map.fitBounds(bounds, { padding });
+    map.fitBounds(bounds, { padding, animate: false });
     map.setMinZoom(map.getZoom());
   }
 
@@ -670,12 +671,52 @@
         fillOpacity: 0.48
       }
     }).addTo(map);
-    fitLeafletBoundsAndLockZoom(map, boundary.getBounds(), [24, 24]);
+    map._spatialBoundaryBounds = boundary.getBounds();
+    map.on("resize", () => refreshLeafletMinimumZoom(map));
+  }
+
+  function fitSpatialLeaflet(chart) {
+    const component = chart?.getModel().getComponent("lmap");
+    const map = component?.getLeaflet();
+    if (!map?._spatialBoundaryBounds) return;
+    chart.resize();
+    map.invalidateSize({ animate: false, pan: false });
+    fitLeafletBoundsAndLockZoom(map, map._spatialBoundaryBounds, [24, 24]);
     const center = map.getCenter();
     component.setCenterAndZoom([center.lat, center.lng], map.getZoom());
-    map.fire("moveend");
-    map.on("resize", () => refreshLeafletMinimumZoom(map));
-    window.requestAnimationFrame(() => chart.resize());
+    chart.dispatchAction({ type: "lmapRoam" });
+  }
+
+  function syncSpatialMapHeaderHeights() {
+    const headers = [
+      document.querySelector('[data-spatial-map-header="contour"]'),
+      document.querySelector('[data-spatial-map-header="decline"]')
+    ].filter(Boolean);
+    headers.forEach(header => {
+      header.style.height = "";
+    });
+    if (window.innerWidth < 1024 || headers.length < 2) return;
+    const height = Math.max(...headers.map(header => header.scrollHeight));
+    headers.forEach(header => {
+      header.style.height = `${height}px`;
+    });
+  }
+
+  function finalizeInitialSpatialView() {
+    if (state.spatialViewInitialized || !state.spatialCharts) return;
+    window.requestAnimationFrame(() => {
+      syncSpatialMapHeaderHeights();
+      fitSpatialLeaflet(state.spatialCharts.contour);
+      fitSpatialLeaflet(state.spatialCharts.decline);
+      state.spatialViewInitialized = true;
+      window.requestAnimationFrame(() => {
+        ["contourMapChart", "declineMapChart"].forEach(id => {
+          const element = document.getElementById(id);
+          if (element) element.style.visibility = "visible";
+        });
+        applyHeatmapClip();
+      });
+    });
   }
 
   function geometryOuterRings(geometry) {
@@ -967,11 +1008,13 @@
         ${piece.label} <b dir="ltr">${declinePieceRange(piece)}</b>
       </span>
     `).join("");
+    syncSpatialMapHeaderHeights();
     document.getElementById("spatialPreviousMonth").disabled =
       spatialYearStepIndex(data, monthIndex, -1) < 0;
     document.getElementById("spatialNextMonth").disabled =
       spatialYearStepIndex(data, monthIndex, 1) < 0;
     syncSpatialDateControls();
+    finalizeInitialSpatialView();
   }
 
   function stopSpatialPlayback() {
@@ -987,6 +1030,8 @@
     const contourElement = document.getElementById("contourMapChart");
     const declineElement = document.getElementById("declineMapChart");
     if (!contourElement || !declineElement) return;
+    contourElement.style.visibility = "hidden";
+    declineElement.style.visibility = "hidden";
     state.spatialData = data;
     state.spatialMonthIndex = defaultSpatialMonthIndex(
       data,
@@ -994,6 +1039,7 @@
     );
     state.spatialContourSeriesIds = [];
     state.contourIntervalInitialized = false;
+    state.spatialViewInitialized = false;
     state.spatialCharts = {
       contour: echarts.init(contourElement),
       decline: echarts.init(declineElement)
@@ -1118,6 +1164,7 @@
     state.spatialData = null;
     state.spatialContourSeriesIds = [];
     state.contourIntervalInitialized = false;
+    state.spatialViewInitialized = false;
     if (state.modalChart) {
       state.modalChart.dispose();
       state.modalChart = null;
@@ -2174,6 +2221,7 @@
   });
 
   window.addEventListener("resize", () => {
+    syncSpatialMapHeaderHeights();
     state.charts.forEach(chart => chart.resize());
     state.modalChart?.resize();
     state.precipitationModalChart?.resize();
