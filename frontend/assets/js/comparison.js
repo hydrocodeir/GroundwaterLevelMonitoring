@@ -209,7 +209,7 @@
     );
   }
 
-  function configureComparisonLeaflet(chart, data) {
+  function configureComparisonLeaflet(chart) {
     const component = chart.getModel().getComponent("lmap");
     const map = component?.getLeaflet();
     if (!map || map._hydroComparisonConfigured) return;
@@ -220,12 +220,24 @@
       maxZoom: 19,
       crossOrigin: true
     }).addTo(map);
+    map.setMaxZoom(MAP_MAX_ZOOM);
+  }
+
+  function fitComparisonLeaflet(chart, data) {
+    const component = chart.getModel().getComponent("lmap");
+    const map = component?.getLeaflet();
+    if (!map) return;
     const [minimumX, minimumY, maximumX, maximumY] = comparisonBounds(data);
+    map.invalidateSize({ animate: false, pan: false });
     map.fitBounds(
       L.latLngBounds([minimumY, minimumX], [maximumY, maximumX]),
-      { padding: [24, 24] }
+      {
+        paddingTopLeft: [32, 32],
+        paddingBottomRight: [32, 32],
+        maxZoom: MAP_MAX_ZOOM,
+        animate: false
+      }
     );
-    map.setMinZoom(map.getZoom());
   }
 
   function mapOption(data, metric, pieces, unit) {
@@ -535,8 +547,8 @@
       mapOption(data, "trend_decline_per_year", trendPieces, " متر/سال"),
       { replaceMerge: ["series"] }
     );
-    configureComparisonLeaflet(state.charts[0], data);
-    configureComparisonLeaflet(state.charts[1], data);
+    configureComparisonLeaflet(state.charts[0]);
+    configureComparisonLeaflet(state.charts[1]);
     return true;
   }
 
@@ -544,6 +556,14 @@
     if (renderToken !== state.mapRenderToken) return;
     if (renderMaps(data)) {
       state.charts.forEach(chart => chart.resize());
+      window.requestAnimationFrame(() => {
+        if (renderToken !== state.mapRenderToken) return;
+        state.charts.forEach(chart => chart.resize());
+        window.requestAnimationFrame(() => {
+          if (renderToken !== state.mapRenderToken) return;
+          state.charts.forEach(chart => fitComparisonLeaflet(chart, data));
+        });
+      });
       return;
     }
     if (attempt >= 30) {
