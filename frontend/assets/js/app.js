@@ -710,11 +710,15 @@
       fitSpatialLeaflet(state.spatialCharts.decline);
       state.spatialViewInitialized = true;
       window.requestAnimationFrame(() => {
-        ["contourMapChart", "declineMapChart"].forEach(id => {
-          const element = document.getElementById(id);
-          if (element) element.style.visibility = "visible";
+        // Rebuild the series after Leaflet has settled on its fitted view.
+        renderSpatialFrame();
+        window.requestAnimationFrame(() => {
+          ["contourMapChart", "declineMapChart"].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.style.visibility = "visible";
+          });
+          applyHeatmapClip();
         });
-        applyHeatmapClip();
       });
     });
   }
