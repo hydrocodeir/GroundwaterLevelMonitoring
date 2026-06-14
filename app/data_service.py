@@ -838,6 +838,62 @@ class GroundwaterData:
             end_month_value,
         )
 
+    def _validate_trend_comparison_period(
+        self,
+        group_id: str,
+        analysis_start_index: int,
+        analysis_end_index: int,
+        start_year: int | None,
+        start_month: int | None,
+        end_year: int | None,
+        end_month: int | None,
+    ) -> tuple[int, int, int, int]:
+        group_monthly = self.monthly[self.monthly["_aquifer_id"] == group_id]
+        minimum = int(group_monthly["_month_index"].min())
+        maximum = int(group_monthly["_month_index"].max())
+        analysis_end_year = (analysis_end_index - 1) // MONTHS_PER_YEAR
+        analysis_end_month = (analysis_end_index - 1) % MONTHS_PER_YEAR + 1
+        default_water_year = self._water_year_for_month(
+            analysis_end_year,
+            analysis_end_month,
+        )
+        default_start_index = max(
+            minimum,
+            default_water_year * MONTHS_PER_YEAR + WATER_YEAR_START_MONTH,
+        )
+        default_start_year = (default_start_index - 1) // MONTHS_PER_YEAR
+        default_start_month = (default_start_index - 1) % MONTHS_PER_YEAR + 1
+        default_end_year = analysis_end_year
+        default_end_month = analysis_end_month
+        start_year_value = (
+            default_start_year if start_year is None else int(start_year)
+        )
+        start_month_value = (
+            default_start_month if start_month is None else int(start_month)
+        )
+        end_year_value = default_end_year if end_year is None else int(end_year)
+        end_month_value = default_end_month if end_month is None else int(end_month)
+        if (
+            not 1 <= start_month_value <= MONTHS_PER_YEAR
+            or not 1 <= end_month_value <= MONTHS_PER_YEAR
+        ):
+            raise ValueError("ماه بازه مقایسه باید عددی بین ۱ تا ۱۲ باشد")
+
+        start_index = start_year_value * MONTHS_PER_YEAR + start_month_value
+        end_index = end_year_value * MONTHS_PER_YEAR + end_month_value
+        if start_index < minimum or end_index > maximum:
+            raise ValueError("بازه مقایسه شیب خارج از محدوده داده‌ها است")
+        if start_index > end_index:
+            raise ValueError("تاریخ شروع بازه مقایسه باید قبل از تاریخ پایان باشد")
+        if end_index < analysis_start_index or start_index > analysis_end_index:
+            raise ValueError("بازه مقایسه شیب باید با بازه تحلیل هم‌پوشانی داشته باشد")
+        return (
+            start_year_value,
+            start_month_value,
+            end_year_value,
+            end_month_value,
+        )
+
     def _comparison_period_bounds(self) -> tuple[int, int]:
         if self.monthly.empty:
             raise ValueError("هیچ داده‌ای برای مقایسه آبخوان‌ها وجود ندارد")
@@ -1160,6 +1216,8 @@ class GroundwaterData:
         group_id: str,
         range_frame: pd.DataFrame,
         months: list[tuple[int, str]],
+        comparison_frame: pd.DataFrame,
+        comparison_months: list[tuple[int, str]],
         selected_join_keys: set[str],
         continuous_only: bool,
         manual_selection: bool,
@@ -1170,6 +1228,10 @@ class GroundwaterData:
         by_join_key = {
             key: group.sort_values("_month_index")
             for key, group in range_frame.groupby("_join_key", sort=False)
+        }
+        comparison_by_join_key = {
+            key: group.sort_values("_month_index")
+            for key, group in comparison_frame.groupby("_join_key", sort=False)
         }
         all_data_keys = set(
             self.monthly[self.monthly["_aquifer_id"] == group_id]["_join_key"].unique()
@@ -1194,6 +1256,16 @@ class GroundwaterData:
             display_values = {
                 index: value for index, value in values.items() if index in month_indexes
             }
+            comparison_series_frame = comparison_by_join_key.get(join_key)
+            comparison_values = (
+                dict(
+                    comparison_series_frame[["_month_index", "level"]].itertuples(
+                        index=False, name=None
+                    )
+                )
+                if comparison_series_frame is not None
+                else {}
+            )
             series = [
                 [month_labels[index], finite_or_none(display_values.get(index))]
                 for index in month_indexes
@@ -1231,6 +1303,10 @@ class GroundwaterData:
                     "exclusion_reason": exclusion_reason,
                     "series": series,
                     "trend": self._trend(display_values, months),
+                    "comparison_trend": self._trend(
+                        comparison_values,
+                        comparison_months,
+                    ),
                     "annual_decline": self._annual_decline_rows(
                         values,
                         start_water_year,
@@ -1247,6 +1323,10 @@ class GroundwaterData:
         start_month: int | None = None,
         end_year: int | None = None,
         end_month: int | None = None,
+        comparison_start_year: int | None = None,
+        comparison_start_month: int | None = None,
+        comparison_end_year: int | None = None,
+        comparison_end_month: int | None = None,
         continuous_only: bool = True,
         manual_selection: bool = False,
         selected_well_ids: list[str] | None = None,
@@ -1273,6 +1353,28 @@ class GroundwaterData:
         )
         start_index = months[0][0]
         end_index = months[-1][0]
+        (
+            comparison_start_year_value,
+            comparison_start_month_value,
+            comparison_end_year_value,
+            comparison_end_month_value,
+        ) = self._validate_trend_comparison_period(
+            group_id,
+            start_index,
+            end_index,
+            comparison_start_year,
+            comparison_start_month,
+            comparison_end_year,
+            comparison_end_month,
+        )
+        comparison_months = self._period_months(
+            comparison_start_year_value,
+            comparison_start_month_value,
+            comparison_end_year_value,
+            comparison_end_month_value,
+        )
+        comparison_start_index = comparison_months[0][0]
+        comparison_end_index = comparison_months[-1][0]
         start_water_year = self._water_year_for_month(
             start_year_value,
             start_month_value,
@@ -1309,6 +1411,13 @@ class GroundwaterData:
         display_calculation_frame = display_frame[
             display_frame["_join_key"].isin(selected_join_keys)
         ]
+        comparison_frame = group_monthly[
+            (group_monthly["_month_index"] >= comparison_start_index)
+            & (group_monthly["_month_index"] <= comparison_end_index)
+        ]
+        comparison_calculation_frame = comparison_frame[
+            comparison_frame["_join_key"].isin(selected_join_keys)
+        ]
         selected_sites = self._selected_sites(group_id, selected_join_keys)
         weights, thiessen_polygons = self._calculate_thiessen(
             group_id,
@@ -1320,6 +1429,13 @@ class GroundwaterData:
             arithmetic_values,
             thiessen_values,
         ) = self._hydrographs(display_calculation_frame, months, weights)
+        (
+            comparison_arithmetic_values,
+            comparison_thiessen_values,
+        ) = self._hydrograph_value_maps(
+            comparison_calculation_frame,
+            weights,
+        )
         aquifer_annual_decline = self._aquifer_annual_rows(
             arithmetic_values,
             thiessen_values,
@@ -1330,6 +1446,8 @@ class GroundwaterData:
             group_id,
             display_frame,
             months,
+            comparison_frame,
+            comparison_months,
             selected_join_keys,
             continuous_only,
             manual_selection,
@@ -1381,6 +1499,10 @@ class GroundwaterData:
                 "start_month": start_month_value,
                 "end_year": end_year_value,
                 "end_month": end_month_value,
+                "comparison_start_year": comparison_start_year_value,
+                "comparison_start_month": comparison_start_month_value,
+                "comparison_end_year": comparison_end_year_value,
+                "comparison_end_month": comparison_end_month_value,
                 "start_water_year": start_water_year,
                 "end_water_year": end_water_year,
                 "continuous_only": continuous_only,
@@ -1405,6 +1527,14 @@ class GroundwaterData:
                 "thiessen": thiessen,
                 "arithmetic_trend": self._trend(arithmetic_values, months),
                 "thiessen_trend": self._trend(thiessen_values, months),
+                "arithmetic_comparison_trend": self._trend(
+                    comparison_arithmetic_values,
+                    comparison_months,
+                ),
+                "thiessen_comparison_trend": self._trend(
+                    comparison_thiessen_values,
+                    comparison_months,
+                ),
             },
             "annual_decline": aquifer_annual_decline,
             "precipitation": precipitation,

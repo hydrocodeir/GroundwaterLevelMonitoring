@@ -334,6 +334,10 @@
   .trend-chip.insufficient {
     @apply border-slate-200 bg-slate-50 text-slate-500;
   }
+
+  .trend-chip.comparison {
+    @apply border-slate-900/20 bg-slate-900/[0.04] text-slate-900;
+  }
 }
 
 .peer:checked + .toggle-track .toggle-thumb {

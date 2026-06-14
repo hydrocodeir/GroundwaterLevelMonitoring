@@ -268,9 +268,16 @@
       : `${compact ? "افزایش" : "شیب افزایش"} ${value} متر/سال`;
   }
 
-  function trendChip(label, trend) {
+  function trendChip(label, trend, variant = "") {
     const direction = trend?.direction || "insufficient";
-    return `<span class="trend-chip ${direction}"><b>${label}</b><span>${trendText(trend, true)}</span></span>`;
+    return `<span class="trend-chip ${direction} ${variant}"><b>${label}</b><span>${trendText(trend, true)}</span></span>`;
+  }
+
+  function alignedTrendSeries(trend, categories) {
+    const values = new Map(trend?.series || []);
+    return categories.map(category => (
+      values.has(category) ? values.get(category) : null
+    ));
   }
 
   function geometryBounds(geometry) {
@@ -1335,14 +1342,21 @@
     const yearOptions = years
       .map(year => `<option value="${year}">${year}</option>`)
       .join("");
-    const startYear = document.getElementById("startYear");
-    const endYear = document.getElementById("endYear");
-    if (!startYear.options.length) startYear.innerHTML = yearOptions;
-    if (!endYear.options.length) endYear.innerHTML = yearOptions;
-    startYear.value = String(data.filters.start_year);
-    endYear.value = String(data.filters.end_year);
+    const yearValues = {
+      startYear: data.filters.start_year,
+      endYear: data.filters.end_year,
+      comparisonStartYear: data.filters.comparison_start_year,
+      comparisonEndYear: data.filters.comparison_end_year
+    };
+    Object.entries(yearValues).forEach(([id, value]) => {
+      const select = document.getElementById(id);
+      if (!select.options.length) select.innerHTML = yearOptions;
+      select.value = String(value);
+    });
     renderMonthOptions("start", data.filters.start_month);
     renderMonthOptions("end", data.filters.end_month);
+    renderMonthOptions("comparisonStart", data.filters.comparison_start_month);
+    renderMonthOptions("comparisonEnd", data.filters.comparison_end_month);
     document.getElementById("continuousOnly").checked = data.filters.continuous_only;
     renderManualWellSelector(data);
   }
@@ -1442,7 +1456,9 @@
       .filter(month => month >= first && month <= last)
       .map(month => `<option value="${month}">${monthNames[month - 1]}</option>`)
       .join("");
-    const preferred = selectedMonth ?? (side === "end" ? last : first);
+    const preferred = selectedMonth ?? (
+      side.toLowerCase().endsWith("end") ? last : first
+    );
     monthSelect.value = String(Math.min(Math.max(preferred || first, first), last));
   }
 
@@ -1645,9 +1661,11 @@
       itemWidth: 18,
       selected: {
         "میانگین حسابی": false,
-        "روند حسابی": false,
+        "روند حسابی (بازه اصلی)": false,
+        "روند حسابی (مقایسه‌ای)": false,
         "میانگین تیسن": true,
-        "روند تیسن": true,
+        "روند تیسن (بازه اصلی)": true,
+        "روند تیسن (مقایسه‌ای)": true,
         "بارش ماهانه": true
       }
     };
@@ -1665,15 +1683,29 @@
         z: 3
       },
       {
-        name: "روند حسابی",
+        name: "روند حسابی (بازه اصلی)",
         type: "line",
         data: data.hydrographs.arithmetic_trend.series.map(item => item[1]),
         showSymbol: false,
         silent: true,
         connectNulls: false,
-        lineStyle: { width: 2, color: "#11395B", type: "dashed", opacity: 0.6 },
-        itemStyle: { color: "#11395B" },
+        lineStyle: { width: 2, color: "#DC2626", type: "dashed", opacity: 0.8 },
+        itemStyle: { color: "#DC2626" },
         z: 4
+      },
+      {
+        name: "روند حسابی (مقایسه‌ای)",
+        type: "line",
+        data: alignedTrendSeries(
+          data.hydrographs.arithmetic_comparison_trend,
+          categories
+        ),
+        showSymbol: false,
+        silent: true,
+        connectNulls: false,
+        lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+        itemStyle: { color: "#111827" },
+        z: 5
       },
       {
         name: "میانگین تیسن",
@@ -1686,22 +1718,46 @@
         z: 3
       },
       {
-        name: "روند تیسن",
+        name: "روند تیسن (بازه اصلی)",
         type: "line",
         data: data.hydrographs.thiessen_trend.series.map(item => item[1]),
         showSymbol: false,
         silent: true,
         connectNulls: false,
-        lineStyle: { width: 2, color: "#E76F51", type: "dashed", opacity: 0.65 },
-        itemStyle: { color: "#E76F51" },
+        lineStyle: { width: 2, color: "#DC2626", type: "dashed", opacity: 0.8 },
+        itemStyle: { color: "#DC2626" },
         z: 4
+      },
+      {
+        name: "روند تیسن (مقایسه‌ای)",
+        type: "line",
+        data: alignedTrendSeries(
+          data.hydrographs.thiessen_comparison_trend,
+          categories
+        ),
+        showSymbol: false,
+        silent: true,
+        connectNulls: false,
+        lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+        itemStyle: { color: "#111827" },
+        z: 5
       }
     ];
     chart.setOption(option);
     state.charts.push(chart);
     document.getElementById("aquiferTrendSummary").innerHTML = [
-      trendChip("حسابی", data.hydrographs.arithmetic_trend),
-      trendChip("تیسن", data.hydrographs.thiessen_trend)
+      trendChip("حسابی اصلی", data.hydrographs.arithmetic_trend),
+      trendChip("تیسن اصلی", data.hydrographs.thiessen_trend),
+      trendChip(
+        "حسابی مقایسه‌ای",
+        data.hydrographs.arithmetic_comparison_trend,
+        "comparison"
+      ),
+      trendChip(
+        "تیسن مقایسه‌ای",
+        data.hydrographs.thiessen_comparison_trend,
+        "comparison"
+      )
     ].join("");
     const stationNames = data.precipitation.stations
       .map(station => station.name)
@@ -2020,7 +2076,10 @@
     document.getElementById("wellModalTitle").textContent = `${well.name}${suffix}`;
     document.getElementById("wellModalMeta").textContent =
       `${status} · ارتفاع چاه: ${formatNumber(well.elevation, " متر")}`;
-    document.getElementById("wellModalTrend").innerHTML = trendChip("شیب بازه", well.trend);
+    document.getElementById("wellModalTrend").innerHTML = [
+      trendChip("شیب بازه اصلی", well.trend),
+      trendChip("شیب بازه مقایسه‌ای", well.comparison_trend, "comparison")
+    ].join(" ");
     document.getElementById("wellModalTable").innerHTML = wellAnnualTable(well);
     modal.querySelectorAll('[data-tab-group="modal-well"]').forEach(button => {
       button.classList.toggle("is-active", button.dataset.tab === "chart");
@@ -2058,15 +2117,29 @@
           z: 3
         },
         {
-          name: "روند خطی",
+          name: "روند بازه اصلی",
           type: "line",
           data: well.trend.series.map(item => item[1]),
           showSymbol: false,
           silent: true,
           connectNulls: false,
-          lineStyle: { width: 2, color, type: "dashed", opacity: 0.7 },
-          itemStyle: { color },
+          lineStyle: { width: 2, color: "#DC2626", type: "dashed", opacity: 0.8 },
+          itemStyle: { color: "#DC2626" },
           z: 4
+        },
+        {
+          name: "روند بازه مقایسه‌ای",
+          type: "line",
+          data: alignedTrendSeries(
+            well.comparison_trend,
+            well.series.map(item => item[0])
+          ),
+          showSymbol: false,
+          silent: true,
+          connectNulls: false,
+          lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+          itemStyle: { color: "#111827" },
+          z: 5
         }
       ];
       state.modalChart.setOption(option);
@@ -2098,7 +2171,10 @@
             <h4 class="text-sm font-bold text-navy">${escapeHtml(well.name)}${suffix}</h4>
             <div class="mt-1 text-[10px] text-slate-400">ارتفاع: ${formatNumber(well.elevation, " متر")}</div>
             ${well.exclusion_reason ? `<div class="mt-1 text-[10px] leading-5 text-amber-600">${escapeHtml(well.exclusion_reason)}</div>` : ""}
-            <div class="mt-2">${trendChip("روند بازه", well.trend)}</div>
+            <div class="mt-2 flex flex-wrap gap-2">
+              ${trendChip("روند اصلی", well.trend)}
+              ${trendChip("روند مقایسه‌ای", well.comparison_trend, "comparison")}
+            </div>
           </div>
           <span class="shrink-0 rounded-full px-3 py-1 text-[10px] ${statusClass}">${statusText}</span>
           </div>
@@ -2161,15 +2237,29 @@
             z: 3
           },
           {
-            name: "روند خطی",
+            name: "روند بازه اصلی",
             type: "line",
             data: well.trend.series.map(item => item[1]),
             showSymbol: false,
             silent: true,
             connectNulls: false,
-            lineStyle: { width: 2, color, type: "dashed", opacity: 0.7 },
-            itemStyle: { color },
+            lineStyle: { width: 2, color: "#DC2626", type: "dashed", opacity: 0.8 },
+            itemStyle: { color: "#DC2626" },
             z: 4
+          },
+          {
+            name: "روند بازه مقایسه‌ای",
+            type: "line",
+            data: alignedTrendSeries(
+              well.comparison_trend,
+              well.series.map(item => item[0])
+            ),
+            showSymbol: false,
+            silent: true,
+            connectNulls: false,
+            lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+            itemStyle: { color: "#111827" },
+            z: 5
           }
         ];
         chart.setOption(option);
@@ -2236,6 +2326,10 @@
         params.set("start_month", filters.startMonth);
         params.set("end_year", filters.endYear);
         params.set("end_month", filters.endMonth);
+        params.set("comparison_start_year", filters.comparisonStartYear);
+        params.set("comparison_start_month", filters.comparisonStartMonth);
+        params.set("comparison_end_year", filters.comparisonEndYear);
+        params.set("comparison_end_month", filters.comparisonEndMonth);
         params.set("continuous_only", String(filters.continuousOnly));
         params.set("manual_selection", String(filters.manualSelection));
         filters.selectedWellIds.forEach(wellId => {
@@ -2267,12 +2361,32 @@
     const form = root.querySelector("#analysisFilters");
     root.querySelector("#startYear").addEventListener("change", () => renderMonthOptions("start"));
     root.querySelector("#endYear").addEventListener("change", () => renderMonthOptions("end"));
+    root.querySelector("#comparisonStartYear").addEventListener(
+      "change",
+      () => renderMonthOptions("comparisonStart")
+    );
+    root.querySelector("#comparisonEndYear").addEventListener(
+      "change",
+      () => renderMonthOptions("comparisonEnd")
+    );
     form.addEventListener("submit", event => {
       event.preventDefault();
       const startYear = Number(root.querySelector("#startYear").value);
       const startMonth = Number(root.querySelector("#startMonth").value);
       const endYear = Number(root.querySelector("#endYear").value);
       const endMonth = Number(root.querySelector("#endMonth").value);
+      const comparisonStartYear = Number(
+        root.querySelector("#comparisonStartYear").value
+      );
+      const comparisonStartMonth = Number(
+        root.querySelector("#comparisonStartMonth").value
+      );
+      const comparisonEndYear = Number(
+        root.querySelector("#comparisonEndYear").value
+      );
+      const comparisonEndMonth = Number(
+        root.querySelector("#comparisonEndMonth").value
+      );
       const monthsPerYear = state.currentData?.calendar?.months_per_year
         || monthNames.length;
       if (
@@ -2280,6 +2394,25 @@
         > endYear * monthsPerYear + endMonth
       ) {
         window.alert("تاریخ شروع باید قبل از تاریخ پایان باشد.");
+        return;
+      }
+      const analysisStartIndex = startYear * monthsPerYear + startMonth;
+      const analysisEndIndex = endYear * monthsPerYear + endMonth;
+      const comparisonStartIndex = (
+        comparisonStartYear * monthsPerYear + comparisonStartMonth
+      );
+      const comparisonEndIndex = (
+        comparisonEndYear * monthsPerYear + comparisonEndMonth
+      );
+      if (comparisonStartIndex > comparisonEndIndex) {
+        window.alert("تاریخ شروع بازه مقایسه باید قبل از تاریخ پایان باشد.");
+        return;
+      }
+      if (
+        comparisonEndIndex < analysisStartIndex
+        || comparisonStartIndex > analysisEndIndex
+      ) {
+        window.alert("بازه مقایسه شیب باید با بازه تحلیل هم‌پوشانی داشته باشد.");
         return;
       }
       const manualSelection = root.querySelector("#manualWellSelection").checked;
@@ -2293,6 +2426,10 @@
         startMonth,
         endYear,
         endMonth,
+        comparisonStartYear,
+        comparisonStartMonth,
+        comparisonEndYear,
+        comparisonEndMonth,
         continuousOnly: root.querySelector("#continuousOnly").checked,
         manualSelection,
         selectedWellIds

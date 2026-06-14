@@ -91,6 +91,78 @@ class GroundwaterDataTests(unittest.TestCase):
             f"{end_year}-{end_month:02d}",
         )
 
+    def test_default_trend_comparison_uses_latest_water_year(self) -> None:
+        group_id = next(iter(self.service.groups))
+        payload = self.service.dashboard(group_id)
+        filters = payload["filters"]
+        end_index = (
+            filters["end_year"] * MONTHS_PER_YEAR + filters["end_month"]
+        )
+        expected_water_year = self.service._water_year_for_month(
+            filters["end_year"],
+            filters["end_month"],
+        )
+        group_frame = self.service.monthly[
+            self.service.monthly["_aquifer_id"] == group_id
+        ]
+        minimum = int(group_frame["_month_index"].min())
+        expected_start = max(
+            minimum,
+            expected_water_year * MONTHS_PER_YEAR + WATER_YEAR_START_MONTH,
+        )
+        start_year, start_month = self.year_month(expected_start)
+        end_year, end_month = self.year_month(end_index)
+
+        self.assertEqual(filters["comparison_start_year"], start_year)
+        self.assertEqual(filters["comparison_start_month"], start_month)
+        self.assertEqual(filters["comparison_end_year"], end_year)
+        self.assertEqual(filters["comparison_end_month"], end_month)
+
+    def test_custom_trend_comparison_is_returned_for_aquifer_and_wells(self) -> None:
+        group_id, minimum, maximum = self.group_with_span(24)
+        analysis_start = minimum
+        analysis_end = min(maximum, minimum + 23)
+        comparison_start = analysis_end - 5
+        start_year, start_month = self.year_month(analysis_start)
+        end_year, end_month = self.year_month(analysis_end)
+        comparison_start_year, comparison_start_month = self.year_month(
+            comparison_start
+        )
+        payload = self.service.dashboard(
+            group_id,
+            start_year=start_year,
+            start_month=start_month,
+            end_year=end_year,
+            end_month=end_month,
+            comparison_start_year=comparison_start_year,
+            comparison_start_month=comparison_start_month,
+            comparison_end_year=end_year,
+            comparison_end_month=end_month,
+            continuous_only=False,
+        )
+        expected_labels = [
+            label
+            for _, label in self.service._period_months(
+                comparison_start_year,
+                comparison_start_month,
+                end_year,
+                end_month,
+            )
+        ]
+
+        self.assertEqual(
+            [
+                item[0]
+                for item in payload["hydrographs"][
+                    "thiessen_comparison_trend"
+                ]["series"]
+            ],
+            expected_labels,
+        )
+        self.assertTrue(
+            all("comparison_trend" in well for well in payload["wells"])
+        )
+
     def test_comparison_default_period_uses_full_dynamic_data_domain(self) -> None:
         payload = self.service.comparison()
         minimum = int(self.service.monthly["_month_index"].min())

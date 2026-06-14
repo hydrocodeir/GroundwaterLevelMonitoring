@@ -73,6 +73,34 @@
         <span aria-hidden="true">←</span>
       </button>
     </div>
+    <div class="grid gap-4 border-t border-slate-100 px-5 py-5 md:grid-cols-2 md:px-6 xl:grid-cols-[1fr_1fr_2.25fr] xl:items-end">
+      <fieldset class="date-fieldset">
+        <legend>شروع بازه مقایسه شیب</legend>
+        <label>
+          <span class="field-label">سال</span>
+          <select id="comparisonStartYear" class="field year-field" name="comparison_start_year"></select>
+        </label>
+        <label>
+          <span class="field-label">ماه</span>
+          <select id="comparisonStartMonth" class="field" name="comparison_start_month"></select>
+        </label>
+      </fieldset>
+      <fieldset class="date-fieldset">
+        <legend>پایان بازه مقایسه شیب</legend>
+        <label>
+          <span class="field-label">سال</span>
+          <select id="comparisonEndYear" class="field year-field" name="comparison_end_year"></select>
+        </label>
+        <label>
+          <span class="field-label">ماه</span>
+          <select id="comparisonEndMonth" class="field" name="comparison_end_month"></select>
+        </label>
+      </fieldset>
+      <div class="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-[10px] leading-6 text-slate-500">
+        این بازه فقط برای شیب مقایسه‌ای است و داده‌ها یا محاسبات بازه اصلی را تغییر نمی‌دهد.
+        پیش‌فرض آن از مهر آخرین سال آبی تا پایان بازه تحلیل است.
+      </div>
+    </div>
     <div class="border-t border-slate-100 px-5 py-5 md:px-6">
       <label class="filter-toggle max-w-xl">
         <input id="manualWellSelection" type="checkbox" class="peer sr-only">
@@ -156,7 +184,7 @@
         <div id="aquiferChart" class="h-[430px] w-full px-2 pb-2"></div>
         <div id="precipitationSource" class="mx-5 mb-3 rounded-xl border border-sky-100 bg-sky-50/70 px-4 py-2.5 text-[10px] leading-6 text-slate-600"></div>
         <div class="mx-5 mb-5 rounded-2xl border border-sand bg-sand/30 px-4 py-3 text-[10px] leading-6 text-slate-600">
-          خط‌چین‌ها شیب رگرسیون بازه انتخابی را نشان می‌دهند. جدول فقط از ماه‌های داخل همین بازه استفاده می‌کند؛ افت سالانه از مهر تا مهر بعد و برای سال پایانی تا شهریور محاسبه می‌شود.
+          خط‌چین قرمز شیب بازه اصلی و خط‌چین مشکی شیب بازه مقایسه‌ای را نشان می‌دهد. جدول فقط از ماه‌های بازه اصلی استفاده می‌کند؛ افت سالانه از مهر تا مهر بعد و برای سال پایانی تا شهریور محاسبه می‌شود.
         </div>
       </div>
       <div class="hidden" data-tab-panel="aquifer-table">
