@@ -343,12 +343,27 @@ class GroundwaterData:
             self.precipitation["station_id"].isin(selection["station_ids"])
         ]
         monthly_values = selected.groupby("_month_index")["precip"].mean().to_dict()
+        stations = []
+        for station in selection["stations"]:
+            station_values = (
+                selected[selected["station_id"] == station["id"]]
+                .groupby("_month_index")["precip"]
+                .mean()
+                .to_dict()
+            )
+            stations.append({
+                **station,
+                "series": [
+                    [label, finite_or_none(station_values.get(index))]
+                    for index, label in months
+                ],
+            })
         return {
             "unit": "میلی‌متر در ماه",
             "method": selection["method"],
             "method_label": selection["method_label"],
             "station_count": len(selection["station_ids"]),
-            "stations": selection["stations"],
+            "stations": stations,
             "series": [
                 [label, finite_or_none(monthly_values.get(index))]
                 for index, label in months

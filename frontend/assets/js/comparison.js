@@ -19,6 +19,10 @@
   const faNumber = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 });
   const zeroTolerance = 0.005;
   const comparisonPageSize = 7;
+  const MAP_MAX_ZOOM = 14;
+  const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const BASEMAP_ATTRIBUTION =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   function escapeHtml(value) {
     const element = document.createElement("div");
@@ -166,19 +170,62 @@
     document.getElementById("comparisonEndMonth").value = String(filters.end_month);
   }
 
-  function mapCollection(data) {
-    return {
-      type: "FeatureCollection",
-      features: data.aquifers.map(aquifer => ({
-        type: "Feature",
-        properties: {
-          name: aquifer.id,
-          aquifer: aquifer.aquifer,
-          mahdoude: aquifer.mahdoude
-        },
-        geometry: aquifer.geometry
-      }))
+  function geometryOuterRings(geometry) {
+    if (geometry.type === "Polygon") return [geometry.coordinates[0]];
+    if (geometry.type === "MultiPolygon") {
+      return geometry.coordinates.map(polygon => polygon[0]);
+    }
+    return [];
+  }
+
+  function geometryBounds(geometry) {
+    const bounds = [Infinity, Infinity, -Infinity, -Infinity];
+    const visit = coordinates => {
+      if (typeof coordinates[0] === "number") {
+        bounds[0] = Math.min(bounds[0], coordinates[0]);
+        bounds[1] = Math.min(bounds[1], coordinates[1]);
+        bounds[2] = Math.max(bounds[2], coordinates[0]);
+        bounds[3] = Math.max(bounds[3], coordinates[1]);
+        return;
+      }
+      coordinates.forEach(visit);
     };
+    visit(geometry.coordinates);
+    return bounds;
+  }
+
+  function comparisonBounds(data) {
+    return data.aquifers.reduce(
+      (bounds, aquifer) => {
+        const current = geometryBounds(aquifer.geometry);
+        return [
+          Math.min(bounds[0], current[0]),
+          Math.min(bounds[1], current[1]),
+          Math.max(bounds[2], current[2]),
+          Math.max(bounds[3], current[3])
+        ];
+      },
+      [Infinity, Infinity, -Infinity, -Infinity]
+    );
+  }
+
+  function configureComparisonLeaflet(chart, data) {
+    const component = chart.getModel().getComponent("lmap");
+    const map = component?.getLeaflet();
+    if (!map || map._hydroComparisonConfigured) return;
+    map._hydroComparisonConfigured = true;
+    map._hydroBaseMap = L.tileLayer(BASEMAP_URL, {
+      attribution: BASEMAP_ATTRIBUTION,
+      maxNativeZoom: 19,
+      maxZoom: 19,
+      crossOrigin: true
+    }).addTo(map);
+    const [minimumX, minimumY, maximumX, maximumY] = comparisonBounds(data);
+    map.fitBounds(
+      L.latLngBounds([minimumY, minimumX], [maximumY, maximumX]),
+      { padding: [24, 24] }
+    );
+    map.setMinZoom(map.getZoom());
   }
 
   function mapOption(data, metric, pieces, unit) {
@@ -188,36 +235,33 @@
     const seriesData = data.aquifers.map(aquifer => {
       const value = aquifer.methods[state.method][metric];
       const piece = pieceForValue(pieces, value);
+      const [minimumX, minimumY, maximumX, maximumY] = geometryBounds(aquifer.geometry);
       return {
         name: aquifer.id,
-        value,
+        value: [
+          (minimumX + maximumX) / 2,
+          (minimumY + maximumY) / 2,
+          value
+        ],
         aquifer,
-        itemStyle: {
-          areaColor: piece?.color || "#CBD5E1",
-          borderColor: "#FFFFFF",
-          borderWidth: 0.9
-        }
+        color: piece?.color || "#CBD5E1",
+        rings: geometryOuterRings(aquifer.geometry)
       };
     });
+    const [minimumX, minimumY, maximumX, maximumY] = comparisonBounds(data);
     return {
       animationDurationUpdate: 350,
       textStyle: { fontFamily: "Vazirmatn" },
-      toolbox: {
-        left: 16,
-        top: 16,
-        feature: {
-          restore: {
-            title: "بازنشانی نمای نقشه",
-            iconStyle: {
-              borderColor: "#11395B"
-            },
-            emphasis: {
-              iconStyle: {
-                borderColor: "#087E8B"
-              }
-            }
-          }
-        }
+      lmap: {
+        center: [(minimumX + maximumX) / 2, (minimumY + maximumY) / 2],
+        zoom: 6,
+        maxZoom: MAP_MAX_ZOOM,
+        zoomSnap: 0.25,
+        zoomDelta: 0.5,
+        attributionControl: true,
+        resizeEnable: true,
+        renderOnMoving: true,
+        echartsLayerInteractive: true
       },
       tooltip: {
         trigger: "item",
@@ -244,40 +288,53 @@
         }
       },
       series: [{
-        type: "map",
-        map: "comparison-aquifers",
-        roam: true,
-        scaleLimit: { min: 1, max: 24 },
-        left: 28,
-        right: 28,
-        top: 28,
-        bottom: 28,
-        selectedMode: false,
+        type: "custom",
+        coordinateSystem: "lmap",
+        clip: false,
         data: seriesData,
-        label: {
-          show: true,
-          color: "#172A3A",
-          fontFamily: "Vazirmatn",
-          fontSize: 8,
-          lineHeight: 12,
-          formatter: parameters => {
-            const aquifer = parameters.data?.aquifer;
-            if (!aquifer) return "";
-            const value = aquifer.methods[state.method][metric];
-            return `${aquifer.aquifer}\n${formatSigned(value)}`;
-          }
-        },
-        labelLayout: { hideOverlap: true },
-        emphasis: {
-          label: {
-            show: true,
-            color: "#11395B",
-            fontWeight: 700
-          },
-          itemStyle: {
-            areaColor: "#F3E9D2",
-            borderColor: "#11395B",
-            borderWidth: 1.5
+        encode: { lng: 0, lat: 1, tooltip: 2 },
+        renderItem: (parameters, api) => {
+          const item = seriesData[parameters.dataIndex];
+          if (!item) return null;
+          const children = item.rings.map(ring => ({
+            type: "polygon",
+            shape: { points: ring.map(coordinate => api.coord(coordinate)) },
+            style: {
+              fill: item.color,
+              stroke: "#FFFFFF",
+              lineWidth: 0.9,
+              opacity: 0.78
+            },
+            emphasis: {
+              style: {
+                fill: "#F3E9D2",
+                stroke: "#11395B",
+                lineWidth: 1.5,
+                opacity: 0.94
+              }
+            }
+          }));
+          const center = api.coord(item.value.slice(0, 2));
+          children.push({
+            type: "text",
+            silent: true,
+            style: {
+              x: center[0],
+              y: center[1],
+              text: `${item.aquifer.aquifer}\n${formatSigned(item.value[2])}`,
+              textAlign: "center",
+              textVerticalAlign: "middle",
+              font: "8px Vazirmatn",
+              lineHeight: 12,
+              fill: "#172A3A",
+              backgroundColor: "rgba(255,255,255,0.66)",
+              padding: [2, 3],
+              borderRadius: 3
+            }
+          });
+          return {
+            type: "group",
+            children
           }
         }
       }]
@@ -472,12 +529,14 @@
     }
     state.charts[0].setOption(
       mapOption(data, "observed_decline", observedPieces, " متر"),
-      { notMerge: true }
+      { replaceMerge: ["series"] }
     );
     state.charts[1].setOption(
       mapOption(data, "trend_decline_per_year", trendPieces, " متر/سال"),
-      { notMerge: true }
+      { replaceMerge: ["series"] }
     );
+    configureComparisonLeaflet(state.charts[0], data);
+    configureComparisonLeaflet(state.charts[1], data);
     return true;
   }
 
@@ -498,7 +557,6 @@
 
   function renderComparison(data) {
     state.data = data;
-    echarts.registerMap("comparison-aquifers", mapCollection(data));
     renderFilterControls(data);
     renderStats(data);
     state.tablePages.observed = 1;

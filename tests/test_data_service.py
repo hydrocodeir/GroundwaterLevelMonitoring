@@ -183,6 +183,18 @@ class GroundwaterDataTests(unittest.TestCase):
                 for _, value in precipitation["series"]
             )
         )
+        self.assertTrue(precipitation["stations"])
+        for station in precipitation["stations"]:
+            self.assertEqual(
+                [item[0] for item in station["series"]],
+                hydrograph_months,
+            )
+            self.assertTrue(
+                all(
+                    value is None or value >= 0
+                    for _, value in station["series"]
+                )
+            )
 
     def test_ndvi_series_matches_hydrograph_period(self) -> None:
         payload = self.service.dashboard(next(iter(self.service.groups)))

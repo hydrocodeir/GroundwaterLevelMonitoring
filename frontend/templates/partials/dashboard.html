@@ -281,4 +281,19 @@
       </div>
     </article>
   </div>
+
+  <div id="precipitationDetailModal" class="well-modal hidden" role="dialog" aria-modal="true" aria-labelledby="precipitationModalTitle">
+    <button type="button" class="well-modal-backdrop" data-close-precipitation-modal aria-label="بستن پنجره"></button>
+    <article class="well-modal-card panel">
+      <header class="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div>
+          <div class="section-kicker">ایستگاه باران‌سنجی</div>
+          <h3 id="precipitationModalTitle" class="mt-1 text-lg font-bold text-navy"></h3>
+          <div id="precipitationModalMeta" class="mt-1 text-[10px] text-slate-500"></div>
+        </div>
+        <button type="button" class="modal-close-button" data-close-precipitation-modal aria-label="بستن">×</button>
+      </header>
+      <div id="precipitationModalChart" class="h-[430px] w-full"></div>
+    </article>
+  </div>
 </div>

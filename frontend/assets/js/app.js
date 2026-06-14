@@ -12,6 +12,7 @@
     spatialContourSeriesIds: [],
     contourIntervalInitialized: false,
     modalChart: null,
+    precipitationModalChart: null,
     aquiferNdviChart: null,
     observer: null,
     requestToken: 0,
@@ -19,6 +20,11 @@
   };
 
   const faNumber = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 });
+  const LEAFLET_MAX_ZOOM = 14;
+  const SELECTION_MAP_MAX_ZOOM = 12;
+  const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const BASEMAP_ATTRIBUTION =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
   const monthNames = [
     "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
     "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
@@ -74,6 +80,17 @@
     map.setMinZoom(map.getZoom());
   }
 
+  function addBaseMap(map) {
+    if (map._hydroBaseMap) return map._hydroBaseMap;
+    map._hydroBaseMap = L.tileLayer(BASEMAP_URL, {
+      attribution: BASEMAP_ATTRIBUTION,
+      maxNativeZoom: 19,
+      maxZoom: 19,
+      crossOrigin: true
+    }).addTo(map);
+    return map._hydroBaseMap;
+  }
+
   function refreshLeafletMinimumZoom(map) {
     if (!map?._dataFitBounds) return;
     const [horizontal, vertical] = map._dataFitPadding || [0, 0];
@@ -90,10 +107,14 @@
     if (!mapElement || state.selectionMap) return;
     const map = L.map(mapElement, {
       zoomControl: true,
-      attributionControl: false,
-      preferCanvas: true
+      attributionControl: true,
+      preferCanvas: true,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      maxZoom: SELECTION_MAP_MAX_ZOOM
     });
     state.selectionMap = map;
+    addBaseMap(map);
 
     try {
       const response = await fetch("/api/navigation-map");
@@ -146,7 +167,7 @@
       }).addTo(map);
       aquiferLayer.bringToFront();
       const bounds = mahdoudeLayer.getBounds();
-      fitLeafletBoundsAndLockZoom(map, bounds, [18, 18]);
+      fitLeafletBoundsAndLockZoom(map, bounds, [4, 4]);
       window.setTimeout(() => map.invalidateSize(), 100);
     } catch (error) {
       console.error("Aquifer selection map failed:", error);
@@ -604,22 +625,42 @@
     return { currentPoints, declinePoints };
   }
 
-  function spatialGeoOption(mapName) {
+  function spatialLeafletOption(geometry) {
+    const [minimumX, minimumY, maximumX, maximumY] = geometryBounds(geometry);
     return {
-      map: mapName,
-      roam: true,
-      scaleLimit: { min: 1, max: 20 },
-      itemStyle: {
-        areaColor: "#EAF5F4",
-        borderColor: "#087E8B",
-        borderWidth: 1.8
-      },
-      emphasis: {
-        itemStyle: { areaColor: "#DDF1EF" },
-        label: { show: false }
-      },
-      select: { disabled: true }
+      center: [(minimumX + maximumX) / 2, (minimumY + maximumY) / 2],
+      zoom: 8,
+      maxZoom: LEAFLET_MAX_ZOOM,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      attributionControl: true,
+      resizeEnable: true,
+      renderOnMoving: true,
+      echartsLayerInteractive: true
     };
+  }
+
+  function configureSpatialLeaflet(chart, feature) {
+    const component = chart.getModel().getComponent("lmap");
+    const map = component?.getLeaflet();
+    if (!map || map._hydroSpatialConfigured) return;
+    map._hydroSpatialConfigured = true;
+    addBaseMap(map);
+    map.createPane("aquiferBoundaryPane");
+    map.getPane("aquiferBoundaryPane").style.zIndex = "350";
+    const boundary = L.geoJSON(feature, {
+      pane: "aquiferBoundaryPane",
+      interactive: false,
+      style: {
+        color: "#087E8B",
+        weight: 2,
+        opacity: 0.95,
+        fillColor: "#EAF5F4",
+        fillOpacity: 0.48
+      }
+    }).addTo(map);
+    fitLeafletBoundsAndLockZoom(map, boundary.getBounds(), [24, 24]);
+    map.on("resize", () => refreshLeafletMinimumZoom(map));
   }
 
   function geometryOuterRings(geometry) {
@@ -642,7 +683,7 @@
     if (!seriesView?.group) return;
     const paths = geometryOuterRings(data.boundaries.aquifer.geometry)
       .map(ring => ring
-        .map(coordinate => chart.convertToPixel({ geoIndex: 0 }, coordinate))
+        .map(coordinate => chart.convertToPixel({ lmapIndex: 0 }, coordinate))
         .filter(point => point?.every(Number.isFinite)))
       .filter(points => points.length >= 3)
       .map(points => new echarts.graphic.Polygon({ shape: { points } }));
@@ -774,7 +815,7 @@
       id: `contour-${level}`,
       name: `تراز ${faNumber.format(level)}`,
       type: "lines",
-      coordinateSystem: "geo",
+      coordinateSystem: "lmap",
       polyline: true,
       silent: true,
       data: contourSegments(grid, level).map(coords => ({ coords, value: level })),
@@ -813,7 +854,7 @@
           id: "contour-labels",
           name: "برچسب خطوط تراز",
           type: "scatter",
-          coordinateSystem: "geo",
+          coordinateSystem: "lmap",
           silent: true,
           symbolSize: 4,
           data: contourLabels,
@@ -834,7 +875,7 @@
           id: "contour-wells",
           name: "پیزومترها",
           type: "scatter",
-          coordinateSystem: "geo",
+          coordinateSystem: "lmap",
           symbolSize: 8,
           data: currentPoints.map(point => ({ value: point })),
           itemStyle: { color: "#11395B", borderColor: "#FFFFFF", borderWidth: 1.5 },
@@ -857,7 +898,7 @@
           id: "monthly-decline-heat",
           name: "افت سال‌به‌سال",
           type: "scatter",
-          coordinateSystem: "geo",
+          coordinateSystem: "lmap",
           symbol: "rect",
           symbolSize: 9,
           data: declineSurface.map(point => ({
@@ -873,7 +914,7 @@
           id: "decline-wells",
           name: "پیزومترها",
           type: "scatter",
-          coordinateSystem: "geo",
+          coordinateSystem: "lmap",
           symbolSize: 7,
           data: declinePoints.map(point => ({ value: point })),
           itemStyle: { color: "#FFFFFF", borderColor: "#11395B", borderWidth: 1.4 },
@@ -929,17 +970,6 @@
     const contourElement = document.getElementById("contourMapChart");
     const declineElement = document.getElementById("declineMapChart");
     if (!contourElement || !declineElement) return;
-    const mapName = `spatial-aquifer-${data.id}`;
-    echarts.registerMap(mapName, {
-      type: "FeatureCollection",
-      features: [{
-        ...data.boundaries.aquifer,
-        properties: {
-          ...data.boundaries.aquifer.properties,
-          name: data.aquifer
-        }
-      }]
-    });
     state.spatialData = data;
     state.spatialMonthIndex = defaultSpatialMonthIndex(
       data,
@@ -965,7 +995,7 @@
             : "";
         }
       },
-      geo: spatialGeoOption(mapName),
+      lmap: spatialLeafletOption(data.boundaries.aquifer.geometry),
       series: []
     });
     state.spatialCharts.decline.setOption({
@@ -985,10 +1015,12 @@
           return `${escapeHtml(value[3] || "")}<br>${direction}: <b dir="ltr">${formatSignedNumber(value[2], " متر")}</b>`;
         }
       },
-      geo: spatialGeoOption(mapName),
+      lmap: spatialLeafletOption(data.boundaries.aquifer.geometry),
       series: []
     });
-    state.spatialCharts.decline.on("georoam", () => {
+    configureSpatialLeaflet(state.spatialCharts.contour, data.boundaries.aquifer);
+    configureSpatialLeaflet(state.spatialCharts.decline, data.boundaries.aquifer);
+    state.spatialCharts.decline.on("lmapRoam", () => {
       window.requestAnimationFrame(applyHeatmapClip);
     });
     document.getElementById("spatialWellMode").onchange = renderSpatialFrame;
@@ -1073,8 +1105,13 @@
       state.modalChart.dispose();
       state.modalChart = null;
     }
+    if (state.precipitationModalChart) {
+      state.precipitationModalChart.dispose();
+      state.precipitationModalChart = null;
+    }
     state.aquiferNdviChart = null;
     document.getElementById("wellDetailModal")?.classList.add("hidden");
+    document.getElementById("precipitationDetailModal")?.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
     if (state.map) {
       state.map.remove();
@@ -1353,10 +1390,14 @@
   function renderMap(data) {
     const map = L.map("map", {
       zoomControl: true,
-      attributionControl: false,
-      preferCanvas: true
+      attributionControl: true,
+      preferCanvas: true,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      maxZoom: LEAFLET_MAX_ZOOM
     });
     state.map = map;
+    const baseMap = addBaseMap(map);
 
     const mahdoudeLayer = L.geoJSON(data.boundaries.mahdoude, {
       style: {
@@ -1425,7 +1466,7 @@
       const distance = station.distance_km > 0
         ? `<div style="margin-top:5px;color:#7c3aed;font-size:11px">فاصله تا محدوده: ${formatNumber(station.distance_km, " کیلومتر")}</div>`
         : "";
-      L.marker(
+      const marker = L.marker(
         [station.latitude, station.longitude],
         {
           icon: precipitationIcon,
@@ -1444,6 +1485,7 @@
           </div>
         `, { direction: "top" })
         .addTo(precipitationLayer);
+      marker.on("click", () => openPrecipitationModal(station));
     });
 
     data.wells.forEach(well => {
@@ -1483,7 +1525,7 @@
     syncMapLayer("showPrecipitationStations", precipitationLayer);
 
     L.control.layers(
-      {},
+      { "نقشه پایه OpenStreetMap": baseMap },
       {
         "پهنه‌های تیسن": thiessenLayer,
         "ایستگاه‌های بارش منتخب": precipitationLayer,
@@ -1744,6 +1786,65 @@
     }
   }
 
+  function closePrecipitationModal() {
+    const modal = document.getElementById("precipitationDetailModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.body.classList.remove("overflow-hidden");
+    if (state.precipitationModalChart) {
+      state.precipitationModalChart.dispose();
+      state.precipitationModalChart = null;
+    }
+  }
+
+  function openPrecipitationModal(station) {
+    const modal = document.getElementById("precipitationDetailModal");
+    if (!modal) return;
+    closeWellModal();
+    closePrecipitationModal();
+    const distance = station.distance_km > 0
+      ? ` · فاصله تا محدوده: ${formatNumber(station.distance_km, " کیلومتر")}`
+      : "";
+    document.getElementById("precipitationModalTitle").textContent = station.name;
+    document.getElementById("precipitationModalMeta").textContent =
+      `شناسه: ${station.id} · ارتفاع: ${formatNumber(station.elevation, " متر")}${distance}`;
+    modal.classList.remove("hidden");
+    document.body.classList.add("overflow-hidden");
+
+    window.requestAnimationFrame(() => {
+      const element = document.getElementById("precipitationModalChart");
+      if (!element) return;
+      state.precipitationModalChart = echarts.init(element);
+      const option = baseChartOption();
+      option.tooltip.valueFormatter = value =>
+        value == null ? "بدون داده" : `${faNumber.format(value)} میلی‌متر`;
+      option.grid = { top: 62, right: 64, bottom: 58, left: 64 };
+      option.xAxis.data = station.series.map(item => item[0]);
+      option.yAxis = [{
+        type: "value",
+        name: "بارش ماهانه (میلی‌متر)",
+        min: 0,
+        nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 10, padding: [0, 0, 8, 0] },
+        splitLine: { lineStyle: { color: "#E9EFF2", type: "dashed" } },
+        axisLabel: { formatter: value => faNumber.format(value), fontSize: 10 }
+      }];
+      option.series = [{
+        name: "بارش ماهانه",
+        type: "bar",
+        data: station.series.map(item => item[1]),
+        barMaxWidth: 22,
+        itemStyle: {
+          color: "#0EA5E9",
+          borderColor: "#0284C7",
+          borderWidth: 0.8,
+          borderRadius: [5, 5, 0, 0]
+        },
+        emphasis: { itemStyle: { color: "#087E8B" } }
+      }];
+      state.precipitationModalChart.setOption(option);
+    });
+  }
+
   function openWellModal(well) {
     const modal = document.getElementById("wellDetailModal");
     if (!modal) return;
@@ -1809,6 +1910,9 @@
   function bindWellModal() {
     document.querySelectorAll("[data-close-well-modal]").forEach(button => {
       button.onclick = closeWellModal;
+    });
+    document.querySelectorAll("[data-close-precipitation-modal]").forEach(button => {
+      button.onclick = closePrecipitationModal;
     });
   }
 
@@ -2055,6 +2159,7 @@
   window.addEventListener("resize", () => {
     state.charts.forEach(chart => chart.resize());
     state.modalChart?.resize();
+    state.precipitationModalChart?.resize();
     if (state.map) {
       state.map.invalidateSize();
       refreshLeafletMinimumZoom(state.map);
@@ -2072,6 +2177,9 @@
   });
 
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeWellModal();
+    if (event.key === "Escape") {
+      closeWellModal();
+      closePrecipitationModal();
+    }
   });
 })();
