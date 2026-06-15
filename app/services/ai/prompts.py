@@ -44,6 +44,8 @@ CHAT_SYSTEM_PROMPT = dedent(
 
     Rules:
     - Treat the supplied dashboard context as the authoritative source.
+    - The context may include full time-series for piezometers, rain gauges, and derived summaries.
+      Use those values directly when available.
     - Never invent measurements, well names, dates, or causal claims.
     - If the context does not contain enough information, say so clearly.
     - Distinguish correlation from causation.
@@ -120,7 +122,9 @@ def build_chat_question_prompt(
     )
     return dedent(
         f"""
-        Dashboard context for the currently selected aquifer:
+        Dashboard context for the currently selected aquifer.
+        It includes aquifer metadata, full piezometer time-series, rain-gauge data,
+        hydrograph trends, annual summaries, and other prepared summaries.
         {context_json}
 
         Current user question:

@@ -575,19 +575,8 @@ def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
 
 
 def build_aquifer_chat_context(dashboard: dict[str, Any]) -> dict[str, Any]:
-    def without_monthly_series(value: Any) -> Any:
-        if isinstance(value, dict):
-            return {
-                key: without_monthly_series(item)
-                for key, item in value.items()
-                if key != "series"
-            }
-        if isinstance(value, list):
-            return [without_monthly_series(item) for item in value]
-        return value
-
     wells = []
-    for well in dashboard.get("wells", [])[:250]:
+    for well in dashboard.get("wells", []):
         series = well.get("series") or []
         trend = well.get("trend") or {}
         suffix = int(well.get("name_suffix") or 1)
@@ -647,34 +636,30 @@ def build_aquifer_chat_context(dashboard: dict[str, Any]) -> dict[str, Any]:
             "end_water_year": dashboard.get("filters", {}).get("end_water_year"),
         },
         "stats": dashboard.get("stats", {}),
+        "filters": dashboard.get("filters", {}),
+        "boundaries": dashboard.get("boundaries", {}),
+        "thiessen_polygons": dashboard.get("thiessen_polygons", []),
         "aquifer_trends": {
             key: value
             for key, value in (dashboard.get("hydrographs") or {}).items()
             if key.endswith("_trend")
         },
+        "hydrographs": dashboard.get("hydrographs", {}),
         "annual_decline": dashboard.get("annual_decline", []),
         "annual_changes": dashboard.get("annual_changes", []),
         "time_series_analysis": {
             "period": analysis.get("period", {}),
+            "trend_statistics": analysis.get("trend_statistics", {}),
+            "correlations": analysis.get("correlations", {}),
+            "lag_analysis": analysis.get("lag_analysis", {}),
+            "stress_indicators": analysis.get("stress_indicators", {}),
             "llm_input": analysis.get("llm_input", {}),
             "agricultural_pressure": analysis.get("agricultural_pressure", {}),
             "driver_classification": analysis.get("driver_classification", {}),
         },
-        "precipitation": {
-            key: value
-            for key, value in (dashboard.get("precipitation") or {}).items()
-            if key != "series"
-        },
-        "ndvi": {
-            key: value
-            for key, value in (dashboard.get("ndvi") or {}).items()
-            if key != "metrics"
-        },
-        "aet": {
-            key: value
-            for key, value in (dashboard.get("aet") or {}).items()
-            if key != "series"
-        },
+        "precipitation": dashboard.get("precipitation", {}),
+        "ndvi": dashboard.get("ndvi", {}),
+        "aet": dashboard.get("aet", {}),
         "piezometers": wells,
     }
-    return without_monthly_series(context)
+    return context

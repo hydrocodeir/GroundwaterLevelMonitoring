@@ -183,7 +183,7 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(result.answer, "پاسخ اصلاح‌شده")
         self.assertEqual(len(client.calls), 2)
 
-    def test_chat_context_omits_raw_monthly_series(self) -> None:
+    def test_chat_context_keeps_full_series_and_station_data(self) -> None:
         context = build_aquifer_chat_context(
             {
                 "id": "a1",
@@ -198,14 +198,35 @@ class AIServiceTests(unittest.TestCase):
                     "start_water_year": 1402,
                     "end_water_year": 1402,
                 },
+                "boundaries": {"aquifer": {"type": "Feature"}},
+                "thiessen_polygons": [{"id": "poly-1"}],
                 "hydrographs": {
                     "thiessen": [["1402-07-01", 10.0]],
                     "thiessen_trend": {"direction": "decline", "slope": -0.2},
                 },
-                "annual_decline": [],
-                "annual_changes": [],
-                "time_series_analysis": {},
-                "precipitation": {"series": [["1402-07-01", 12.0]], "method": "inside"},
+                "annual_decline": [{"water_year": "1402-1403"}],
+                "annual_changes": [{"water_year": "1402-1403"}],
+                "time_series_analysis": {
+                    "period": {"start_water_year": "1402-1403"},
+                    "trend_statistics": {"groundwater": {"slope": -0.2}},
+                    "correlations": {"precipitation": {"r": 0.5}},
+                    "lag_analysis": {"precipitation": {"lag": 1}},
+                    "stress_indicators": {"declining_year_count": 1},
+                    "llm_input": {"trend_statistics": {"groundwater": {"slope": -0.2}}},
+                    "agricultural_pressure": {"irrigated_area_trend": {"direction": "rise"}},
+                    "driver_classification": {"label": "Mixed Influence"},
+                },
+                "precipitation": {
+                    "series": [["1402-07-01", 12.0]],
+                    "method": "inside",
+                    "stations": [
+                        {
+                            "id": "st1",
+                            "name": "بارانسنج 1",
+                            "series": [["1402-07-01", 11.5]],
+                        }
+                    ],
+                },
                 "ndvi": {"metrics": {"median": []}, "default_metric": "median"},
                 "aet": {"series": [["1402-07-01", 50.0]], "source": "WaPOR"},
                 "wells": [
@@ -225,12 +246,10 @@ class AIServiceTests(unittest.TestCase):
 
         serialized = json.dumps(context, ensure_ascii=False)
         self.assertIn("پیزومتر نمونه", serialized)
-        self.assertNotIn('"thiessen":[', serialized)
-        self.assertNotIn('"series"', serialized)
-        self.assertEqual(
-            context["piezometers"][0]["latest_observation"]["level_m"],
-            19.5,
-        )
+        self.assertIn('"series"', serialized)
+        self.assertEqual(context["hydrographs"]["thiessen"][0][1], 10.0)
+        self.assertEqual(context["precipitation"]["stations"][0]["series"][0][1], 11.5)
+        self.assertEqual(context["piezometers"][0]["series"][1][1], 19.5)
 
     def test_service_repairs_response_when_analysis_text_is_missing(self) -> None:
         client = FakeClient(
