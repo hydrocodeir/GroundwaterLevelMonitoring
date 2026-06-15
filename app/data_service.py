@@ -74,6 +74,9 @@ class GroundwaterData:
         self.boundary_matches = self._match_boundaries()
         self.ndvi = self._load_ndvi()
         self.aet = self._load_aet()
+        self.warm_season_irrigated_area = (
+            self._load_warm_season_irrigated_area()
+        )
         self.precipitation = self._load_precipitation()
         self.precipitation_stations = self._precipitation_station_metadata()
         self.precipitation_selections = {
@@ -305,6 +308,75 @@ class GroundwaterData:
             )
         )
 
+    @staticmethod
+    def _load_warm_season_irrigated_area() -> pd.DataFrame:
+        path = DATA_DIR / "Warm_Season_Irrigated_Area.csv"
+        value_columns = [
+            "PROBABLE_IRRIGATED_AREA_HA",
+            "ANALYSIS_MASK_AREA_HA",
+            "VALID_OBSERVATION_AREA_HA",
+            "PROBABLE_PERCENT_OF_ANALYSIS",
+            "VALID_PERCENT_OF_ANALYSIS",
+        ]
+        result_columns = [
+            "_mahdoude_key",
+            "_aquifer_key",
+            "JALALI_YEAR",
+            *value_columns,
+        ]
+        if not path.exists():
+            return pd.DataFrame(columns=result_columns)
+
+        frame = pd.read_csv(path, encoding="utf-8-sig")
+        required = {"MAHDOUDE", "AQUIFER", "JALALI_YEAR", *value_columns}
+        missing = required.difference(frame.columns)
+        if missing:
+            raise ValueError(
+                "ستون‌های فایل مساحت کشت آبی کامل نیستند: "
+                f"{', '.join(sorted(missing))}"
+            )
+
+        frame["JALALI_YEAR"] = pd.to_numeric(
+            frame["JALALI_YEAR"],
+            errors="coerce",
+        )
+        for column in value_columns:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+        frame = frame.dropna(
+            subset=["MAHDOUDE", "AQUIFER", "JALALI_YEAR"]
+        ).copy()
+        frame = frame[
+            (
+                frame[
+                    [
+                        "PROBABLE_IRRIGATED_AREA_HA",
+                        "ANALYSIS_MASK_AREA_HA",
+                        "VALID_OBSERVATION_AREA_HA",
+                    ]
+                ].isna()
+                | frame[
+                    [
+                        "PROBABLE_IRRIGATED_AREA_HA",
+                        "ANALYSIS_MASK_AREA_HA",
+                        "VALID_OBSERVATION_AREA_HA",
+                    ]
+                ].ge(0)
+            ).all(axis=1)
+        ].copy()
+        frame["JALALI_YEAR"] = frame["JALALI_YEAR"].astype(int)
+        frame["_mahdoude_key"] = frame["MAHDOUDE"].map(normalize_name)
+        frame["_aquifer_key"] = frame["AQUIFER"].map(normalize_name)
+        return (
+            frame.groupby(
+                ["_mahdoude_key", "_aquifer_key", "JALALI_YEAR"],
+                as_index=False,
+            )[value_columns]
+            .mean()
+            .sort_values(
+                ["_mahdoude_key", "_aquifer_key", "JALALI_YEAR"]
+            )
+        )
+
     def _station_mahdoude_name(self, point: Point) -> str | None:
         matches = [
             feature.properties.get("MAHDOUDE", "")
@@ -490,6 +562,60 @@ class GroundwaterData:
                 for index, label in months
             ],
         }
+
+    def _warm_season_irrigated_area_payload(
+        self,
+        group_id: str,
+    ) -> dict[int, dict[str, float | bool | None]]:
+        properties = self.boundary_matches[group_id]["aquifer"].properties
+        mahdoude_key = normalize_name(properties.get("MAHDOUDE", ""))
+        aquifer_key = normalize_name(properties.get("AQUIFER", ""))
+        selected = self.warm_season_irrigated_area[
+            (
+                self.warm_season_irrigated_area["_mahdoude_key"]
+                == mahdoude_key
+            )
+            & (
+                self.warm_season_irrigated_area["_aquifer_key"]
+                == aquifer_key
+            )
+        ]
+        result: dict[int, dict[str, float | bool | None]] = {}
+        for row in selected.itertuples(index=False):
+            valid_observation_area = finite_or_none(
+                row.VALID_OBSERVATION_AREA_HA,
+                2,
+            )
+            has_valid_observations = (
+                valid_observation_area is not None
+                and valid_observation_area > 0
+            )
+            result[int(row.JALALI_YEAR)] = {
+                "probable_area_ha": (
+                    finite_or_none(row.PROBABLE_IRRIGATED_AREA_HA, 2)
+                    if has_valid_observations
+                    else None
+                ),
+                "analysis_area_ha": finite_or_none(
+                    row.ANALYSIS_MASK_AREA_HA,
+                    2,
+                ),
+                "valid_observation_area_ha": valid_observation_area,
+                "probable_percent": (
+                    finite_or_none(
+                        row.PROBABLE_PERCENT_OF_ANALYSIS,
+                        2,
+                    )
+                    if has_valid_observations
+                    else None
+                ),
+                "valid_percent": finite_or_none(
+                    row.VALID_PERCENT_OF_ANALYSIS,
+                    2,
+                ),
+                "has_valid_observations": has_valid_observations,
+            }
+        return result
 
     def _build_groups(self) -> dict[str, dict[str, Any]]:
         groups: dict[str, dict[str, Any]] = {}
@@ -1203,6 +1329,10 @@ class GroundwaterData:
         precipitation: dict[str, Any],
         aet: dict[str, Any],
         ndvi: dict[str, Any],
+        warm_season_irrigated_area: dict[
+            int,
+            dict[str, float | bool | None],
+        ],
     ) -> list[dict[str, Any]]:
         month_indexes = {label: index for index, label in months}
         selected_indexes = set(month_indexes.values())
@@ -1264,6 +1394,11 @@ class GroundwaterData:
             )
             water_year_label = f"{water_year}-{water_year + 1}"
             decline = decline_by_year.get(water_year_label, {})
+            warm_season_year = water_year + 1
+            irrigated_area = warm_season_irrigated_area.get(
+                warm_season_year,
+                {},
+            )
             rows.append({
                 "water_year": water_year_label,
                 "is_complete": len(indexes) == MONTHS_PER_YEAR,
@@ -1284,6 +1419,26 @@ class GroundwaterData:
                 "aet_total": finite_or_none(
                     sum(aet_items) if aet_items else None,
                 ),
+                "warm_season_irrigated_area": {
+                    "jalali_year": warm_season_year,
+                    "probable_area_ha": irrigated_area.get(
+                        "probable_area_ha"
+                    ),
+                    "analysis_area_ha": irrigated_area.get(
+                        "analysis_area_ha"
+                    ),
+                    "valid_observation_area_ha": irrigated_area.get(
+                        "valid_observation_area_ha"
+                    ),
+                    "probable_percent": irrigated_area.get(
+                        "probable_percent"
+                    ),
+                    "valid_percent": irrigated_area.get("valid_percent"),
+                    "has_valid_observations": irrigated_area.get(
+                        "has_valid_observations",
+                        False,
+                    ),
+                },
                 "ndvi_mean": finite_or_none(
                     np.mean(ndvi_mean_items) if ndvi_mean_items else None,
                     4,
@@ -1614,12 +1769,16 @@ class GroundwaterData:
         precipitation = self._precipitation_payload(group_id, months)
         ndvi = self._ndvi_payload(group_id, months)
         aet = self._aet_payload(group_id, months)
+        warm_season_irrigated_area = (
+            self._warm_season_irrigated_area_payload(group_id)
+        )
         annual_changes = self._annual_change_rows(
             months,
             aquifer_annual_decline,
             precipitation,
             aet,
             ndvi,
+            warm_season_irrigated_area,
         )
         group_minimum = int(group_monthly["_month_index"].min())
         group_maximum = int(group_monthly["_month_index"].max())

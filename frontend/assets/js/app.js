@@ -2006,7 +2006,7 @@
         textStyle: { fontFamily: "Vazirmatn", fontSize: 10 },
         itemWidth: 16
       },
-      grid: { top: 68, right: 132, bottom: 62, left: 64 },
+      grid: { top: 68, right: 196, bottom: 62, left: 64 },
       xAxis: {
         type: "category",
         data: rows.map(row => row.water_year),
@@ -2044,6 +2044,16 @@
           position: "right",
           offset: 66,
           nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, color: "#059669" },
+          axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
+          splitLine: { show: false }
+        },
+        {
+          type: "value",
+          name: "مساحت (هکتار)",
+          min: 0,
+          position: "right",
+          offset: 132,
+          nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, color: "#7C3AED" },
           axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
           splitLine: { show: false }
         }
@@ -2115,6 +2125,24 @@
               : faNumber.format(value)
           },
           z: 5
+        },
+        {
+          name: "سطح کشت آبی احتمالی",
+          type: "line",
+          yAxisIndex: 3,
+          data: rows.map(
+            row => row.warm_season_irrigated_area?.probable_area_ha ?? null
+          ),
+          symbolSize: 7,
+          connectNulls: false,
+          lineStyle: { width: 2.5, color: "#7C3AED", type: "dashed" },
+          itemStyle: { color: "#7C3AED", borderColor: "#FFFFFF", borderWidth: 1.5 },
+          tooltip: {
+            valueFormatter: value => value == null
+              ? "بدون داده"
+              : `${faNumber.format(value)} هکتار`
+          },
+          z: 4
         }
       ]
     }, true);
@@ -2130,6 +2158,7 @@
             <th>بارش (میلی‌متر)</th>
             <th>AET (میلی‌متر)</th>
             <th>NDVI ${ndviLabel} (${ndviPeriodLabel})</th>
+            <th>سطح کشت آبی احتمالی (هکتار)</th>
             <th>پوشش زمانی</th>
           </tr>
         </thead>
@@ -2142,6 +2171,21 @@
               <td>${numberCell(row.aet_total)}</td>
               <td>${numberCell(ndviPeriodData(row)[ndviMetric])}</td>
               <td>
+                ${numberCell(
+                  row.warm_season_irrigated_area?.probable_area_ha
+                )}
+                <div class="mt-1 text-[9px] text-slate-400">
+                  سال ${faNumber.format(
+                    row.warm_season_irrigated_area?.jalali_year
+                  )} ·
+                  ${row.warm_season_irrigated_area?.probable_percent == null
+                    ? "درصد نامشخص"
+                    : `${faNumber.format(
+                      row.warm_season_irrigated_area.probable_percent
+                    )}٪ از محدوده تحلیل`}
+                </div>
+              </td>
+              <td>
                 <span class="${row.is_complete ? "text-teal" : "text-amber-600"}">
                   ${row.is_complete ? "کامل" : "ناقص"} · ${faNumber.format(row.selected_month_count)} ماه
                 </span>
@@ -2150,6 +2194,14 @@
                   AET ${faNumber.format(row.aet_month_count)} ·
                   NDVI ${faNumber.format(ndviPeriodData(row)[`${ndviMetric}_month_count`])}
                   از ${faNumber.format(ndviPeriodData(row).expected_month_count)}
+                </div>
+                <div class="mt-1 text-[9px] text-slate-400">
+                  پوشش معتبر سطح کشت:
+                  ${row.warm_season_irrigated_area?.valid_percent == null
+                    ? "—"
+                    : `${faNumber.format(
+                      row.warm_season_irrigated_area.valid_percent
+                    )}٪`}
                 </div>
               </td>
             </tr>

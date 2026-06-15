@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "landsat_collections": [
+    "LANDSAT/LC08/C02/T1_L2",
+    "LANDSAT/LC09/C02/T1_L2"
+  ],
+  "calendar": "Solar Hijri",
+  "warm_months": [
+    3,
+    4,
+    5,
+    6
+  ],
+  "monthly_composite": "median",
+  "conditions": {
+    "max_ndvi_greater_than": 0.4,
+    "mean_ndvi_greater_than": 0.3,
+    "monthly_ndvi_greater_than": 0.35,
+    "minimum_active_months": 2,
+    "minimum_valid_months": 4
+  },
+  "land_cover_mask": "gfsad-irrigated",
+  "land_cover_asset": "projects/sat-io/open-datasets/GFSAD/LGRIP30",
+  "land_cover_class": 2,
+  "scale_meters": 30
+}

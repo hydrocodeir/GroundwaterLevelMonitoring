@@ -270,12 +270,35 @@ class GroundwaterDataTests(unittest.TestCase):
                     "median": ndvi_series,
                 }
             },
+            {
+                1403: {
+                    "probable_area_ha": 125.5,
+                    "analysis_area_ha": 500,
+                    "valid_observation_area_ha": 450,
+                    "probable_percent": 25.1,
+                    "valid_percent": 90,
+                    "has_valid_observations": True,
+                }
+            },
         )
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["water_year"], "1402-1403")
         self.assertEqual(rows[0]["ndvi_periods"]["warm_months"]["mean"], 0.045)
         self.assertEqual(rows[0]["ndvi_periods"]["full_year"]["mean"], 0.065)
+        self.assertEqual(
+            rows[0]["warm_season_irrigated_area"]["jalali_year"],
+            1403,
+        )
+        self.assertEqual(
+            rows[0]["warm_season_irrigated_area"]["probable_area_ha"],
+            125.5,
+        )
+        self.assertTrue(
+            rows[0]["warm_season_irrigated_area"][
+                "has_valid_observations"
+            ]
+        )
 
     def test_partial_water_year_is_marked_incomplete(self) -> None:
         group_id, minimum, maximum = self.group_with_span(6)
