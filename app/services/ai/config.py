@@ -23,7 +23,7 @@ DEFAULT_GROQ_MODELS = (
     "qwen/qwen3-32b",
 )
 DEFAULT_GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-DEFAULT_OPENROUTER_MODEL = "openrouter/auto"
+DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 DEFAULT_OPENROUTER_MODELS = (
     "openrouter/free",
     "openai/gpt-oss-120b:free",
