@@ -21,7 +21,11 @@
     requestToken: 0,
     currentData: null,
     aiRequestToken: 0,
-    aiOptions: null
+    aiOptions: null,
+    chatHistory: [],
+    chatAquiferId: null,
+    chatContextKey: null,
+    chatRequestToken: 0
   };
 
   const faNumber = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 });
@@ -388,22 +392,24 @@
 
   function renderAiOptions(options) {
     const providerSelect = document.getElementById("aiProvider");
-    if (!providerSelect) return;
     state.aiOptions = options;
-    providerSelect.innerHTML = "";
-    const enabledProviders = (options.providers || []).filter(provider => provider.enabled);
-    (options.providers || []).forEach(provider => {
-      const option = document.createElement("option");
-      option.value = provider.id;
-      option.disabled = !provider.enabled;
-      option.textContent = `${provider.label}${provider.enabled ? "" : " · کلید تنظیم نشده"}`;
-      option.selected = provider.id === options.default_provider && provider.enabled;
-      providerSelect.appendChild(option);
-    });
-    if (!providerSelect.value && enabledProviders.length) {
-      providerSelect.value = enabledProviders[0].id;
+    if (providerSelect) {
+      providerSelect.innerHTML = "";
+      const enabledProviders = (options.providers || []).filter(provider => provider.enabled);
+      (options.providers || []).forEach(provider => {
+        const option = document.createElement("option");
+        option.value = provider.id;
+        option.disabled = !provider.enabled;
+        option.textContent = `${provider.label}${provider.enabled ? "" : " · کلید تنظیم نشده"}`;
+        option.selected = provider.id === options.default_provider && provider.enabled;
+        providerSelect.appendChild(option);
+      });
+      if (!providerSelect.value && enabledProviders.length) {
+        providerSelect.value = enabledProviders[0].id;
+      }
+      syncAiModelOptions();
     }
-    syncAiModelOptions();
+    renderChatAiOptions(options);
   }
 
   async function loadAiOptions() {
@@ -411,7 +417,8 @@
       renderAiOptions(state.aiOptions);
       return;
     }
-    const status = document.getElementById("aiAnalysisStatus");
+    const status = document.getElementById("aiAnalysisStatus")
+      || document.getElementById("aquiferChatStatus");
     try {
       const response = await fetch("/api/ai/options");
       const options = await response.json().catch(() => ({}));
@@ -421,15 +428,250 @@
       renderAiOptions(options);
       const hasEnabledProvider = options.providers?.some(provider => provider.enabled);
       if (!hasEnabledProvider && status) {
-        status.textContent = "هیچ کلید API فعالی پیدا نشد. کلید OpenRouter یا Groq را در فایل .env تنظیم کنید.";
+        status.textContent = "هیچ کلید API فعالی پیدا نشد. کلید OpenRouter، Gemini یا Groq را در فایل .env تنظیم کنید.";
         status.className = "rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-[10px] leading-6 text-amber-700";
+        status.classList.remove("hidden");
       }
     } catch (error) {
       if (status) {
         status.textContent = error.message || "دریافت تنظیمات AI ناموفق بود.";
         status.className = "rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-[10px] leading-6 text-red-700";
+        status.classList.remove("hidden");
       }
     }
+  }
+
+  function selectedChatProvider() {
+    const providerId = document.getElementById("aquiferChatProvider")?.value;
+    return state.aiOptions?.providers?.find(provider => provider.id === providerId) || null;
+  }
+
+  function syncChatModelOptions() {
+    const modelSelect = document.getElementById("aquiferChatModel");
+    const sendButton = document.getElementById("aquiferChatSend");
+    const provider = selectedChatProvider();
+    if (!modelSelect || !sendButton) return;
+    modelSelect.innerHTML = "";
+    if (!provider?.enabled) {
+      modelSelect.disabled = true;
+      sendButton.disabled = true;
+      return;
+    }
+    provider.models.forEach(model => {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = `${model.label}${model.free ? " · رایگان" : ""}`;
+      option.selected = model.id === provider.default_model;
+      modelSelect.appendChild(option);
+    });
+    modelSelect.disabled = !provider.models.length;
+    sendButton.disabled = !provider.models.length;
+  }
+
+  function renderChatAiOptions(options) {
+    const providerSelect = document.getElementById("aquiferChatProvider");
+    if (!providerSelect) return;
+    const previousProvider = providerSelect.value;
+    providerSelect.innerHTML = "";
+    const enabledProviders = (options.providers || []).filter(provider => provider.enabled);
+    (options.providers || []).forEach(provider => {
+      const option = document.createElement("option");
+      option.value = provider.id;
+      option.disabled = !provider.enabled;
+      option.textContent = `${provider.label}${provider.enabled ? "" : " · غیرفعال"}`;
+      option.selected = (
+        provider.id === previousProvider
+        || (!previousProvider && provider.id === options.default_provider)
+      ) && provider.enabled;
+      providerSelect.appendChild(option);
+    });
+    if (!providerSelect.value && enabledProviders.length) {
+      providerSelect.value = enabledProviders[0].id;
+    }
+    syncChatModelOptions();
+  }
+
+  function appendAquiferChatMessage(role, text, meta = "") {
+    const messages = document.getElementById("aquiferChatMessages");
+    if (!messages) return null;
+    const message = document.createElement("div");
+    message.className = `aquifer-chat-message ${role}`;
+    const content = document.createElement("div");
+    content.textContent = text;
+    message.appendChild(content);
+    if (meta) {
+      const metadata = document.createElement("div");
+      metadata.className = "aquifer-chat-message-meta";
+      metadata.textContent = meta;
+      message.appendChild(metadata);
+    }
+    messages.appendChild(message);
+    messages.scrollTop = messages.scrollHeight;
+    return message;
+  }
+
+  function resetAquiferChat(data) {
+    const widget = document.getElementById("aquiferChatWidget");
+    const title = document.getElementById("aquiferChatTitle");
+    if (!widget || !data?.id) return;
+    const filters = data.filters || {};
+    const contextKey = JSON.stringify([
+      data.id,
+      filters.start_year,
+      filters.start_month,
+      filters.end_year,
+      filters.end_month,
+      Boolean(filters.continuous_only),
+      Boolean(filters.manual_selection),
+      filters.selected_well_ids || []
+    ]);
+    const changedContext = state.chatContextKey !== contextKey;
+    state.chatAquiferId = data.id;
+    state.chatContextKey = contextKey;
+    widget.classList.remove("hidden");
+    if (title) title.textContent = `آبخوان ${data.aquifer}`;
+    if (!changedContext) return;
+    state.chatHistory = [];
+    state.chatRequestToken += 1;
+    const messages = document.getElementById("aquiferChatMessages");
+    if (messages) messages.innerHTML = "";
+    appendAquiferChatMessage(
+      "assistant",
+      `درباره آبخوان ${data.aquifer}، روند تراز، سال‌های آبی یا پیزومترهای آن سؤال کنید.`
+    );
+    const status = document.getElementById("aquiferChatStatus");
+    status?.classList.add("hidden");
+  }
+
+  function clearAquiferChat() {
+    if (!state.currentData) return;
+    state.chatHistory = [];
+    state.chatRequestToken += 1;
+    const messages = document.getElementById("aquiferChatMessages");
+    if (messages) messages.innerHTML = "";
+    appendAquiferChatMessage(
+      "assistant",
+      `گفتگو پاک شد. سؤال جدیدتان درباره آبخوان ${state.currentData.aquifer} را بنویسید.`
+    );
+  }
+
+  function toggleAquiferChat(forceOpen = null) {
+    const panel = document.getElementById("aquiferChatPanel");
+    const toggle = document.getElementById("aquiferChatToggle");
+    if (!panel || !toggle) return;
+    const shouldOpen = forceOpen ?? panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !shouldOpen);
+    toggle.setAttribute("aria-expanded", String(shouldOpen));
+    if (shouldOpen) {
+      loadAiOptions();
+      window.setTimeout(() => document.getElementById("aquiferChatInput")?.focus(), 50);
+    }
+  }
+
+  function aquiferChatErrorMessage(error, provider) {
+    const message = error?.message || "گفتگو با AI ناموفق بود.";
+    const forbidden = /HTTP 403|not permitted|Forbidden|permission denied/i.test(message);
+    if (forbidden && provider === "groq") {
+      return "Groq دسترسی این حساب یا موقعیت شبکه را رد کرده است. یک provider دیگر انتخاب کنید.";
+    }
+    if (forbidden && provider === "gemini") {
+      return "Gemini دسترسی این کلید، پروژه یا موقعیت شبکه را رد کرده است. یک provider دیگر انتخاب کنید.";
+    }
+    return message;
+  }
+
+  async function sendAquiferChatMessage() {
+    const input = document.getElementById("aquiferChatInput");
+    const sendButton = document.getElementById("aquiferChatSend");
+    const status = document.getElementById("aquiferChatStatus");
+    const provider = document.getElementById("aquiferChatProvider")?.value;
+    const model = document.getElementById("aquiferChatModel")?.value;
+    const question = input?.value.trim();
+    if (!state.currentData || !question || !provider || !model) return;
+
+    const previousHistory = state.chatHistory.slice(-10);
+    appendAquiferChatMessage("user", question);
+    if (input) input.value = "";
+    const pending = appendAquiferChatMessage("assistant pending", "در حال بررسی داده‌های آبخوان...");
+    const token = ++state.chatRequestToken;
+    if (sendButton) sendButton.disabled = true;
+    status?.classList.add("hidden");
+
+    const filters = state.currentData.filters || {};
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          aquifer_id: state.currentData.id,
+          language: "fa",
+          provider,
+          model,
+          question,
+          history: previousHistory,
+          filters: {
+            start_year: filters.start_year,
+            start_month: filters.start_month,
+            end_year: filters.end_year,
+            end_month: filters.end_month,
+            continuous_only: Boolean(filters.continuous_only),
+            manual_selection: Boolean(filters.manual_selection),
+            selected_well_ids: filters.selected_well_ids || []
+          }
+        })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (token !== state.chatRequestToken) return;
+      if (!response.ok || result.status !== "success") {
+        throw new Error(result.message || "گفتگو با AI ناموفق بود.");
+      }
+      pending?.remove();
+      appendAquiferChatMessage(
+        "assistant",
+        result.answer,
+        `${result.provider} · ${result.model}`
+      );
+      state.chatHistory = [
+        ...previousHistory,
+        { role: "user", content: question },
+        { role: "assistant", content: result.answer }
+      ].slice(-10);
+    } catch (error) {
+      if (token !== state.chatRequestToken) return;
+      pending?.remove();
+      appendAquiferChatMessage(
+        "assistant error",
+        aquiferChatErrorMessage(error, provider)
+      );
+    } finally {
+      if (token === state.chatRequestToken && sendButton) {
+        sendButton.disabled = false;
+      }
+    }
+  }
+
+  function initializeAquiferChat() {
+    document.getElementById("aquiferChatToggle")?.addEventListener("click", () => {
+      toggleAquiferChat();
+    });
+    document.getElementById("aquiferChatClose")?.addEventListener("click", () => {
+      toggleAquiferChat(false);
+    });
+    document.getElementById("aquiferChatClear")?.addEventListener("click", clearAquiferChat);
+    document.getElementById("aquiferChatProvider")?.addEventListener(
+      "change",
+      syncChatModelOptions
+    );
+    document.getElementById("aquiferChatForm")?.addEventListener("submit", event => {
+      event.preventDefault();
+      sendAquiferChatMessage();
+    });
+    document.getElementById("aquiferChatInput")?.addEventListener("keydown", event => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        document.getElementById("aquiferChatForm")?.requestSubmit();
+      }
+    });
   }
 
   function closeAiModal() {
@@ -2911,6 +3153,7 @@
   function renderDashboardData(data, activeTab = "chart") {
     disposeVisuals();
     renderFilterControls(data);
+    resetAquiferChat(data);
     renderStats(data);
     resetAiAnalysisCard();
     bindWellModal();
@@ -3155,6 +3398,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     initializeSelectionTabs();
     initializeAquiferSelection();
+    initializeAquiferChat();
   });
 
   document.addEventListener("keydown", event => {

@@ -35,6 +35,26 @@ SYSTEM_PROMPT = dedent(
 ).strip()
 
 
+CHAT_SYSTEM_PROMPT = dedent(
+    """
+    You are a conversational groundwater and hydrology assistant for an Iranian aquifer dashboard.
+
+    Answer questions about the selected aquifer, its piezometers, groundwater trends, annual decline,
+    precipitation, NDVI, AET, irrigated area, and the dashboard calculations.
+
+    Rules:
+    - Treat the supplied dashboard context as the authoritative source.
+    - Never invent measurements, well names, dates, or causal claims.
+    - If the context does not contain enough information, say so clearly.
+    - Distinguish correlation from causation.
+    - Use the Persian Water Year for Iran: 1 Mehr through 31 Shahrivar.
+    - Refer to piezometers by their exact names when relevant.
+    - Keep answers clear and reasonably concise.
+    - Return valid JSON only, with exactly one property named "answer".
+    """
+).strip()
+
+
 def build_system_prompt(language: str) -> str:
     language = (language or "fa").strip().lower()
     if language == "en":
@@ -78,5 +98,35 @@ def build_user_prompt(
 
         Use these exact English property names even when the values are in Persian.
         Do not omit any property. Do not wrap the JSON in Markdown.
+        """
+    ).strip()
+
+
+def build_chat_system_prompt(language: str) -> str:
+    if (language or "fa").strip().lower() == "en":
+        return f"{CHAT_SYSTEM_PROMPT}\n\nRespond in English."
+    return f"{CHAT_SYSTEM_PROMPT}\n\nRespond in Persian (Farsi)."
+
+
+def build_chat_question_prompt(
+    aquifer_context: dict[str, Any],
+    question: str,
+) -> str:
+    context_json = json.dumps(
+        aquifer_context,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return dedent(
+        f"""
+        Dashboard context for the currently selected aquifer:
+        {context_json}
+
+        Current user question:
+        {question}
+
+        Return exactly:
+        {{"answer": "Your answer in the requested language"}}
         """
     ).strip()

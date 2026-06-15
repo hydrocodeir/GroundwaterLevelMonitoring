@@ -145,5 +145,49 @@
         </div>
       </section>
     </main>
+
+    <aside id="aquiferChatWidget" class="aquifer-chat-widget hidden" aria-live="polite">
+      <section id="aquiferChatPanel" class="aquifer-chat-panel hidden" aria-label="گفتگو درباره آبخوان">
+        <header class="aquifer-chat-header">
+          <div class="min-w-0">
+            <div class="text-[10px] font-bold text-aqua">دستیار آبخوان</div>
+            <h2 id="aquiferChatTitle" class="mt-0.5 truncate text-sm font-bold text-white">گفتگو با AI</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="aquiferChatClear" type="button" class="aquifer-chat-header-button">پاک‌کردن</button>
+            <button id="aquiferChatClose" type="button" class="aquifer-chat-close" aria-label="بستن گفتگو">×</button>
+          </div>
+        </header>
+
+        <div class="aquifer-chat-settings">
+          <label>
+            <span>ارائه‌دهنده</span>
+            <select id="aquiferChatProvider"></select>
+          </label>
+          <label>
+            <span>مدل</span>
+            <select id="aquiferChatModel" dir="ltr"></select>
+          </label>
+        </div>
+
+        <div id="aquiferChatMessages" class="aquifer-chat-messages"></div>
+        <div id="aquiferChatStatus" class="hidden px-4 py-2 text-[10px] leading-5 text-red-700"></div>
+
+        <form id="aquiferChatForm" class="aquifer-chat-form">
+          <textarea
+            id="aquiferChatInput"
+            rows="2"
+            maxlength="2000"
+            placeholder="درباره آبخوان، روند افت یا یک پیزومتر سؤال کنید..."
+          ></textarea>
+          <button id="aquiferChatSend" type="submit">ارسال</button>
+        </form>
+      </section>
+
+      <button id="aquiferChatToggle" type="button" class="aquifer-chat-toggle" aria-expanded="false">
+        <span class="aquifer-chat-toggle-icon" aria-hidden="true">AI</span>
+        <span>گفتگو درباره آبخوان</span>
+      </button>
+    </aside>
   </body>
 </html>

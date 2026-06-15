@@ -20,10 +20,17 @@ from app.services.ai.errors import (
 from app.services.ai.groq_client import GroqClient
 from app.services.ai.gemini_client import GeminiClient
 from app.services.ai.openrouter_client import OpenRouterClient
-from app.services.ai.prompts import build_system_prompt, build_user_prompt
+from app.services.ai.prompts import (
+    build_chat_question_prompt,
+    build_chat_system_prompt,
+    build_system_prompt,
+    build_user_prompt,
+)
 from app.services.ai.schemas import (
     AIAnalysisRequest,
     AIAnalysisResponse,
+    AIChatRequest,
+    AIChatResponse,
     LLMAnalysisPayload,
     RiskLevel,
     ProviderName,
@@ -256,17 +263,22 @@ class AIAnalysisService:
             )
         return self._build_client(self.config, provider=provider, model=model)
 
+    @staticmethod
+    def _client_metadata(client: Any, request: Any, config: AIConfig) -> tuple[str, str]:
+        provider_name = getattr(client, "provider_name", request.provider or config.provider)
+        model_name = getattr(
+            client,
+            "model",
+            request.model or config.default_model_for(provider_name),
+        )
+        return provider_name, model_name
+
     def analyze(self, request: AIAnalysisRequest) -> AIAnalysisResponse:
         if not request.summary_data:
             raise AIValidationError("summary_data cannot be empty.", self.provider_name)
 
         client = self._client_for_request(request)
-        provider_name = getattr(client, "provider_name", request.provider or self.config.provider)
-        model_name = getattr(
-            client,
-            "model",
-            request.model or self.config.default_model_for(provider_name),
-        )
+        provider_name, model_name = self._client_metadata(client, request, self.config)
         precomputed_risk_level = calculate_precomputed_risk_level(request.summary_data)
         messages = [
             {"role": "system", "content": build_system_prompt(request.language)},
@@ -369,6 +381,88 @@ class AIAnalysisService:
             uncertainty_note=llm_output.uncertainty_note.strip(),
         )
 
+    def chat(
+        self,
+        request: AIChatRequest,
+        aquifer_context: dict[str, Any],
+    ) -> AIChatResponse:
+        client = self._client_for_request(request)
+        provider_name, model_name = self._client_metadata(client, request, self.config)
+        messages = [
+            {
+                "role": "system",
+                "content": build_chat_system_prompt(request.language),
+            },
+            *[
+                {"role": message.role, "content": message.content}
+                for message in request.history
+            ],
+            {
+                "role": "user",
+                "content": build_chat_question_prompt(
+                    aquifer_context,
+                    request.question,
+                ),
+            },
+        ]
+        try:
+            raw_content = client.complete(messages)
+        except (AIConfigurationError, AIRateLimitError, AITimeoutError, AIRemoteError):
+            raise
+        except Exception as error:
+            LOGGER.exception(
+                "AI chat provider request failed for provider=%s model=%s",
+                provider_name,
+                model_name,
+            )
+            raise AIProviderError(
+                "AI provider request failed unexpectedly.",
+                provider_name,
+            ) from error
+
+        try:
+            parsed = _extract_json_object(raw_content)
+            answer = _first_nonempty_string(
+                parsed,
+                ("answer", "response", "analysis", "پاسخ"),
+            )
+            if not answer:
+                raise ValueError("LLM chat response did not contain an answer.")
+        except Exception:
+            repair_messages = [
+                *messages,
+                {"role": "assistant", "content": raw_content},
+                {
+                    "role": "user",
+                    "content": (
+                        'Return one valid JSON object only: {"answer": "..."} '
+                        "with a non-empty answer in the requested language."
+                    ),
+                },
+            ]
+            try:
+                repaired_content = client.complete(repair_messages)
+                repaired = _extract_json_object(repaired_content)
+                answer = _first_nonempty_string(
+                    repaired,
+                    ("answer", "response", "analysis", "پاسخ"),
+                )
+                if not answer:
+                    raise ValueError("LLM chat response did not contain an answer.")
+            except (AIConfigurationError, AIRateLimitError, AITimeoutError, AIRemoteError):
+                raise
+            except Exception as error:
+                raise AIProviderError(
+                    "LLM returned an invalid chat response.",
+                    provider_name,
+                ) from error
+
+        return AIChatResponse(
+            provider=cast(ProviderName, provider_name),
+            model=model_name,
+            answer=answer,
+        )
+
 
 @lru_cache(maxsize=1)
 def get_ai_service() -> AIAnalysisService:
@@ -421,3 +515,109 @@ def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
         "default_provider": config.provider,
         "providers": providers,
     }
+
+
+def build_aquifer_chat_context(dashboard: dict[str, Any]) -> dict[str, Any]:
+    def without_monthly_series(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: without_monthly_series(item)
+                for key, item in value.items()
+                if key != "series"
+            }
+        if isinstance(value, list):
+            return [without_monthly_series(item) for item in value]
+        return value
+
+    wells = []
+    for well in dashboard.get("wells", [])[:250]:
+        series = well.get("series") or []
+        trend = well.get("trend") or {}
+        suffix = int(well.get("name_suffix") or 1)
+        display_name = str(well.get("name") or "")
+        if suffix > 1:
+            display_name = f"{display_name} ({suffix})"
+        latest_observation = next(
+            (
+                {"date": item[0], "level_m": item[1]}
+                for item in reversed(series)
+                if isinstance(item, list) and len(item) >= 2 and item[1] is not None
+            ),
+            None,
+        )
+        wells.append(
+            {
+                "name": display_name,
+                "included": well.get("included"),
+                "status": well.get("status"),
+                "exclusion_reason": well.get("exclusion_reason"),
+                "elevation_m": well.get("elevation"),
+                "latest_observation": latest_observation,
+                "trend": {
+                    "direction": trend.get("direction"),
+                    "slope_per_year": trend.get("slope_per_year"),
+                    "decline_per_year": trend.get("decline_per_year"),
+                },
+                "recent_annual_decline": [
+                    {
+                        "water_year": row.get("water_year"),
+                        "decline_m": row.get("decline"),
+                        "cumulative_decline_m": row.get("cumulative_decline"),
+                    }
+                    for row in (well.get("annual_decline") or [])[-3:]
+                ],
+            }
+        )
+
+    analysis = dashboard.get("time_series_analysis") or {}
+    context = {
+        "aquifer": {
+            "id": dashboard.get("id"),
+            "name": dashboard.get("aquifer"),
+            "study_area": dashboard.get("mahdoude"),
+        },
+        "calendar": {
+            "standard": "Persian Water Year",
+            "start": "1 Mehr",
+            "end": "31 Shahrivar",
+        },
+        "selected_period": {
+            "start_year": dashboard.get("filters", {}).get("start_year"),
+            "start_month": dashboard.get("filters", {}).get("start_month"),
+            "end_year": dashboard.get("filters", {}).get("end_year"),
+            "end_month": dashboard.get("filters", {}).get("end_month"),
+            "start_water_year": dashboard.get("filters", {}).get("start_water_year"),
+            "end_water_year": dashboard.get("filters", {}).get("end_water_year"),
+        },
+        "stats": dashboard.get("stats", {}),
+        "aquifer_trends": {
+            key: value
+            for key, value in (dashboard.get("hydrographs") or {}).items()
+            if key.endswith("_trend")
+        },
+        "annual_decline": dashboard.get("annual_decline", []),
+        "annual_changes": dashboard.get("annual_changes", []),
+        "time_series_analysis": {
+            "period": analysis.get("period", {}),
+            "llm_input": analysis.get("llm_input", {}),
+            "agricultural_pressure": analysis.get("agricultural_pressure", {}),
+            "driver_classification": analysis.get("driver_classification", {}),
+        },
+        "precipitation": {
+            key: value
+            for key, value in (dashboard.get("precipitation") or {}).items()
+            if key != "series"
+        },
+        "ndvi": {
+            key: value
+            for key, value in (dashboard.get("ndvi") or {}).items()
+            if key != "metrics"
+        },
+        "aet": {
+            key: value
+            for key, value in (dashboard.get("aet") or {}).items()
+            if key != "series"
+        },
+        "piezometers": wells,
+    }
+    return without_monthly_series(context)

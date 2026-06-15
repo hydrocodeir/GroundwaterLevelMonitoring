@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from app.data_service import get_data_service
 from app.services.ai import (
     AIAnalysisRequest,
+    AIChatRequest,
     AIConfigurationError,
     AIForbiddenError,
     AIProviderError,
@@ -21,6 +22,7 @@ from app.services.ai import (
     AIRemoteError,
     AITimeoutError,
     AIValidationError,
+    build_aquifer_chat_context,
     get_ai_options,
     get_ai_service,
 )
@@ -59,7 +61,7 @@ def warm_data_cache() -> None:
 
 @app.middleware("http")
 async def limit_ai_request_size(request: Request, call_next):
-    if request.url.path == "/api/ai/analyze" and request.method.upper() == "POST":
+    if request.url.path in {"/api/ai/analyze", "/api/ai/chat"} and request.method.upper() == "POST":
         content_length = request.headers.get("content-length")
         if content_length and content_length.isdigit():
             if int(content_length) > AI_REQUEST_MAX_BYTES:
@@ -216,6 +218,71 @@ async def ai_analyze(request: Request) -> JSONResponse:
     except Exception:
         return _ai_error_response(
             "AI analysis failed unexpectedly.",
+            provider=getattr(service, "provider_name", None),
+            status_code=500,
+        )
+
+    return JSONResponse(content=result.model_dump())
+
+
+@app.post("/api/ai/chat")
+async def ai_chat(request: Request) -> JSONResponse:
+    body = await request.body()
+    if len(body) > AI_REQUEST_MAX_BYTES:
+        return _ai_error_response(
+            "Request body is too large.",
+            status_code=413,
+        )
+    try:
+        payload = AIChatRequest.model_validate_json(body)
+    except ValidationError:
+        return _ai_error_response(
+            "Invalid chat request body.",
+            provider=None,
+            status_code=400,
+        )
+
+    filters = payload.filters
+    try:
+        dashboard = await run_in_threadpool(
+            get_data_service().dashboard,
+            payload.aquifer_id,
+            start_year=filters.start_year,
+            start_month=filters.start_month,
+            end_year=filters.end_year,
+            end_month=filters.end_month,
+            continuous_only=filters.continuous_only,
+            manual_selection=filters.manual_selection,
+            selected_well_ids=filters.selected_well_ids or None,
+        )
+    except KeyError:
+        return _ai_error_response(
+            "Aquifer was not found.",
+            provider=payload.provider,
+            status_code=404,
+        )
+    except ValueError as error:
+        return _ai_error_response(
+            str(error),
+            provider=payload.provider,
+            status_code=400,
+        )
+
+    service = get_ai_service()
+    context = build_aquifer_chat_context(dashboard)
+    try:
+        result = await run_in_threadpool(service.chat, payload, context)
+    except AIConfigurationError as error:
+        return _ai_error_response(error.message, error.provider, 500)
+    except AIForbiddenError as error:
+        return _ai_error_response(error.message, error.provider, 403)
+    except (AIProviderError, AIRateLimitError, AIRemoteError, AITimeoutError) as error:
+        return _ai_error_response(error.message, error.provider, 502)
+    except AIValidationError as error:
+        return _ai_error_response(error.message, error.provider, 400)
+    except Exception:
+        return _ai_error_response(
+            "AI chat failed unexpectedly.",
             provider=getattr(service, "provider_name", None),
             status_code=500,
         )

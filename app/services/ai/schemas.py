@@ -62,3 +62,57 @@ class LLMAnalysisPayload(BaseModel):
     key_findings: list[str] | str = Field(default_factory=list)
     recommendations: list[str] | str = Field(default_factory=list)
     uncertainty_note: str = ""
+
+
+class AIChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class AIChatFilters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_year: int | None = None
+    start_month: int | None = Field(default=None, ge=1, le=12)
+    end_year: int | None = None
+    end_month: int | None = Field(default=None, ge=1, le=12)
+    continuous_only: bool = True
+    manual_selection: bool = False
+    selected_well_ids: list[str] = Field(default_factory=list, max_length=250)
+
+
+class AIChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    aquifer_id: str = Field(min_length=1, max_length=64)
+    language: LanguageCode = "fa"
+    provider: ProviderName | None = None
+    model: str | None = Field(default=None, min_length=1, max_length=128)
+    question: str = Field(min_length=1, max_length=2000)
+    history: list[AIChatMessage] = Field(default_factory=list, max_length=10)
+    filters: AIChatFilters = Field(default_factory=AIChatFilters)
+
+    @field_validator("aquifer_id", "question")
+    @classmethod
+    def normalize_required_chat_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("value cannot be empty")
+        return cleaned
+
+    @field_validator("model")
+    @classmethod
+    def normalize_chat_model(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class AIChatResponse(BaseModel):
+    status: Literal["success"] = "success"
+    provider: ProviderName
+    model: str
+    answer: str

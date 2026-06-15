@@ -8,14 +8,20 @@ from unittest.mock import AsyncMock, patch
 
 from starlette.requests import Request
 
-from app.main import ai_analyze
+from app.main import ai_analyze, ai_chat
 from app.services.ai.config import AIConfig
 from app.services.ai.errors import AIValidationError
 from app.services.ai.http_client import post_chat_completion
 from app.services.ai.gemini_client import GeminiClient
-from app.services.ai.schemas import AIAnalysisRequest, AIAnalysisResponse
+from app.services.ai.schemas import (
+    AIAnalysisRequest,
+    AIAnalysisResponse,
+    AIChatRequest,
+    AIChatResponse,
+)
 from app.services.ai.service import (
     AIAnalysisService,
+    build_aquifer_chat_context,
     calculate_precomputed_risk_level,
     get_ai_options,
 )
@@ -125,6 +131,104 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(result.key_findings, ["روند تراز آب زیرزمینی کاهشی است."])
         self.assertTrue(result.uncertainty_note)
         self.assertEqual(len(client.calls), 1)
+
+    def test_chat_uses_history_and_returns_provider_metadata(self) -> None:
+        client = FakeClient({"answer": "پیزومتر نمونه روند کاهشی دارد."})
+        service = self.build_service(client)
+        request = AIChatRequest.model_validate(
+            {
+                "aquifer_id": "aquifer-id",
+                "provider": "openrouter",
+                "model": "openrouter/auto",
+                "question": "کدام پیزومتر افت دارد؟",
+                "history": [
+                    {"role": "user", "content": "درباره چاه‌ها توضیح بده."},
+                    {"role": "assistant", "content": "نام چاه را مشخص کنید."},
+                ],
+            }
+        )
+
+        result = service.chat(
+            request,
+            {
+                "aquifer": {"name": "آبخوان نمونه"},
+                "piezometers": [{"name": "پیزومتر نمونه"}],
+            },
+        )
+
+        self.assertIsInstance(result, AIChatResponse)
+        self.assertEqual(result.provider, "openrouter")
+        self.assertIn("روند کاهشی", result.answer)
+        self.assertEqual(client.messages[1]["role"], "user")
+        self.assertIn("آبخوان نمونه", client.messages[-1]["content"])
+        self.assertIn("کدام پیزومتر", client.messages[-1]["content"])
+
+    def test_chat_repairs_response_without_answer_field(self) -> None:
+        client = FakeClient(
+            [
+                {"message": "پاسخ با کلید اشتباه"},
+                {"answer": "پاسخ اصلاح‌شده"},
+            ]
+        )
+        service = self.build_service(client)
+        request = AIChatRequest(
+            aquifer_id="aquifer-id",
+            question="وضعیت چیست؟",
+        )
+
+        result = service.chat(request, {"aquifer": {"name": "نمونه"}})
+
+        self.assertEqual(result.answer, "پاسخ اصلاح‌شده")
+        self.assertEqual(len(client.calls), 2)
+
+    def test_chat_context_omits_raw_monthly_series(self) -> None:
+        context = build_aquifer_chat_context(
+            {
+                "id": "a1",
+                "aquifer": "آبخوان نمونه",
+                "mahdoude": "محدوده نمونه",
+                "stats": {"total_wells": 1},
+                "filters": {
+                    "start_year": 1402,
+                    "start_month": 7,
+                    "end_year": 1403,
+                    "end_month": 6,
+                    "start_water_year": 1402,
+                    "end_water_year": 1402,
+                },
+                "hydrographs": {
+                    "thiessen": [["1402-07-01", 10.0]],
+                    "thiessen_trend": {"direction": "decline", "slope": -0.2},
+                },
+                "annual_decline": [],
+                "annual_changes": [],
+                "time_series_analysis": {},
+                "precipitation": {"series": [["1402-07-01", 12.0]], "method": "inside"},
+                "ndvi": {"metrics": {"median": []}, "default_metric": "median"},
+                "aet": {"series": [["1402-07-01", 50.0]], "source": "WaPOR"},
+                "wells": [
+                    {
+                        "id": "w1",
+                        "name": "پیزومتر نمونه",
+                        "included": True,
+                        "status": "included",
+                        "elevation": 1000,
+                        "series": [["1402-07-01", 20.0], ["1402-08-01", 19.5]],
+                        "trend": {"direction": "decline", "slope": -0.5},
+                        "annual_decline": [],
+                    }
+                ],
+            }
+        )
+
+        serialized = json.dumps(context, ensure_ascii=False)
+        self.assertIn("پیزومتر نمونه", serialized)
+        self.assertNotIn('"thiessen":[', serialized)
+        self.assertNotIn('"series"', serialized)
+        self.assertEqual(
+            context["piezometers"][0]["latest_observation"]["level_m"],
+            19.5,
+        )
 
     def test_service_repairs_response_when_analysis_text_is_missing(self) -> None:
         client = FakeClient(
@@ -415,6 +519,92 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(response_body["risk_level"], "high")
         self.assertEqual(response_body["precomputed_risk_level"], "high")
         self.assertIn("analysis", response_body)
+
+    def test_ai_chat_endpoint_builds_server_side_aquifer_context(self) -> None:
+        class FakeDataService:
+            def dashboard(self, aquifer_id, **filters):
+                self.aquifer_id = aquifer_id
+                self.filters = filters
+                return {
+                    "id": aquifer_id,
+                    "aquifer": "آبخوان نمونه",
+                    "mahdoude": "محدوده نمونه",
+                    "stats": {"total_wells": 0},
+                    "filters": {
+                        "start_year": 1402,
+                        "start_month": 7,
+                        "end_year": 1403,
+                        "end_month": 6,
+                        "start_water_year": 1402,
+                        "end_water_year": 1402,
+                    },
+                    "hydrographs": {},
+                    "annual_decline": [],
+                    "annual_changes": [],
+                    "time_series_analysis": {},
+                    "precipitation": {},
+                    "ndvi": {},
+                    "aet": {},
+                    "wells": [],
+                }
+
+        class FakeChatService:
+            provider_name = "openrouter"
+
+            def chat(self, request, context):
+                self.request = request
+                self.context = context
+                return AIChatResponse(
+                    provider="openrouter",
+                    model="openrouter/free",
+                    answer="پاسخ آزمایشی",
+                )
+
+        payload = {
+            "aquifer_id": "aquifer-id",
+            "provider": "openrouter",
+            "model": "openrouter/free",
+            "question": "وضعیت آبخوان چیست؟",
+            "history": [],
+            "filters": {
+                "start_year": 1402,
+                "start_month": 7,
+                "end_year": 1403,
+                "end_month": 6,
+            },
+        }
+        body = json.dumps(payload).encode("utf-8")
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/api/ai/chat",
+                "headers": [],
+            },
+            receive,
+        )
+        data_service = FakeDataService()
+        chat_service = FakeChatService()
+
+        async def run_directly(function, *args, **kwargs):
+            return function(*args, **kwargs)
+
+        with (
+            patch("app.main.get_data_service", return_value=data_service),
+            patch("app.main.get_ai_service", return_value=chat_service),
+            patch("app.main.run_in_threadpool", side_effect=run_directly),
+        ):
+            response = asyncio.run(ai_chat(request))
+
+        self.assertEqual(response.status_code, 200)
+        response_body = json.loads(response.body)
+        self.assertEqual(response_body["answer"], "پاسخ آزمایشی")
+        self.assertEqual(data_service.aquifer_id, "aquifer-id")
+        self.assertEqual(chat_service.context["aquifer"]["name"], "آبخوان نمونه")
 
 
 if __name__ == "__main__":
