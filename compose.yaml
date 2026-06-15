@@ -11,6 +11,8 @@ services:
       - "127.0.0.1:${APP_PORT:-8228}:8228"
     volumes:
       - ./Data:/app/Data:ro
+    env_file:
+      - .env
     environment:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"

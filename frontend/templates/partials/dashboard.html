@@ -122,64 +122,6 @@
 
   <section id="statsGrid" class="grid grid-cols-2 gap-4 lg:grid-cols-5"></section>
 
-  <section class="panel overflow-hidden" data-ai-analysis-panel>
-    <div class="section-heading flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div>
-        <span class="section-kicker">تحلیل هوشمند</span>
-        <h3 class="section-title">AI Analysis</h3>
-        <p class="section-description">خلاصه شاخص‌های محاسبه‌شده برای تولید گزارش تحلیلی بدون ارسال دادهٔ خام</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-3">
-        <label class="block">
-          <span class="field-label">زبان خروجی</span>
-          <select id="aiLanguage" class="field h-11 w-28">
-            <option value="fa" selected>فارسی</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-        <button id="aiAnalyzeButton" type="button" class="primary-button min-w-40">
-          <span>Analyze with AI</span>
-        </button>
-      </div>
-    </div>
-    <div class="border-t border-slate-100 bg-slate-50/70 px-5 py-4">
-      <div id="aiAnalysisStatus" class="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-[10px] leading-6 text-slate-600">
-        گزارش هنوز تولید نشده است. پس از انتخاب بازه، روی Analyze with AI کلیک کنید.
-      </div>
-      <article id="aiAnalysisCard" class="mt-4 hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div class="flex flex-wrap items-center gap-2">
-              <span id="aiAnalysisProvider" class="rounded-full border border-teal/20 bg-teal/5 px-3 py-1 text-[10px] font-medium text-teal"></span>
-              <span id="aiAnalysisModel" class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] text-slate-500"></span>
-              <span id="aiAnalysisRisk" class="rounded-full px-3 py-1 text-[10px] font-bold"></span>
-            </div>
-            <h4 class="mt-4 text-lg font-bold text-navy">خلاصه تحلیلی</h4>
-            <p id="aiAnalysisText" class="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600"></p>
-          </div>
-          <div class="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-[10px] leading-6 text-slate-500 lg:min-w-64">
-            <div class="font-bold text-navy">اطلاعات ورودی</div>
-            <div id="aiAnalysisMeta" class="mt-2 space-y-1"></div>
-          </div>
-        </div>
-        <div class="mt-5 grid gap-4 lg:grid-cols-2">
-          <section class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-            <h5 class="text-[11px] font-bold text-navy">Key Findings</h5>
-            <ul id="aiAnalysisFindings" class="mt-3 space-y-2 text-[10px] leading-6 text-slate-600"></ul>
-          </section>
-          <section class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-            <h5 class="text-[11px] font-bold text-navy">Recommendations</h5>
-            <ul id="aiAnalysisRecommendations" class="mt-3 space-y-2 text-[10px] leading-6 text-slate-600"></ul>
-          </section>
-        </div>
-        <div class="mt-4 rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-[10px] leading-6 text-slate-500">
-          <span class="font-bold text-amber-700">Uncertainty:</span>
-          <span id="aiAnalysisUncertainty"></span>
-        </div>
-      </article>
-    </div>
-  </section>
-
   <section class="grid gap-6 xl:grid-cols-12">
     <article class="panel overflow-hidden xl:col-span-5" data-aquifer-map-panel>
       <div class="section-heading" data-aquifer-map-heading>
@@ -222,12 +164,17 @@
           <p class="section-description">مقایسه روش میانگین حسابی و میانگین وزنی تیسن</p>
           <div id="aquiferTrendSummary" class="mt-3 flex flex-wrap gap-2"></div>
         </div>
-        <div class="tab-list" role="tablist" aria-label="نمای تحلیل آبخوان">
-          <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">تراز + بارش</button>
-          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="ndvi">تراز + NDVI</button>
-          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="aet">تراز + AET</button>
-          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="annual">تغییرات سالانه</button>
-          <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
+        <div class="flex max-w-full flex-col items-end gap-3">
+          <button id="aiOpenModalButton" type="button" class="primary-button h-11 min-w-36">
+            <span>تحلیل با AI</span>
+          </button>
+          <div class="tab-list" role="tablist" aria-label="نمای تحلیل آبخوان">
+            <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">تراز + بارش</button>
+            <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="ndvi">تراز + NDVI</button>
+            <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="aet">تراز + AET</button>
+            <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="annual">تغییرات سالانه</button>
+            <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
+          </div>
         </div>
       </div>
       <div data-tab-panel="aquifer-chart">
@@ -369,6 +316,83 @@
     </div>
     <div id="wellCharts" class="grid grid-cols-1 gap-5 xl:grid-cols-2"></div>
   </section>
+
+  <div id="aiAnalysisModal" class="well-modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
+    <button type="button" class="well-modal-backdrop" data-close-ai-modal aria-label="بستن پنجره تحلیل هوشمند"></button>
+    <article class="well-modal-card panel">
+      <header class="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div>
+          <div class="section-kicker">تحلیل هوشمند آبخوان</div>
+          <h3 id="aiModalTitle" class="mt-1 text-lg font-bold text-navy">تحلیل با AI</h3>
+          <p class="mt-1 text-[10px] leading-5 text-slate-500">فقط خلاصه شاخص‌های محاسبه‌شده ارسال می‌شود و داده خام چاه‌ها ارسال نمی‌شود.</p>
+        </div>
+        <button type="button" class="modal-close-button" data-close-ai-modal aria-label="بستن">×</button>
+      </header>
+
+      <div class="border-b border-slate-100 bg-slate-50/70 p-5">
+        <div class="grid gap-3 md:grid-cols-3">
+          <label class="block">
+            <span class="field-label">ارائه‌دهنده</span>
+            <select id="aiProvider" class="field h-11"></select>
+          </label>
+          <label class="block">
+            <span class="field-label">مدل</span>
+            <select id="aiModel" class="field h-11 text-left" dir="ltr"></select>
+          </label>
+          <label class="block">
+            <span class="field-label">زبان خروجی</span>
+            <select id="aiLanguage" class="field h-11">
+              <option value="fa" selected>فارسی</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </div>
+        <div id="aiModelHint" class="mt-3 text-[10px] leading-5 text-slate-500"></div>
+        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div id="aiAnalysisStatus" class="flex-1 rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-[10px] leading-6 text-slate-600">
+            ارائه‌دهنده و مدل را انتخاب کنید، سپس تحلیل را اجرا کنید.
+          </div>
+          <button id="aiAnalyzeButton" type="button" class="primary-button min-w-40">
+            <span>اجرای تحلیل</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-5">
+        <article id="aiAnalysisCard" class="hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span id="aiAnalysisProvider" class="rounded-full border border-teal/20 bg-teal/5 px-3 py-1 text-[10px] font-medium text-teal"></span>
+                <span id="aiAnalysisModel" class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] text-slate-500"></span>
+                <span id="aiAnalysisRisk" class="rounded-full px-3 py-1 text-[10px] font-bold"></span>
+              </div>
+              <h4 class="mt-4 text-lg font-bold text-navy">خلاصه تحلیلی</h4>
+              <p id="aiAnalysisText" class="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600"></p>
+            </div>
+            <div class="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-[10px] leading-6 text-slate-500 lg:min-w-64">
+              <div class="font-bold text-navy">اطلاعات ورودی</div>
+              <div id="aiAnalysisMeta" class="mt-2 space-y-1"></div>
+            </div>
+          </div>
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <section class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <h5 class="text-[11px] font-bold text-navy">یافته‌های کلیدی</h5>
+              <ul id="aiAnalysisFindings" class="mt-3 space-y-2 text-[10px] leading-6 text-slate-600"></ul>
+            </section>
+            <section class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <h5 class="text-[11px] font-bold text-navy">پیشنهادها</h5>
+              <ul id="aiAnalysisRecommendations" class="mt-3 space-y-2 text-[10px] leading-6 text-slate-600"></ul>
+            </section>
+          </div>
+          <div class="mt-4 rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-[10px] leading-6 text-slate-500">
+            <span class="font-bold text-amber-700">عدم قطعیت:</span>
+            <span id="aiAnalysisUncertainty"></span>
+          </div>
+        </article>
+      </div>
+    </article>
+  </div>
 
   <div id="wellDetailModal" class="well-modal hidden" role="dialog" aria-modal="true" aria-labelledby="wellModalTitle">
     <button type="button" class="well-modal-backdrop" data-close-well-modal aria-label="بستن پنجره"></button>

@@ -14,6 +14,8 @@ class AIAnalysisRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     language: LanguageCode = "fa"
+    provider: ProviderName | None = None
+    model: str | None = Field(default=None, min_length=1, max_length=128)
     dataset_type: str = Field(default="groundwater_dashboard", min_length=1, max_length=64)
     water_year: str | None = Field(default=None, max_length=64)
     summary_data: dict[str, Any]
@@ -28,6 +30,14 @@ class AIAnalysisRequest(BaseModel):
     @field_validator("water_year")
     @classmethod
     def normalize_water_year(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("model")
+    @classmethod
+    def normalize_model(cls, value: str | None) -> str | None:
         if value is None:
             return value
         cleaned = value.strip()

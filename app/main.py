@@ -15,11 +15,13 @@ from app.data_service import get_data_service
 from app.services.ai import (
     AIAnalysisRequest,
     AIConfigurationError,
+    AIForbiddenError,
     AIProviderError,
     AIRateLimitError,
     AIRemoteError,
     AITimeoutError,
     AIValidationError,
+    get_ai_options,
     get_ai_service,
 )
 
@@ -205,10 +207,12 @@ async def ai_analyze(request: Request) -> JSONResponse:
         result = await run_in_threadpool(service.analyze, payload)
     except AIConfigurationError as error:
         return _ai_error_response(error.message, error.provider, 500)
+    except AIForbiddenError as error:
+        return _ai_error_response(error.message, error.provider, 403)
     except (AIProviderError, AIRateLimitError, AIRemoteError, AITimeoutError) as error:
         return _ai_error_response(error.message, error.provider, 502)
     except AIValidationError as error:
-        return _ai_error_response(error.message, error.provider, 500)
+        return _ai_error_response(error.message, error.provider, 400)
     except Exception:
         return _ai_error_response(
             "AI analysis failed unexpectedly.",
@@ -217,6 +221,11 @@ async def ai_analyze(request: Request) -> JSONResponse:
         )
 
     return JSONResponse(content=result.model_dump())
+
+
+@app.get("/api/ai/options")
+def ai_options() -> dict:
+    return get_ai_options()
 
 
 @app.get("/health")

@@ -187,11 +187,16 @@ def calculate_precomputed_risk_level(summary_data: dict[str, Any]) -> RiskLevel:
 class AIAnalysisService:
     def __init__(self, config: AIConfig | None = None, client: Any | None = None) -> None:
         self.config = config or AIConfig.from_env()
-        self.client = client or self._build_client(self.config)
+        self.client = client
 
     @staticmethod
-    def _build_client(config: AIConfig) -> Any:
-        provider = config.provider
+    def _build_client(
+        config: AIConfig,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> Any:
+        provider = provider or config.provider
+        model = model or config.default_model_for(provider)
         if provider not in SUPPORTED_PROVIDERS:
             raise AIConfigurationError(
                 f"Invalid AI_PROVIDER '{provider}'. Supported providers are groq and openrouter.",
@@ -202,7 +207,7 @@ class AIAnalysisService:
                 raise AIConfigurationError("GROQ_API_KEY is missing.", provider)
             return GroqClient(
                 api_key=config.groq_api_key,
-                model=config.groq_model,
+                model=model,
                 base_url=config.groq_base_url,
                 timeout_seconds=config.timeout_seconds,
             )
@@ -210,7 +215,7 @@ class AIAnalysisService:
             raise AIConfigurationError("OPENROUTER_API_KEY is missing.", provider)
         return OpenRouterClient(
             api_key=config.openrouter_api_key,
-            model=config.openrouter_model,
+            model=model,
             base_url=config.openrouter_base_url,
             site_url=config.openrouter_site_url,
             app_name=config.openrouter_app_name,
@@ -223,12 +228,35 @@ class AIAnalysisService:
 
     @property
     def model_name(self) -> str:
-        return getattr(self.client, "model", "")
+        return getattr(
+            self.client,
+            "model",
+            self.config.default_model_for(self.config.provider),
+        )
+
+    def _client_for_request(self, request: AIAnalysisRequest) -> Any:
+        if self.client is not None:
+            return self.client
+        provider = request.provider or self.config.provider
+        model = request.model or self.config.default_model_for(provider)
+        if model not in self.config.allowed_models_for(provider):
+            raise AIValidationError(
+                f"Model '{model}' is not enabled for {provider}.",
+                provider,
+            )
+        return self._build_client(self.config, provider=provider, model=model)
 
     def analyze(self, request: AIAnalysisRequest) -> AIAnalysisResponse:
         if not request.summary_data:
             raise AIValidationError("summary_data cannot be empty.", self.provider_name)
 
+        client = self._client_for_request(request)
+        provider_name = getattr(client, "provider_name", request.provider or self.config.provider)
+        model_name = getattr(
+            client,
+            "model",
+            request.model or self.config.default_model_for(provider_name),
+        )
         precomputed_risk_level = calculate_precomputed_risk_level(request.summary_data)
         messages = [
             {"role": "system", "content": build_system_prompt(request.language)},
@@ -245,7 +273,7 @@ class AIAnalysisService:
         ]
 
         try:
-            raw_content = self.client.complete(messages)
+            raw_content = client.complete(messages)
         except AIConfigurationError:
             raise
         except AIRateLimitError:
@@ -257,12 +285,12 @@ class AIAnalysisService:
         except Exception as error:
             LOGGER.exception(
                 "Unexpected AI provider failure for provider=%s model=%s",
-                self.provider_name,
-                self.model_name,
+                provider_name,
+                model_name,
             )
             raise AIProviderError(
                 "AI provider request failed unexpectedly.",
-                self.provider_name,
+                provider_name,
             ) from error
 
         try:
@@ -270,7 +298,7 @@ class AIAnalysisService:
         except Exception as error:
             raise AIProviderError(
                 "LLM returned invalid JSON.",
-                self.provider_name,
+                provider_name,
             ) from error
 
         normalized = _normalize_llm_payload(
@@ -285,8 +313,8 @@ class AIAnalysisService:
         except (ValidationError, ValueError):
             LOGGER.warning(
                 "LLM response did not match the analysis schema for provider=%s model=%s; retrying once.",
-                self.provider_name,
-                self.model_name,
+                provider_name,
+                model_name,
             )
             repair_messages = _build_repair_messages(
                 messages,
@@ -294,7 +322,7 @@ class AIAnalysisService:
                 precomputed_risk_level,
             )
             try:
-                repaired_content = self.client.complete(repair_messages)
+                repaired_content = client.complete(repair_messages)
                 repaired = _extract_json_object(repaired_content)
                 normalized = _normalize_llm_payload(
                     repaired,
@@ -307,7 +335,7 @@ class AIAnalysisService:
             except Exception as error:
                 raise AIProviderError(
                     "LLM returned an incomplete analysis response.",
-                    self.provider_name,
+                    provider_name,
                 ) from error
 
         parsed_risk_level = _normalize_risk_level(llm_output.risk_level)
@@ -318,11 +346,11 @@ class AIAnalysisService:
                 precomputed_risk_level,
             )
         final_risk_level = precomputed_risk_level
-        provider_name = cast(ProviderName, self.provider_name)
+        response_provider = cast(ProviderName, provider_name)
 
         return AIAnalysisResponse(
-            provider=provider_name,
-            model=self.model_name,
+            provider=response_provider,
+            model=model_name,
             analysis=llm_output.analysis.strip(),
             risk_level=final_risk_level,
             precomputed_risk_level=precomputed_risk_level,
@@ -335,3 +363,46 @@ class AIAnalysisService:
 @lru_cache(maxsize=1)
 def get_ai_service() -> AIAnalysisService:
     return AIAnalysisService()
+
+
+def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
+    config = config or AIConfig.from_env()
+    labels = {
+        "openrouter": "OpenRouter",
+        "groq": "Groq",
+    }
+    providers = []
+    for provider in ("openrouter", "groq"):
+        models = []
+        for model in config.allowed_models_for(provider):
+            is_free = provider == "groq" or model == "openrouter/free" or model.endswith(":free")
+            models.append(
+                {
+                    "id": model,
+                    "label": model,
+                    "free": is_free,
+                }
+            )
+        default_model = config.default_model_for(provider)
+        if provider == "openrouter":
+            default_is_free = (
+                default_model == "openrouter/free"
+                or default_model.endswith(":free")
+            )
+            if not default_is_free:
+                free_model = next((model["id"] for model in models if model["free"]), None)
+                default_model = free_model or default_model
+        providers.append(
+            {
+                "id": provider,
+                "label": labels[provider],
+                "enabled": config.has_api_key_for(provider),
+                "default_model": default_model,
+                "models": models,
+            }
+        )
+    return {
+        "status": "success",
+        "default_provider": config.provider,
+        "providers": providers,
+    }

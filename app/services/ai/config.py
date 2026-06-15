@@ -10,12 +10,39 @@ load_environment()
 
 SUPPORTED_PROVIDERS = {"groq", "openrouter"}
 DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
+DEFAULT_GROQ_MODELS = (
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "qwen/qwen3-32b",
+)
 DEFAULT_GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_OPENROUTER_MODEL = "openrouter/auto"
+DEFAULT_OPENROUTER_MODELS = (
+    "openrouter/free",
+    "openai/gpt-oss-120b:free",
+    "openai/gpt-oss-20b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "google/gemma-4-31b-it:free",
+)
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_SITE_URL = "http://localhost:3000"
 DEFAULT_OPENROUTER_APP_NAME = "Groundwater Dashboard AI"
 DEFAULT_AI_PROVIDER = "openrouter"
+
+
+def _model_list_from_env(name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return defaults
+    models = tuple(model.strip() for model in raw.split(",") if model.strip())
+    return models or defaults
+
+
+def _unique_models(default_model: str, models: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((default_model, *models)))
 
 
 @dataclass(frozen=True)
@@ -31,6 +58,27 @@ class AIConfig:
     openrouter_app_name: str
     timeout_seconds: int = 60
     max_request_bytes: int = 64_000
+    groq_models: tuple[str, ...] = DEFAULT_GROQ_MODELS
+    openrouter_models: tuple[str, ...] = DEFAULT_OPENROUTER_MODELS
+
+    def default_model_for(self, provider: str) -> str:
+        if provider == "groq":
+            return self.groq_model
+        return self.openrouter_model
+
+    def allowed_models_for(self, provider: str) -> tuple[str, ...]:
+        if provider == "groq":
+            return _unique_models(self.groq_model, self.groq_models)
+        if provider == "openrouter":
+            return _unique_models(self.openrouter_model, self.openrouter_models)
+        return ()
+
+    def has_api_key_for(self, provider: str) -> bool:
+        if provider == "groq":
+            return bool(self.groq_api_key)
+        if provider == "openrouter":
+            return bool(self.openrouter_api_key)
+        return False
 
     @classmethod
     def from_env(cls) -> "AIConfig":
@@ -62,4 +110,9 @@ class AIConfig:
             openrouter_base_url=openrouter_base_url or DEFAULT_OPENROUTER_BASE_URL,
             openrouter_site_url=openrouter_site_url or DEFAULT_OPENROUTER_SITE_URL,
             openrouter_app_name=openrouter_app_name or DEFAULT_OPENROUTER_APP_NAME,
+            groq_models=_model_list_from_env("GROQ_MODELS", DEFAULT_GROQ_MODELS),
+            openrouter_models=_model_list_from_env(
+                "OPENROUTER_MODELS",
+                DEFAULT_OPENROUTER_MODELS,
+            ),
         )

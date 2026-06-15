@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
-from unittest.mock import patch
+from io import BytesIO
+from unittest.mock import AsyncMock, patch
 
-from fastapi.testclient import TestClient
+from starlette.requests import Request
 
-from app.main import app
+from app.main import ai_analyze
 from app.services.ai.config import AIConfig
+from app.services.ai.errors import AIValidationError
+from app.services.ai.http_client import post_chat_completion
 from app.services.ai.schemas import AIAnalysisRequest, AIAnalysisResponse
-from app.services.ai.service import AIAnalysisService, calculate_precomputed_risk_level
+from app.services.ai.service import (
+    AIAnalysisService,
+    calculate_precomputed_risk_level,
+    get_ai_options,
+)
 
 
 class FakeClient:
@@ -140,6 +148,112 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(len(client.calls), 2)
         self.assertEqual(client.calls[1][-1]["role"], "user")
 
+    def test_service_builds_selected_provider_and_model(self) -> None:
+        client = FakeClient(
+            {
+                "analysis": "Selected Groq model response.",
+                "risk_level": "high",
+                "key_findings": [],
+                "recommendations": [],
+                "uncertainty_note": "Summary data only.",
+            }
+        )
+        client.provider_name = "groq"
+        client.model = "openai/gpt-oss-20b"
+        config = AIConfig(
+            provider="openrouter",
+            groq_api_key="groq-key",
+            groq_model="llama-3.1-8b-instant",
+            groq_base_url="https://api.groq.com/openai/v1",
+            openrouter_api_key="openrouter-key",
+            openrouter_model="openrouter/auto",
+            openrouter_base_url="https://openrouter.ai/api/v1",
+            openrouter_site_url="http://localhost:3000",
+            openrouter_app_name="Groundwater Dashboard AI",
+        )
+        request = self.build_request(language="en").model_copy(
+            update={"provider": "groq", "model": "openai/gpt-oss-20b"}
+        )
+
+        with patch.object(AIAnalysisService, "_build_client", return_value=client) as builder:
+            result = AIAnalysisService(config=config).analyze(request)
+
+        builder.assert_called_once_with(
+            config,
+            provider="groq",
+            model="openai/gpt-oss-20b",
+        )
+        self.assertEqual(result.provider, "groq")
+        self.assertEqual(result.model, "openai/gpt-oss-20b")
+
+    def test_service_rejects_model_outside_server_allowlist(self) -> None:
+        request = self.build_request().model_copy(
+            update={"provider": "openrouter", "model": "paid/model"}
+        )
+
+        with self.assertRaises(AIValidationError):
+            AIAnalysisService(
+                config=AIConfig(
+                    provider="openrouter",
+                    groq_api_key="",
+                    groq_model="llama-3.1-8b-instant",
+                    groq_base_url="https://api.groq.com/openai/v1",
+                    openrouter_api_key="test-key",
+                    openrouter_model="openrouter/auto",
+                    openrouter_base_url="https://openrouter.ai/api/v1",
+                    openrouter_site_url="http://localhost:3000",
+                    openrouter_app_name="Groundwater Dashboard AI",
+                )
+            ).analyze(request)
+
+    def test_ai_options_only_exposes_key_availability_and_allowed_models(self) -> None:
+        options = get_ai_options(
+            AIConfig(
+                provider="openrouter",
+                groq_api_key="groq-secret",
+                groq_model="llama-3.1-8b-instant",
+                groq_base_url="https://api.groq.com/openai/v1",
+                openrouter_api_key="",
+                openrouter_model="openrouter/auto",
+                openrouter_base_url="https://openrouter.ai/api/v1",
+                openrouter_site_url="http://localhost:3000",
+                openrouter_app_name="Groundwater Dashboard AI",
+            )
+        )
+
+        providers = {provider["id"]: provider for provider in options["providers"]}
+        self.assertFalse(providers["openrouter"]["enabled"])
+        self.assertEqual(providers["openrouter"]["default_model"], "openrouter/free")
+        self.assertTrue(providers["groq"]["enabled"])
+        self.assertNotIn("groq-secret", json.dumps(options))
+        self.assertTrue(providers["groq"]["models"])
+
+    def test_generic_provider_forbidden_error_gets_actionable_message(self) -> None:
+        from urllib.error import HTTPError
+
+        error = HTTPError(
+            url="https://api.groq.com/openai/v1/chat/completions",
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
+            fp=BytesIO(b'{"error":{"message":"Forbidden"}}'),
+        )
+        with patch(
+            "app.services.ai.http_client.urlrequest.urlopen",
+            side_effect=error,
+        ):
+            with self.assertRaisesRegex(
+                Exception,
+                "account or network location is not permitted",
+            ):
+                post_chat_completion(
+                    provider="groq",
+                    url="https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": "Bearer test"},
+                    payload={"model": "llama-3.1-8b-instant", "messages": []},
+                    timeout_seconds=5,
+                )
+
     def test_ai_endpoint_returns_structured_response(self) -> None:
         client = FakeClient(
             {
@@ -153,6 +267,8 @@ class AIServiceTests(unittest.TestCase):
         fake_service = self.build_service(client)
         payload = {
             "language": "en",
+            "provider": "openrouter",
+            "model": "openrouter/auto",
             "dataset_type": "groundwater_dashboard",
             "water_year": "1402-1403",
             "summary_data": {
@@ -164,17 +280,35 @@ class AIServiceTests(unittest.TestCase):
                 "total_wells_count": 45,
             },
         }
-        with patch("app.main.get_ai_service", return_value=fake_service):
-            response = TestClient(app).post("/api/ai/analyze", json=payload)
+        body = json.dumps(payload).encode("utf-8")
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/api/ai/analyze",
+                "headers": [],
+            },
+            receive,
+        )
+        run_directly = AsyncMock(side_effect=lambda function, argument: function(argument))
+        with (
+            patch("app.main.get_ai_service", return_value=fake_service),
+            patch("app.main.run_in_threadpool", run_directly),
+        ):
+            response = asyncio.run(ai_analyze(request))
 
         self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["status"], "success")
-        self.assertEqual(body["provider"], "openrouter")
-        self.assertEqual(body["model"], "openrouter/auto")
-        self.assertEqual(body["risk_level"], "high")
-        self.assertEqual(body["precomputed_risk_level"], "high")
-        self.assertIn("analysis", body)
+        response_body = json.loads(response.body)
+        self.assertEqual(response_body["status"], "success")
+        self.assertEqual(response_body["provider"], "openrouter")
+        self.assertEqual(response_body["model"], "openrouter/auto")
+        self.assertEqual(response_body["risk_level"], "high")
+        self.assertEqual(response_body["precomputed_risk_level"], "high")
+        self.assertIn("analysis", response_body)
 
 
 if __name__ == "__main__":

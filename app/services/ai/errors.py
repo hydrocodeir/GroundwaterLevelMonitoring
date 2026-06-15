@@ -24,6 +24,10 @@ class AIProviderError(AIRemoteError):
     pass
 
 
+class AIForbiddenError(AIRemoteError):
+    pass
+
+
 class AIRateLimitError(AIRemoteError):
     pass
 

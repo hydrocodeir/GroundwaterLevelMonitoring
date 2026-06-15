@@ -20,7 +20,8 @@
     observer: null,
     requestToken: 0,
     currentData: null,
-    aiRequestToken: 0
+    aiRequestToken: 0,
+    aiOptions: null
   };
 
   const faNumber = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 });
@@ -341,14 +342,109 @@
     const card = document.getElementById("aiAnalysisCard");
     const button = document.getElementById("aiAnalyzeButton");
     if (status) {
-      status.textContent = "گزارش هنوز تولید نشده است. پس از انتخاب بازه، روی Analyze with AI کلیک کنید.";
+      status.textContent = "ارائه‌دهنده و مدل را انتخاب کنید، سپس تحلیل را اجرا کنید.";
       status.className = "rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-[10px] leading-6 text-slate-600";
     }
     if (card) card.classList.add("hidden");
     if (button) {
       button.disabled = false;
-      button.innerHTML = "<span>Analyze with AI</span>";
+      button.innerHTML = "<span>اجرای تحلیل</span>";
     }
+  }
+
+  function selectedAiProvider() {
+    const providerId = document.getElementById("aiProvider")?.value;
+    return state.aiOptions?.providers?.find(provider => provider.id === providerId) || null;
+  }
+
+  function syncAiModelOptions() {
+    const modelSelect = document.getElementById("aiModel");
+    const hint = document.getElementById("aiModelHint");
+    const analyzeButton = document.getElementById("aiAnalyzeButton");
+    const provider = selectedAiProvider();
+    if (!modelSelect || !hint || !analyzeButton) return;
+    modelSelect.innerHTML = "";
+    if (!provider?.enabled) {
+      modelSelect.disabled = true;
+      analyzeButton.disabled = true;
+      hint.textContent = "برای استفاده از این ارائه‌دهنده، کلید API آن را در فایل .env وارد و سرور را restart کنید.";
+      return;
+    }
+    provider.models.forEach(model => {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = `${model.label}${model.free ? " · رایگان" : ""}`;
+      option.selected = model.id === provider.default_model;
+      modelSelect.appendChild(option);
+    });
+    modelSelect.disabled = !provider.models.length;
+    analyzeButton.disabled = !provider.models.length;
+    hint.textContent = provider.id === "groq"
+      ? "مدل‌های Groq از سهمیه Free Tier حساب شما استفاده می‌کنند و محدودیت نرخ دارند."
+      : "مدل‌های دارای برچسب رایگان هزینه توکن ندارند؛ دسترسی و ظرفیت آن‌ها ممکن است تغییر کند.";
+  }
+
+  function renderAiOptions(options) {
+    const providerSelect = document.getElementById("aiProvider");
+    if (!providerSelect) return;
+    state.aiOptions = options;
+    providerSelect.innerHTML = "";
+    const enabledProviders = (options.providers || []).filter(provider => provider.enabled);
+    (options.providers || []).forEach(provider => {
+      const option = document.createElement("option");
+      option.value = provider.id;
+      option.disabled = !provider.enabled;
+      option.textContent = `${provider.label}${provider.enabled ? "" : " · کلید تنظیم نشده"}`;
+      option.selected = provider.id === options.default_provider && provider.enabled;
+      providerSelect.appendChild(option);
+    });
+    if (!providerSelect.value && enabledProviders.length) {
+      providerSelect.value = enabledProviders[0].id;
+    }
+    syncAiModelOptions();
+  }
+
+  async function loadAiOptions() {
+    if (state.aiOptions) {
+      renderAiOptions(state.aiOptions);
+      return;
+    }
+    const status = document.getElementById("aiAnalysisStatus");
+    try {
+      const response = await fetch("/api/ai/options");
+      const options = await response.json().catch(() => ({}));
+      if (!response.ok || options.status !== "success") {
+        throw new Error(options.message || "دریافت تنظیمات AI ناموفق بود.");
+      }
+      renderAiOptions(options);
+      const hasEnabledProvider = options.providers?.some(provider => provider.enabled);
+      if (!hasEnabledProvider && status) {
+        status.textContent = "هیچ کلید API فعالی پیدا نشد. کلید OpenRouter یا Groq را در فایل .env تنظیم کنید.";
+        status.className = "rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-[10px] leading-6 text-amber-700";
+      }
+    } catch (error) {
+      if (status) {
+        status.textContent = error.message || "دریافت تنظیمات AI ناموفق بود.";
+        status.className = "rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-[10px] leading-6 text-red-700";
+      }
+    }
+  }
+
+  function closeAiModal() {
+    const modal = document.getElementById("aiAnalysisModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.body.classList.remove("overflow-hidden");
+  }
+
+  function openAiModal() {
+    const modal = document.getElementById("aiAnalysisModal");
+    if (!modal || !state.currentData) return;
+    closeWellModal();
+    closePrecipitationModal();
+    modal.classList.remove("hidden");
+    document.body.classList.add("overflow-hidden");
+    loadAiOptions();
   }
 
   function renderAiAnalysisResult(result, summaryData) {
@@ -392,8 +488,8 @@
       )).join("");
     };
 
-    findings.innerHTML = renderList(result.key_findings || [], "Finding is not available.");
-    recommendations.innerHTML = renderList(result.recommendations || [], "Recommendation is not available.");
+    findings.innerHTML = renderList(result.key_findings || [], "یافته‌ای ارائه نشده است.");
+    recommendations.innerHTML = renderList(result.recommendations || [], "پیشنهادی ارائه نشده است.");
     uncertainty.textContent = result.uncertainty_note || "—";
     status.textContent = `گزارش توسط ${result.provider || "provider"} با مدل ${result.model || "model"} تولید شد.`;
     status.className = "rounded-xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-[10px] leading-6 text-emerald-700";
@@ -403,11 +499,23 @@
   async function analyzeWithAi(root) {
     const button = root.querySelector("#aiAnalyzeButton");
     const language = root.querySelector("#aiLanguage")?.value || "fa";
+    const provider = root.querySelector("#aiProvider")?.value;
+    const model = root.querySelector("#aiModel")?.value;
     if (!state.currentData) return;
+    if (!provider || !model) {
+      const status = document.getElementById("aiAnalysisStatus");
+      if (status) {
+        status.textContent = "ابتدا یک ارائه‌دهنده و مدل فعال انتخاب کنید.";
+        status.className = "rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-[10px] leading-6 text-amber-700";
+      }
+      return;
+    }
     const summaryData = buildAiSummaryData(state.currentData);
     const waterYear = summaryData.water_year || summaryData.selected_period_label || "—";
     const payload = {
       language,
+      provider,
+      model,
       dataset_type: "groundwater_dashboard",
       water_year: waterYear,
       summary_data: summaryData
@@ -438,15 +546,19 @@
       renderAiAnalysisResult(data, summaryData);
     } catch (error) {
       if (token !== state.aiRequestToken) return;
+      const provider = root.querySelector("#aiProvider")?.value;
+      const forbidden = /HTTP 403|not permitted|Forbidden/i.test(error.message || "");
       if (status) {
-        status.textContent = error.message || "تحلیل AI ناموفق بود.";
+        status.textContent = forbidden && provider === "groq"
+          ? "Groq دسترسی این حساب یا موقعیت شبکه را با خطای 403 رد کرده است. از OpenRouter استفاده کنید یا وضعیت دسترسی حساب Groq را در کنسول آن بررسی کنید."
+          : error.message || "تحلیل AI ناموفق بود.";
         status.className = "rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-[10px] leading-6 text-red-700";
       }
       if (card) card.classList.add("hidden");
     } finally {
       if (token === state.aiRequestToken && button) {
         button.disabled = false;
-        button.innerHTML = "<span>Analyze with AI</span>";
+        button.innerHTML = "<span>اجرای تحلیل</span>";
       }
     }
   }
@@ -2657,6 +2769,9 @@
     document.querySelectorAll("[data-close-precipitation-modal]").forEach(button => {
       button.onclick = closePrecipitationModal;
     });
+    document.querySelectorAll("[data-close-ai-modal]").forEach(button => {
+      button.onclick = closeAiModal;
+    });
   }
 
   function wellCard(well, index) {
@@ -2900,9 +3015,11 @@
 
   function initializeDashboard(root) {
     const form = root.querySelector("#analysisFilters");
+    root.querySelector("#aiOpenModalButton")?.addEventListener("click", openAiModal);
     root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => {
       analyzeWithAi(root);
     });
+    root.querySelector("#aiProvider")?.addEventListener("change", syncAiModelOptions);
     root.querySelector("#startYear").addEventListener("change", () => renderMonthOptions("start"));
     root.querySelector("#endYear").addEventListener("change", () => renderMonthOptions("end"));
     root.querySelector("#comparisonStartYear").addEventListener(
@@ -3038,6 +3155,7 @@
 
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") {
+      closeAiModal();
       closeWellModal();
       closePrecipitationModal();
     }

@@ -170,6 +170,7 @@ restart داشبورد، تب «تراز + AET» به‌صورت خودکار د
 ```env
 GROQ_API_KEY=your_key
 GROQ_MODEL=llama-3.1-8b-instant
+GROQ_MODELS=llama-3.1-8b-instant,llama-3.3-70b-versatile,openai/gpt-oss-20b,openai/gpt-oss-120b,qwen/qwen3-32b
 AI_PROVIDER=groq
 ```
 
@@ -178,6 +179,7 @@ AI_PROVIDER=groq
 ```env
 OPENROUTER_API_KEY=your_key
 OPENROUTER_MODEL=openrouter/auto
+OPENROUTER_MODELS=openrouter/free,openai/gpt-oss-120b:free,openai/gpt-oss-20b:free,meta-llama/llama-3.3-70b-instruct:free,qwen/qwen3-next-80b-a3b-instruct:free,google/gemma-4-31b-it:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_SITE_URL=http://localhost:3000
 OPENROUTER_APP_NAME=Groundwater Dashboard AI
@@ -185,8 +187,14 @@ AI_PROVIDER=openrouter
 ```
 
 - کلیدهای API فقط در بک‌اند خوانده می‌شوند و هرگز به فرانت ارسال نمی‌شوند.
-- اگر مدل رایگان OpenRouter برای شما در دسترس باشد، می‌توانید همان نام مدل
-  را در `OPENROUTER_MODEL` قرار دهید.
+- در پنجره «تحلیل با AI» می‌توان بین OpenRouter و Groq و مدل‌های مجاز هر
+  ارائه‌دهنده انتخاب کرد.
+- مدل‌های OpenRouter با پسوند `:free` یا مدل `openrouter/free` رایگان هستند.
+  فهرست آن‌ها ممکن است تغییر کند و از طریق `OPENROUTER_MODELS` قابل تنظیم است.
+- مدل‌های Groq از سهمیه Free Tier حساب استفاده می‌کنند و محدودیت نرخ دارند.
+  فهرست قابل انتخاب از طریق `GROQ_MODELS` کنترل می‌شود.
+- فقط مدل‌های allowlist‌شده در متغیرهای بالا پذیرفته می‌شوند تا model ID
+  دلخواه یا هزینه‌دار از سمت مرورگر قابل تزریق نباشد.
 - خروجی AI به‌صورت پیش‌فرض فارسی است و با انتخاب زبان، انگلیسی هم پشتیبانی
   می‌شود.
 - آدرس endpoint تحلیل هوشمند:
@@ -200,6 +208,8 @@ POST /api/ai/analyze
 ```json
 {
   "language": "fa",
+  "provider": "openrouter",
+  "model": "openrouter/free",
   "dataset_type": "groundwater_dashboard",
   "water_year": "1402-1403",
   "summary_data": {
