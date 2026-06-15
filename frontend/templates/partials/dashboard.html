@@ -122,6 +122,64 @@
 
   <section id="statsGrid" class="grid grid-cols-2 gap-4 lg:grid-cols-5"></section>
 
+  <section class="panel overflow-hidden" data-ai-analysis-panel>
+    <div class="section-heading flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div>
+        <span class="section-kicker">تحلیل هوشمند</span>
+        <h3 class="section-title">AI Analysis</h3>
+        <p class="section-description">خلاصه شاخص‌های محاسبه‌شده برای تولید گزارش تحلیلی بدون ارسال دادهٔ خام</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="block">
+          <span class="field-label">زبان خروجی</span>
+          <select id="aiLanguage" class="field h-11 w-28">
+            <option value="fa" selected>فارسی</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <button id="aiAnalyzeButton" type="button" class="primary-button min-w-40">
+          <span>Analyze with AI</span>
+        </button>
+      </div>
+    </div>
+    <div class="border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+      <div id="aiAnalysisStatus" class="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-[10px] leading-6 text-slate-600">
+        گزارش هنوز تولید نشده است. پس از انتخاب بازه، روی Analyze with AI کلیک کنید.
+      </div>
+      <article id="aiAnalysisCard" class="mt-4 hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="aiAnalysisProvider" class="rounded-full border border-teal/20 bg-teal/5 px-3 py-1 text-[10px] font-medium text-teal"></span>
+              <span id="aiAnalysisModel" class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] text-slate-500"></span>
+              <span id="aiAnalysisRisk" class="rounded-full px-3 py-1 text-[10px] font-bold"></span>
+            </div>
+            <h4 class="mt-4 text-lg font-bold text-navy">خلاصه تحلیلی</h4>
+            <p id="aiAnalysisText" class="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600"></p>
+          </div>
+          <div class="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 text-[10px] leading-6 text-slate-500 lg:min-w-64">
+            <div class="font-bold text-navy">اطلاعات ورودی</div>
+            <div id="aiAnalysisMeta" class="mt-2 space-y-1"></div>
+          </div>
+        </div>
+        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+          <section class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+            <h5 class="text-[11px] font-bold text-navy">Key Findings</h5>
+            <ul id="aiAnalysisFindings" class="mt-3 space-y-2 text-[10px] leading-6 text-slate-600"></ul>
+          </section>
+          <section class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+            <h5 class="text-[11px] font-bold text-navy">Recommendations</h5>
+            <ul id="aiAnalysisRecommendations" class="mt-3 space-y-2 text-[10px] leading-6 text-slate-600"></ul>
+          </section>
+        </div>
+        <div class="mt-4 rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-[10px] leading-6 text-slate-500">
+          <span class="font-bold text-amber-700">Uncertainty:</span>
+          <span id="aiAnalysisUncertainty"></span>
+        </div>
+      </article>
+    </div>
+  </section>
+
   <section class="grid gap-6 xl:grid-cols-12">
     <article class="panel overflow-hidden xl:col-span-5" data-aquifer-map-panel>
       <div class="section-heading" data-aquifer-map-heading>

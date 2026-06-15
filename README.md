@@ -160,6 +160,78 @@ http://127.0.0.1:8228
 قالب `YYYY-MM-01` و واحد `AET` میلی‌متر در ماه است. پس از تولید فایل و
 restart داشبورد، تب «تراز + AET» به‌صورت خودکار داده‌ها را نمایش می‌دهد.
 
+## AI Agent Setup
+
+برای فعال‌سازی تحلیل هوشمند داشبورد، فایل `.env` را بر اساس `.env.example`
+بسازید و یکی از ارائه‌دهنده‌ها را انتخاب کنید.
+
+### Groq
+
+```env
+GROQ_API_KEY=your_key
+GROQ_MODEL=llama-3.1-8b-instant
+AI_PROVIDER=groq
+```
+
+### OpenRouter
+
+```env
+OPENROUTER_API_KEY=your_key
+OPENROUTER_MODEL=openrouter/auto
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_SITE_URL=http://localhost:3000
+OPENROUTER_APP_NAME=Groundwater Dashboard AI
+AI_PROVIDER=openrouter
+```
+
+- کلیدهای API فقط در بک‌اند خوانده می‌شوند و هرگز به فرانت ارسال نمی‌شوند.
+- اگر مدل رایگان OpenRouter برای شما در دسترس باشد، می‌توانید همان نام مدل
+  را در `OPENROUTER_MODEL` قرار دهید.
+- خروجی AI به‌صورت پیش‌فرض فارسی است و با انتخاب زبان، انگلیسی هم پشتیبانی
+  می‌شود.
+- آدرس endpoint تحلیل هوشمند:
+
+```http
+POST /api/ai/analyze
+```
+
+نمونه درخواست:
+
+```json
+{
+  "language": "fa",
+  "dataset_type": "groundwater_dashboard",
+  "water_year": "1402-1403",
+  "summary_data": {
+    "groundwater_level_change_m": -1.8,
+    "precipitation_anomaly_percent": -24,
+    "ndvi_change": -0.12,
+    "aet_change_percent": -8,
+    "critical_wells_count": 12,
+    "total_wells_count": 45,
+    "mean_groundwater_level_m": 38.4,
+    "minimum_groundwater_level_m": 21.5,
+    "maximum_groundwater_level_m": 51.2
+  }
+}
+```
+
+نمونه پاسخ:
+
+```json
+{
+  "status": "success",
+  "provider": "openrouter",
+  "model": "openrouter/auto",
+  "analysis": "…",
+  "risk_level": "high",
+  "precomputed_risk_level": "high",
+  "key_findings": ["…"],
+  "recommendations": ["…"],
+  "uncertainty_note": "…"
+}
+```
+
 ## توسعه و آزمون
 
 ```bash

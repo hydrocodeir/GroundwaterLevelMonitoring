@@ -319,6 +319,98 @@ class GroundwaterDataTests(unittest.TestCase):
             all(not row["is_complete"] for row in payload["annual_changes"])
         )
 
+    def test_dashboard_exposes_time_series_analysis_payload(self) -> None:
+        payload = self.service.dashboard(next(iter(self.service.groups)))
+        analysis = payload["time_series_analysis"]
+
+        self.assertEqual(
+            analysis["period"]["water_year_count"],
+            len(payload["annual_changes"]),
+        )
+        self.assertEqual(
+            analysis["period"]["start_water_year"],
+            payload["annual_changes"][0]["water_year"],
+        )
+        self.assertEqual(
+            analysis["period"]["end_water_year"],
+            payload["annual_changes"][-1]["water_year"],
+        )
+        self.assertIn("trend_statistics", analysis)
+        self.assertIn("correlations", analysis)
+        self.assertIn("lag_analysis", analysis)
+        self.assertIn("stress_indicators", analysis)
+        self.assertIn("agricultural_pressure", analysis)
+        self.assertIn("driver_classification", analysis)
+        self.assertIn("llm_input", analysis)
+        self.assertNotIn("period", analysis["llm_input"])
+
+    def test_time_series_analysis_derives_driver_classification(self) -> None:
+        rows = [
+            {
+                "water_year": "1400-1401",
+                "is_complete": True,
+                "selected_month_count": MONTHS_PER_YEAR,
+                "precipitation_total": 100,
+                "aet_total": 50,
+                "warm_season_irrigated_area": {"probable_area_ha": 10},
+                "ndvi_periods": {"warm_months": {"mean": 0.2}},
+                "decline": {"thiessen": 1},
+            },
+            {
+                "water_year": "1401-1402",
+                "is_complete": True,
+                "selected_month_count": MONTHS_PER_YEAR,
+                "precipitation_total": 101,
+                "aet_total": 51,
+                "warm_season_irrigated_area": {"probable_area_ha": 15},
+                "ndvi_periods": {"warm_months": {"mean": 0.25}},
+                "decline": {"thiessen": 1},
+            },
+            {
+                "water_year": "1402-1403",
+                "is_complete": True,
+                "selected_month_count": MONTHS_PER_YEAR,
+                "precipitation_total": 99,
+                "aet_total": 52,
+                "warm_season_irrigated_area": {"probable_area_ha": 22},
+                "ndvi_periods": {"warm_months": {"mean": 0.31}},
+                "decline": {"thiessen": 1},
+            },
+            {
+                "water_year": "1403-1404",
+                "is_complete": True,
+                "selected_month_count": MONTHS_PER_YEAR,
+                "precipitation_total": 100,
+                "aet_total": 53,
+                "warm_season_irrigated_area": {"probable_area_ha": 30},
+                "ndvi_periods": {"warm_months": {"mean": 0.35}},
+                "decline": {"thiessen": 10},
+            },
+        ]
+        analysis = self.service._time_series_analysis(rows)
+
+        self.assertEqual(analysis["period"]["water_year_count"], 4)
+        self.assertEqual(
+            analysis["stress_indicators"]["declining_year_count"],
+            4,
+        )
+        self.assertEqual(
+            analysis["stress_indicators"]["max_annual_groundwater_decline_m"],
+            10,
+        )
+        self.assertTrue(
+            analysis["stress_indicators"]["groundwater_decline_anomaly_years"]
+        )
+        self.assertEqual(
+            analysis["driver_classification"]["label"],
+            "Human Dominated",
+        )
+        self.assertTrue(
+            analysis["agricultural_pressure"]["joint_growth_index"][
+                "simultaneous_pressure_years"
+            ]
+        )
+
     def test_comparison_default_period_uses_full_dynamic_data_domain(self) -> None:
         payload = self.service.comparison()
         minimum = int(self.service.monthly["_month_index"].min())

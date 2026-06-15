@@ -19,7 +19,8 @@
     aquiferAnnualChangesChart: null,
     observer: null,
     requestToken: 0,
-    currentData: null
+    currentData: null,
+    aiRequestToken: 0
   };
 
   const faNumber = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 });
@@ -231,6 +232,223 @@
     const element = document.createElement("div");
     element.textContent = String(value ?? "");
     return element.innerHTML;
+  }
+
+  function toNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function meanValue(values) {
+    const numeric = values
+      .map(toNumber)
+      .filter(value => value !== null);
+    if (!numeric.length) return null;
+    return numeric.reduce((sum, value) => sum + value, 0) / numeric.length;
+  }
+
+  function minValue(values) {
+    const numeric = values
+      .map(toNumber)
+      .filter(value => value !== null);
+    return numeric.length ? Math.min(...numeric) : null;
+  }
+
+  function maxValue(values) {
+    const numeric = values
+      .map(toNumber)
+      .filter(value => value !== null);
+    return numeric.length ? Math.max(...numeric) : null;
+  }
+
+  function aiRiskLabel(level) {
+    return {
+      low: "کم",
+      moderate: "متوسط",
+      high: "زیاد",
+      critical: "بحرانی"
+    }[level] || "نامشخص";
+  }
+
+  function aiRiskBadgeClass(level) {
+    return {
+      low: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      moderate: "border-amber-200 bg-amber-50 text-amber-700",
+      high: "border-coral/20 bg-coral/10 text-coral",
+      critical: "border-red-200 bg-red-50 text-red-700"
+    }[level] || "border-slate-200 bg-slate-50 text-slate-500";
+  }
+
+  function buildAiSummaryData(data) {
+    const analysis = data.time_series_analysis || {};
+    const llmInput = analysis.llm_input || {};
+    const trends = llmInput.trend_statistics || {};
+    const groundwaterTrend = trends.groundwater_level_change || {};
+    const precipitationTrend = trends.precipitation || {};
+    const aetTrend = trends.aet || {};
+    const ndviTrend = trends.ndvi || {};
+    const irrigatedAreaTrend = trends.irrigated_area || {};
+    const groundwaterValues = data.hydrographs.thiessen
+      .map(item => toNumber(item[1]))
+      .filter(value => value !== null);
+    const criticalWellsCount = data.wells.filter(well => (
+      well.has_range_data && well.trend?.direction === "decline"
+    )).length;
+    const period = analysis.period || {};
+    const waterYear = period.water_year_count === 1
+      ? period.start_water_year
+      : `${period.start_water_year || "—"} تا ${period.end_water_year || "—"}`;
+    return {
+      water_year: waterYear,
+      language: "fa",
+      dataset_type: "groundwater_dashboard",
+      groundwater_level_change_m: toNumber(data.stats.change),
+      precipitation_anomaly_percent: toNumber(precipitationTrend.percentage_change),
+      ndvi_change: toNumber(
+        ndviTrend.start_value !== null && ndviTrend.start_value !== undefined
+          && ndviTrend.end_value !== null && ndviTrend.end_value !== undefined
+          ? ndviTrend.end_value - ndviTrend.start_value
+          : null
+      ),
+      aet_change_percent: toNumber(aetTrend.percentage_change),
+      critical_wells_count: criticalWellsCount,
+      total_wells_count: data.stats.total_wells,
+      mean_groundwater_level_m: meanValue(groundwaterValues),
+      minimum_groundwater_level_m: minValue(groundwaterValues),
+      maximum_groundwater_level_m: maxValue(groundwaterValues),
+      selected_period: period,
+      trend_statistics: trends,
+      correlations: llmInput.correlations || {},
+      lag_analysis: llmInput.lag_analysis || {},
+      stress_indicators: llmInput.stress_indicators || {},
+      agricultural_pressure: analysis.agricultural_pressure || {},
+      driver_classification: analysis.driver_classification || {},
+      data_context: {
+        start_month: data.filters.start_month,
+        start_year: data.filters.start_year,
+        end_month: data.filters.end_month,
+        end_year: data.filters.end_year,
+        active_wells: data.stats.active_wells,
+        selected_wells: data.stats.selected_wells,
+        excluded_wells: data.stats.excluded_wells
+      },
+      selected_period_label: `${period.start_water_year || "—"} تا ${period.end_water_year || "—"}`
+    };
+  }
+
+  function resetAiAnalysisCard() {
+    const status = document.getElementById("aiAnalysisStatus");
+    const card = document.getElementById("aiAnalysisCard");
+    const button = document.getElementById("aiAnalyzeButton");
+    if (status) {
+      status.textContent = "گزارش هنوز تولید نشده است. پس از انتخاب بازه، روی Analyze with AI کلیک کنید.";
+      status.className = "rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-[10px] leading-6 text-slate-600";
+    }
+    if (card) card.classList.add("hidden");
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = "<span>Analyze with AI</span>";
+    }
+  }
+
+  function renderAiAnalysisResult(result, summaryData) {
+    const card = document.getElementById("aiAnalysisCard");
+    const status = document.getElementById("aiAnalysisStatus");
+    const provider = document.getElementById("aiAnalysisProvider");
+    const model = document.getElementById("aiAnalysisModel");
+    const risk = document.getElementById("aiAnalysisRisk");
+    const text = document.getElementById("aiAnalysisText");
+    const meta = document.getElementById("aiAnalysisMeta");
+    const findings = document.getElementById("aiAnalysisFindings");
+    const recommendations = document.getElementById("aiAnalysisRecommendations");
+    const uncertainty = document.getElementById("aiAnalysisUncertainty");
+    if (!card || !status || !provider || !model || !risk || !text || !meta || !findings || !recommendations || !uncertainty) return;
+
+    provider.textContent = result.provider || "—";
+    model.textContent = result.model || "—";
+    risk.textContent = aiRiskLabel(result.risk_level);
+    risk.className = `rounded-full px-3 py-1 text-[10px] font-bold ${aiRiskBadgeClass(result.risk_level)}`;
+    text.textContent = result.analysis || "—";
+
+    meta.innerHTML = [
+      ["بازه", summaryData.selected_period_label || "—"],
+      ["خطر پیش‌محاسبه", aiRiskLabel(result.precomputed_risk_level)],
+      ["چاه‌های کل", formatNumber(summaryData.total_wells_count)],
+      ["چاه‌های بحرانی", formatNumber(summaryData.critical_wells_count)],
+      ["تغییر تراز", formatSignedNumber(summaryData.groundwater_level_change_m, " m")],
+      ["تغییر بارش", formatSignedNumber(summaryData.precipitation_anomaly_percent, "%")],
+      ["تغییر NDVI", formatSignedNumber(summaryData.ndvi_change)],
+      ["تغییر AET", formatSignedNumber(summaryData.aet_change_percent, "%")]
+    ].map(([label, value]) => (
+      `<div class="flex items-start justify-between gap-3"><span>${escapeHtml(label)}</span><strong class="text-navy">${escapeHtml(value)}</strong></div>`
+    )).join("");
+
+    const renderList = (items, emptyLabel) => {
+      if (!items.length) {
+        return `<li class="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-slate-400">${escapeHtml(emptyLabel)}</li>`;
+      }
+      return items.map(item => (
+        `<li class="rounded-lg border border-slate-100 bg-white px-3 py-2">${escapeHtml(item)}</li>`
+      )).join("");
+    };
+
+    findings.innerHTML = renderList(result.key_findings || [], "Finding is not available.");
+    recommendations.innerHTML = renderList(result.recommendations || [], "Recommendation is not available.");
+    uncertainty.textContent = result.uncertainty_note || "—";
+    status.textContent = `گزارش توسط ${result.provider || "provider"} با مدل ${result.model || "model"} تولید شد.`;
+    status.className = "rounded-xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-[10px] leading-6 text-emerald-700";
+    card.classList.remove("hidden");
+  }
+
+  async function analyzeWithAi(root) {
+    const button = root.querySelector("#aiAnalyzeButton");
+    const language = root.querySelector("#aiLanguage")?.value || "fa";
+    if (!state.currentData) return;
+    const summaryData = buildAiSummaryData(state.currentData);
+    const waterYear = summaryData.water_year || summaryData.selected_period_label || "—";
+    const payload = {
+      language,
+      dataset_type: "groundwater_dashboard",
+      water_year: waterYear,
+      summary_data: summaryData
+    };
+    const token = ++state.aiRequestToken;
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = "<span>در حال تحلیل...</span>";
+    }
+    const status = document.getElementById("aiAnalysisStatus");
+    const card = document.getElementById("aiAnalysisCard");
+    if (status) {
+      status.textContent = "در حال ارسال خلاصهٔ تحلیلی به موتور AI...";
+      status.className = "rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-[10px] leading-6 text-sky-700";
+    }
+    if (card) card.classList.add("hidden");
+    try {
+      const response = await fetch("/api/ai/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (token !== state.aiRequestToken) return;
+      if (!response.ok || data.status !== "success") {
+        throw new Error(data.message || "تحلیل AI ناموفق بود.");
+      }
+      renderAiAnalysisResult(data, summaryData);
+    } catch (error) {
+      if (token !== state.aiRequestToken) return;
+      if (status) {
+        status.textContent = error.message || "تحلیل AI ناموفق بود.";
+        status.className = "rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-[10px] leading-6 text-red-700";
+      }
+      if (card) card.classList.add("hidden");
+    } finally {
+      if (token === state.aiRequestToken && button) {
+        button.disabled = false;
+        button.innerHTML = "<span>Analyze with AI</span>";
+      }
+    }
   }
 
   function numberCell(value) {
@@ -2575,6 +2793,7 @@
     disposeVisuals();
     renderFilterControls(data);
     renderStats(data);
+    resetAiAnalysisCard();
     bindWellModal();
     renderMap(data);
     renderAquiferChart(data);
@@ -2681,6 +2900,9 @@
 
   function initializeDashboard(root) {
     const form = root.querySelector("#analysisFilters");
+    root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => {
+      analyzeWithAi(root);
+    });
     root.querySelector("#startYear").addEventListener("change", () => renderMonthOptions("start"));
     root.querySelector("#endYear").addEventListener("change", () => renderMonthOptions("end"));
     root.querySelector("#comparisonStartYear").addEventListener(

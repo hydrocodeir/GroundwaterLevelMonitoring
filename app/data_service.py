@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.stats import kendalltau, pearsonr, spearmanr, theilslopes
 from pyproj import Transformer
 from shapely import voronoi_polygons
 from shapely.geometry import MultiPoint, Point, mapping, shape
@@ -26,6 +27,9 @@ NDVI_WARM_MONTHS = frozenset(range(3, 7))
 DEFAULT_ANALYSIS_YEARS = 4
 NEAREST_PRECIPITATION_STATION_COUNT = 3
 COMPARISON_GEOMETRY_TOLERANCE = 0.001
+TREND_STRONG_THRESHOLD = 0.6
+TREND_WEAK_THRESHOLD = 0.3
+DECLINE_ANOMALY_Z_THRESHOLD = 1.5
 
 CHAR_TRANSLATION = str.maketrans(
     {
@@ -1283,6 +1287,650 @@ class GroundwaterData:
             ],
         }
 
+    @staticmethod
+    def _trend_statistics(
+        years: list[int],
+        values: list[float | None],
+    ) -> dict[str, Any]:
+        pairs = [
+            (int(year), float(value))
+            for year, value in zip(years, values, strict=False)
+            if value is not None and np.isfinite(value)
+        ]
+        if len(pairs) < 2:
+            return {
+                "n": len(pairs),
+                "valid_years": [year for year, _ in pairs],
+                "mann_kendall": {
+                    "tau": None,
+                    "p_value": None,
+                    "trend": "insufficient",
+                },
+                "sen_slope": {
+                    "slope_per_year": None,
+                    "intercept": None,
+                },
+                "linear_trend": {
+                    "slope_per_year": None,
+                    "intercept": None,
+                },
+                "percentage_change": None,
+                "start_value": pairs[0][1] if pairs else None,
+                "end_value": pairs[-1][1] if pairs else None,
+                "direction": "insufficient",
+            }
+
+        x = np.array([year for year, _ in pairs], dtype=float)
+        y = np.array([value for _, value in pairs], dtype=float)
+        x_relative = x - x[0]
+
+        try:
+            mk = kendalltau(x, y, nan_policy="omit")
+            mk_tau = finite_or_none(mk.statistic, 4)
+            mk_p = finite_or_none(mk.pvalue, 4)
+        except Exception:
+            mk_tau = None
+            mk_p = None
+
+        try:
+            sen_slope, sen_intercept, _, _ = theilslopes(y, x_relative)
+        except Exception:
+            sen_slope = None
+            sen_intercept = None
+
+        try:
+            linear_slope, linear_intercept = np.polyfit(x_relative, y, 1)
+        except Exception:
+            linear_slope = None
+            linear_intercept = None
+
+        start_value = float(y[0])
+        end_value = float(y[-1])
+        percentage_change = (
+            None
+            if abs(start_value) < 1e-12
+            else ((end_value - start_value) / abs(start_value)) * 100
+        )
+
+        slope_value = linear_slope if linear_slope is not None else sen_slope
+        tolerance = 1e-9
+        direction = (
+            "decline"
+            if slope_value is not None and slope_value < -tolerance
+            else "rise"
+            if slope_value is not None and slope_value > tolerance
+            else "stable"
+        )
+        mk_direction = (
+            "decline"
+            if mk_tau is not None and mk_tau < -tolerance
+            else "rise"
+            if mk_tau is not None and mk_tau > tolerance
+            else "stable"
+        )
+
+        return {
+            "n": len(pairs),
+            "valid_years": [year for year, _ in pairs],
+            "mann_kendall": {
+                "tau": mk_tau,
+                "p_value": mk_p,
+                "trend": mk_direction,
+            },
+            "sen_slope": {
+                "slope_per_year": finite_or_none(sen_slope, 4),
+                "intercept": finite_or_none(sen_intercept, 4),
+            },
+            "linear_trend": {
+                "slope_per_year": finite_or_none(linear_slope, 4),
+                "intercept": finite_or_none(linear_intercept, 4),
+            },
+            "percentage_change": finite_or_none(percentage_change, 2),
+            "start_value": finite_or_none(start_value, 4),
+            "end_value": finite_or_none(end_value, 4),
+            "direction": direction,
+        }
+
+    @staticmethod
+    def _safe_pearson(x: list[float], y: list[float]) -> tuple[float | None, float | None]:
+        if len(x) < 2 or len(y) < 2:
+            return None, None
+        if np.allclose(x, x[0]) or np.allclose(y, y[0]):
+            return None, None
+        try:
+            result = pearsonr(x, y)
+        except Exception:
+            return None, None
+        return finite_or_none(result.statistic, 4), finite_or_none(result.pvalue, 4)
+
+    @staticmethod
+    def _safe_spearman(
+        x: list[float],
+        y: list[float],
+    ) -> tuple[float | None, float | None]:
+        if len(x) < 2 or len(y) < 2:
+            return None, None
+        if np.allclose(x, x[0]) or np.allclose(y, y[0]):
+            return None, None
+        try:
+            result = spearmanr(x, y)
+        except Exception:
+            return None, None
+        statistic = getattr(result, "statistic", result[0])
+        pvalue = getattr(result, "pvalue", result[1])
+        return finite_or_none(statistic, 4), finite_or_none(pvalue, 4)
+
+    @classmethod
+    def _association_statistics(
+        cls,
+        x_years: list[int],
+        x_values: list[float | None],
+        y_years: list[int],
+        y_values: list[float | None],
+        lag: int = 0,
+    ) -> dict[str, Any]:
+        x_map = {
+            int(year): float(value)
+            for year, value in zip(x_years, x_values, strict=False)
+            if value is not None and np.isfinite(value)
+        }
+        y_map = {
+            int(year): float(value)
+            for year, value in zip(y_years, y_values, strict=False)
+            if value is not None and np.isfinite(value)
+        }
+        pairs = []
+        for year, value in x_map.items():
+            if lag:
+                matched = y_map.get(year - lag)
+            else:
+                matched = y_map.get(year)
+            if matched is not None:
+                pairs.append((value, matched))
+        if len(pairs) < 2:
+            return {
+                "n": len(pairs),
+                "pearson": {"coefficient": None, "p_value": None},
+                "spearman": {"coefficient": None, "p_value": None},
+            }
+        x_series = [item[0] for item in pairs]
+        y_series = [item[1] for item in pairs]
+        pearson, pearson_p = cls._safe_pearson(x_series, y_series)
+        spearman, spearman_p = cls._safe_spearman(x_series, y_series)
+        return {
+            "n": len(pairs),
+            "pearson": {
+                "coefficient": pearson,
+                "p_value": pearson_p,
+            },
+            "spearman": {
+                "coefficient": spearman,
+                "p_value": spearman_p,
+            },
+        }
+
+    @staticmethod
+    def _decline_periods(
+        years: list[int],
+        values: list[float | None],
+    ) -> list[dict[str, Any]]:
+        periods: list[dict[str, Any]] = []
+        current: dict[str, Any] | None = None
+        previous_year: int | None = None
+        for year, value in zip(years, values, strict=False):
+            if value is None or not np.isfinite(value) or value <= 0:
+                if current is not None:
+                    periods.append(current)
+                    current = None
+                previous_year = None
+                continue
+            if current is None or previous_year is None or year != previous_year + 1:
+                if current is not None:
+                    periods.append(current)
+                current = {
+                    "start_water_year": f"{year}-{year + 1}",
+                    "end_water_year": f"{year}-{year + 1}",
+                    "years": [f"{year}-{year + 1}"],
+                    "length_years": 1,
+                    "total_decline_m": finite_or_none(value, 3),
+                    "mean_decline_m": finite_or_none(value, 3),
+                    "max_decline_m": finite_or_none(value, 3),
+                }
+            else:
+                current["end_water_year"] = f"{year}-{year + 1}"
+                current["years"].append(f"{year}-{year + 1}")
+                current["length_years"] += 1
+                current["total_decline_m"] = finite_or_none(
+                    (current["total_decline_m"] or 0) + value,
+                    3,
+                )
+                current["mean_decline_m"] = finite_or_none(
+                    current["total_decline_m"] / current["length_years"],
+                    3,
+                )
+                current["max_decline_m"] = finite_or_none(
+                    max(current["max_decline_m"] or value, value),
+                    3,
+                )
+            previous_year = year
+        if current is not None:
+            periods.append(current)
+        return periods
+
+    @staticmethod
+    def _decline_anomalies(
+        years: list[int],
+        values: list[float | None],
+    ) -> list[dict[str, Any]]:
+        pairs = [
+            (year, float(value))
+            for year, value in zip(years, values, strict=False)
+            if value is not None and np.isfinite(value)
+        ]
+        if len(pairs) < 3:
+            return []
+        values_array = np.array([value for _, value in pairs], dtype=float)
+        median = float(np.median(values_array))
+        mad = float(np.median(np.abs(values_array - median)))
+        if mad > 0:
+            z_scores = 0.6745 * (values_array - median) / mad
+        else:
+            mean = float(np.mean(values_array))
+            std = float(np.std(values_array))
+            if std == 0:
+                return []
+            z_scores = (values_array - mean) / std
+        anomalies = []
+        for (year, value), z_score in zip(pairs, z_scores, strict=False):
+            if z_score >= DECLINE_ANOMALY_Z_THRESHOLD:
+                anomalies.append(
+                    {
+                        "water_year": f"{year}-{year + 1}",
+                        "value_m": finite_or_none(value, 3),
+                        "z_score": finite_or_none(float(z_score), 3),
+                    }
+                )
+        return anomalies
+
+    @staticmethod
+    def _water_year_label(year: int) -> str:
+        return f"{year}-{year + 1}"
+
+    def _time_series_analysis(
+        self,
+        annual_changes: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        frame = pd.DataFrame(
+            [
+                {
+                    "water_year": int(str(row["water_year"]).split("-", 1)[0]),
+                    "water_year_label": str(row["water_year"]),
+                    "is_complete": bool(row.get("is_complete")),
+                    "selected_month_count": int(row.get("selected_month_count", 0)),
+                    "precipitation_total": row.get("precipitation_total"),
+                    "aet_total": row.get("aet_total"),
+                    "irrigated_area_ha": (
+                        row.get("warm_season_irrigated_area", {})
+                        .get("probable_area_ha")
+                    ),
+                    "ndvi_mean": (
+                        row.get("ndvi_periods", {})
+                        .get("warm_months", {})
+                        .get("mean")
+                    ),
+                    "groundwater_decline_m": row.get("decline", {}).get("thiessen"),
+                }
+                for row in annual_changes
+            ]
+        )
+        if frame.empty:
+            return {
+                "period": {
+                    "water_year_count": 0,
+                    "complete_year_count": 0,
+                    "partial_year_count": 0,
+                    "groundwater_method": "thiessen",
+                    "ndvi_window": "khordad-shahrivar",
+                },
+                "trend_statistics": {},
+                "correlations": {},
+                "lag_analysis": {},
+                "stress_indicators": {},
+                "agricultural_pressure": {},
+                "driver_classification": {
+                    "label": "Mixed Influence",
+                    "confidence": "low",
+                    "confidence_score": 0.0,
+                    "reason": "No annual data available for the selected period.",
+                },
+                "llm_input": {
+                    "trend_statistics": {},
+                    "correlations": {},
+                    "lag_analysis": {},
+                    "stress_indicators": {},
+                    "anomaly_years": [],
+                },
+            }
+
+        frame = frame.sort_values("water_year").reset_index(drop=True)
+        years = frame["water_year"].tolist()
+        water_year_labels = frame["water_year_label"].tolist()
+        precipitation_values = frame["precipitation_total"].tolist()
+        aet_values = frame["aet_total"].tolist()
+        irrigated_area_values = frame["irrigated_area_ha"].tolist()
+        ndvi_values = frame["ndvi_mean"].tolist()
+        groundwater_values = frame["groundwater_decline_m"].tolist()
+        complete_years = int(frame["is_complete"].sum())
+        partial_years = int(len(frame) - complete_years)
+
+        trends = {
+            "precipitation": self._trend_statistics(years, precipitation_values),
+            "aet": self._trend_statistics(years, aet_values),
+            "irrigated_area": self._trend_statistics(years, irrigated_area_values),
+            "ndvi": self._trend_statistics(years, ndvi_values),
+            "groundwater_level_change": self._trend_statistics(
+                years,
+                groundwater_values,
+            ),
+        }
+        correlations = {
+            "precipitation": self._association_statistics(
+                years,
+                precipitation_values,
+                years,
+                groundwater_values,
+            ),
+            "aet": self._association_statistics(
+                years,
+                aet_values,
+                years,
+                groundwater_values,
+            ),
+            "irrigated_area": self._association_statistics(
+                years,
+                irrigated_area_values,
+                years,
+                groundwater_values,
+            ),
+            "ndvi": self._association_statistics(
+                years,
+                ndvi_values,
+                years,
+                groundwater_values,
+            ),
+        }
+        lag_analysis = {
+            "lag_1": self._association_statistics(
+                years,
+                precipitation_values,
+                years,
+                groundwater_values,
+                lag=1,
+            ),
+            "lag_2": self._association_statistics(
+                years,
+                precipitation_values,
+                years,
+                groundwater_values,
+                lag=2,
+            ),
+        }
+        groundwater_decline_values = [
+            float(value) if value is not None and np.isfinite(value) else None
+            for value in groundwater_values
+        ]
+        stress_indicators = {
+            "mean_annual_groundwater_decline_m": finite_or_none(
+                np.mean([
+                    value
+                    for value in groundwater_decline_values
+                    if value is not None
+                ])
+                if any(value is not None for value in groundwater_decline_values)
+                else None,
+                3,
+            ),
+            "max_annual_groundwater_decline_m": finite_or_none(
+                max(
+                    [
+                        value
+                        for value in groundwater_decline_values
+                        if value is not None and value > 0
+                    ],
+                    default=None,
+                ),
+                3,
+            ),
+            "declining_year_count": sum(
+                1
+                for value in groundwater_decline_values
+                if value is not None and value > 0
+            ),
+            "consecutive_decline_periods": self._decline_periods(
+                years,
+                groundwater_decline_values,
+            ),
+            "groundwater_decline_anomaly_years": self._decline_anomalies(
+                years,
+                groundwater_decline_values,
+            ),
+        }
+
+        area_map = {
+            year: float(value)
+            for year, value in zip(years, irrigated_area_values, strict=False)
+            if value is not None and np.isfinite(value)
+        }
+        ndvi_map = {
+            year: float(value)
+            for year, value in zip(years, ndvi_values, strict=False)
+            if value is not None and np.isfinite(value)
+        }
+        groundwater_map = {
+            year: float(value)
+            for year, value in zip(years, groundwater_values, strict=False)
+            if value is not None and np.isfinite(value)
+        }
+        growth_pairs: list[tuple[int, float, float]] = []
+        for year in years[1:]:
+            if (
+                year in area_map
+                and year - 1 in area_map
+                and year in ndvi_map
+                and year - 1 in ndvi_map
+            ):
+                area_change = area_map[year] - area_map[year - 1]
+                ndvi_change = ndvi_map[year] - ndvi_map[year - 1]
+                growth_pairs.append((year, area_change, ndvi_change))
+
+        if growth_pairs:
+            area_changes = np.array([item[1] for item in growth_pairs], dtype=float)
+            ndvi_changes = np.array([item[2] for item in growth_pairs], dtype=float)
+            area_std = float(np.std(area_changes))
+            ndvi_std = float(np.std(ndvi_changes))
+            area_center = float(np.mean(area_changes))
+            ndvi_center = float(np.mean(ndvi_changes))
+            if area_std > 0:
+                area_z = (area_changes - area_center) / area_std
+            else:
+                area_z = np.zeros_like(area_changes)
+            if ndvi_std > 0:
+                ndvi_z = (ndvi_changes - ndvi_center) / ndvi_std
+            else:
+                ndvi_z = np.zeros_like(ndvi_changes)
+            joint_index = (area_z + ndvi_z) / 2
+            simultaneous_pressure_years = []
+            for (year, area_change, ndvi_change), index in zip(
+                growth_pairs,
+                joint_index,
+                strict=False,
+            ):
+                groundwater_decline = groundwater_map.get(year)
+                if (
+                    area_change > 0
+                    and ndvi_change > 0
+                    and groundwater_decline is not None
+                    and groundwater_decline > 0
+                ):
+                    simultaneous_pressure_years.append(
+                        {
+                            "water_year": self._water_year_label(year),
+                            "irrigated_area_change_ha": finite_or_none(area_change, 3),
+                            "ndvi_change": finite_or_none(ndvi_change, 4),
+                            "groundwater_decline_m": finite_or_none(
+                                groundwater_decline,
+                                3,
+                            ),
+                            "joint_growth_index": finite_or_none(float(index), 3),
+                        }
+                    )
+            joint_summary = {
+                "definition": "mean(z(irrigated_area_year_over_year_change), z(ndvi_year_over_year_change)) / 2",
+                "mean": finite_or_none(float(np.mean(joint_index)), 3),
+                "max": finite_or_none(float(np.max(joint_index)), 3),
+                "min": finite_or_none(float(np.min(joint_index)), 3),
+                "positive_year_count": int(np.sum(joint_index > 0)),
+                "simultaneous_pressure_years": simultaneous_pressure_years,
+            }
+        else:
+            joint_summary = {
+                "definition": "mean(z(irrigated_area_year_over_year_change), z(ndvi_year_over_year_change)) / 2",
+                "mean": None,
+                "max": None,
+                "min": None,
+                "positive_year_count": 0,
+                "simultaneous_pressure_years": [],
+            }
+
+        irrigated_area_trend = trends["irrigated_area"]
+        ndvi_trend = trends["ndvi"]
+        precip_corr = correlations["precipitation"]
+        lag_1_corr = lag_analysis["lag_1"]
+        lag_2_corr = lag_analysis["lag_2"]
+        precip_strength = max(
+            abs(precip_corr["pearson"]["coefficient"] or 0),
+            abs(precip_corr["spearman"]["coefficient"] or 0),
+            abs(lag_1_corr["pearson"]["coefficient"] or 0),
+            abs(lag_2_corr["pearson"]["coefficient"] or 0),
+        )
+        ag_trend_strength = sum(
+            1
+            for trend in (irrigated_area_trend, ndvi_trend)
+            if (trend.get("direction") == "rise")
+        )
+        decline_persistence = (
+            stress_indicators["declining_year_count"] / len(years)
+            if years
+            else 0
+        )
+        climate_score = float(np.clip((precip_strength - TREND_WEAK_THRESHOLD) / 0.4, 0, 1))
+        human_score = float(
+            np.clip(
+                (
+                    decline_persistence
+                    + (1 if irrigated_area_trend.get("direction") == "rise" else 0)
+                    + (1 if ndvi_trend.get("direction") == "rise" else 0)
+                )
+                / 3,
+                0,
+                1,
+            )
+            * (1 - precip_strength)
+        )
+        if climate_score >= 0.7 and human_score < 0.5:
+            driver_label = "Climate Dominated"
+            driver_reason = (
+                "groundwater responds strongly to precipitation while agricultural "
+                "signals remain weak."
+            )
+        elif human_score >= 0.7 and precip_strength < TREND_STRONG_THRESHOLD:
+            driver_label = "Human Dominated"
+            driver_reason = (
+                "groundwater decline is persistent and agricultural indicators rise "
+                "while precipitation linkage stays weak."
+            )
+        else:
+            driver_label = "Mixed Influence"
+            driver_reason = (
+                "climate and agricultural signals both contribute to groundwater "
+                "change."
+            )
+
+        confidence_base = min(1.0, len(years) / 6)
+        confidence_score = float(
+            np.clip(
+                confidence_base * (1 - 0.15 * partial_years) * max(climate_score, human_score, 0.25),
+                0,
+                1,
+            )
+        )
+        confidence = (
+            "high"
+            if confidence_score >= 0.75
+            else "medium"
+            if confidence_score >= 0.5
+            else "low"
+        )
+        rationale = [
+            f"{len(years)} water years were analyzed.",
+            (
+                f"Precipitation relationship strength is {precip_strength:.2f}."
+                if precip_strength
+                else "Precipitation relationship is weak or insufficient."
+            ),
+            (
+                f"{stress_indicators['declining_year_count']} years show groundwater decline."
+            ),
+        ]
+
+        return {
+            "period": {
+                "start_water_year": self._water_year_label(years[0]),
+                "end_water_year": self._water_year_label(years[-1]),
+                "water_year_count": len(years),
+                "complete_year_count": complete_years,
+                "partial_year_count": partial_years,
+                "groundwater_method": "thiessen",
+                "ndvi_window": "khordad-shahrivar",
+                "water_year_labels": water_year_labels,
+            },
+            "trend_statistics": trends,
+            "correlations": correlations,
+            "lag_analysis": lag_analysis,
+            "stress_indicators": stress_indicators,
+            "agricultural_pressure": {
+                "irrigated_area_trend": irrigated_area_trend,
+                "ndvi_trend": ndvi_trend,
+                "joint_growth_index": joint_summary,
+            },
+            "driver_classification": {
+                "label": driver_label,
+                "confidence": confidence,
+                "confidence_score": finite_or_none(confidence_score, 2),
+                "climate_score": finite_or_none(climate_score, 2),
+                "human_score": finite_or_none(human_score, 2),
+                "reason": driver_reason,
+                "rationale": rationale,
+                "signals": {
+                    "precipitation_strength": finite_or_none(precip_strength, 2),
+                    "agricultural_trend_strength": ag_trend_strength,
+                    "decline_persistence": finite_or_none(decline_persistence, 2),
+                    "simultaneous_pressure_years": joint_summary[
+                        "simultaneous_pressure_years"
+                    ],
+                },
+            },
+            "llm_input": {
+                "trend_statistics": trends,
+                "correlations": correlations,
+                "lag_analysis": lag_analysis,
+                "stress_indicators": stress_indicators,
+                "anomaly_years": stress_indicators[
+                    "groundwater_decline_anomaly_years"
+                ],
+            },
+        }
+
     def _aquifer_annual_rows(
         self,
         arithmetic_values: dict[int, float],
@@ -1780,6 +2428,7 @@ class GroundwaterData:
             ndvi,
             warm_season_irrigated_area,
         )
+        time_series_analysis = self._time_series_analysis(annual_changes)
         group_minimum = int(group_monthly["_month_index"].min())
         group_maximum = int(group_monthly["_month_index"].max())
         active_wells = sum(well["has_range_data"] for well in wells)
@@ -1864,6 +2513,7 @@ class GroundwaterData:
             },
             "annual_decline": aquifer_annual_decline,
             "annual_changes": annual_changes,
+            "time_series_analysis": time_series_analysis,
             "precipitation": precipitation,
             "ndvi": ndvi,
             "aet": aet,

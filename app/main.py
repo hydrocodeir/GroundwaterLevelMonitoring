@@ -3,14 +3,30 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
+from pydantic import ValidationError
+
+from app.settings import load_environment
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.data_service import get_data_service
+from app.services.ai import (
+    AIAnalysisRequest,
+    AIConfigurationError,
+    AIProviderError,
+    AIRateLimitError,
+    AIRemoteError,
+    AITimeoutError,
+    AIValidationError,
+    get_ai_service,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+load_environment()
 
 app = FastAPI(title="داشبورد پایش آب زیرزمینی")
 app.mount("/assets", StaticFiles(directory=ROOT / "frontend" / "assets"), name="assets")
@@ -20,11 +36,37 @@ templates.env.globals["asset_version"] = max(
     (ROOT / "frontend" / "assets" / "js" / "app.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "comparison.js").stat().st_mtime_ns,
 )
+AI_REQUEST_MAX_BYTES = 64_000
+
+
+def _ai_error_response(message: str, provider: str | None = None, status_code: int = 500) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "error",
+            "message": message,
+            "provider": provider,
+        },
+    )
 
 
 @app.on_event("startup")
 def warm_data_cache() -> None:
     get_data_service()
+
+
+@app.middleware("http")
+async def limit_ai_request_size(request: Request, call_next):
+    if request.url.path == "/api/ai/analyze" and request.method.upper() == "POST":
+        content_length = request.headers.get("content-length")
+        if content_length and content_length.isdigit():
+            if int(content_length) > AI_REQUEST_MAX_BYTES:
+                return _ai_error_response(
+                    "Request body is too large.",
+                    provider=None,
+                    status_code=413,
+                )
+    return await call_next(request)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -139,6 +181,42 @@ def comparison_data(
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/api/ai/analyze")
+async def ai_analyze(request: Request) -> JSONResponse:
+    body = await request.body()
+    if len(body) > AI_REQUEST_MAX_BYTES:
+        return _ai_error_response(
+            "Request body is too large.",
+            status_code=413,
+        )
+    try:
+        payload = AIAnalysisRequest.model_validate_json(body)
+    except ValidationError:
+        return _ai_error_response(
+            "Invalid request body.",
+            provider=None,
+            status_code=400,
+        )
+
+    service = get_ai_service()
+    try:
+        result = await run_in_threadpool(service.analyze, payload)
+    except AIConfigurationError as error:
+        return _ai_error_response(error.message, error.provider, 500)
+    except (AIProviderError, AIRateLimitError, AIRemoteError, AITimeoutError) as error:
+        return _ai_error_response(error.message, error.provider, 502)
+    except AIValidationError as error:
+        return _ai_error_response(error.message, error.provider, 500)
+    except Exception:
+        return _ai_error_response(
+            "AI analysis failed unexpectedly.",
+            provider=getattr(service, "provider_name", None),
+            status_code=500,
+        )
+
+    return JSONResponse(content=result.model_dump())
 
 
 @app.get("/health")
