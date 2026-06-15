@@ -4,6 +4,7 @@ from app.data_service import (
     DEFAULT_ANALYSIS_YEARS,
     MONTHS_PER_YEAR,
     NEAREST_PRECIPITATION_STATION_COUNT,
+    NDVI_WARM_MONTHS,
     WATER_YEAR_END_MONTH,
     WATER_YEAR_START_MONTH,
     GroundwaterData,
@@ -204,6 +205,77 @@ class GroundwaterDataTests(unittest.TestCase):
                 row["ndvi_median"] is None
                 or -1 <= row["ndvi_median"] <= 1
             )
+            periods = row["ndvi_periods"]
+            self.assertEqual(
+                periods["warm_months"]["expected_month_count"],
+                len(NDVI_WARM_MONTHS),
+            )
+            self.assertLessEqual(
+                periods["warm_months"]["selected_month_count"],
+                len(NDVI_WARM_MONTHS),
+            )
+            self.assertEqual(
+                periods["warm_months"]["is_complete"],
+                periods["warm_months"]["selected_month_count"]
+                == len(NDVI_WARM_MONTHS),
+            )
+            self.assertEqual(
+                periods["full_year"]["expected_month_count"],
+                MONTHS_PER_YEAR,
+            )
+            self.assertEqual(
+                periods["full_year"]["mean"],
+                row["ndvi_mean"],
+            )
+            self.assertEqual(
+                periods["full_year"]["median"],
+                row["ndvi_median"],
+            )
+            for period in periods.values():
+                self.assertTrue(
+                    period["mean"] is None
+                    or -1 <= period["mean"] <= 1
+                )
+                self.assertTrue(
+                    period["median"] is None
+                    or -1 <= period["median"] <= 1
+                )
+
+    def test_annual_ndvi_warm_period_uses_months_three_through_six(self) -> None:
+        water_year = 1402
+        start_index = water_year * MONTHS_PER_YEAR + WATER_YEAR_START_MONTH
+        end_index = (
+            (water_year + 1) * MONTHS_PER_YEAR + WATER_YEAR_END_MONTH
+        )
+        months = [
+            (
+                index,
+                f"{(index - 1) // MONTHS_PER_YEAR}-"
+                f"{((index - 1) % MONTHS_PER_YEAR) + 1:02d}",
+            )
+            for index in range(start_index, end_index + 1)
+        ]
+        ndvi_series = [
+            [label, ((index - 1) % MONTHS_PER_YEAR + 1) / 100]
+            for index, label in months
+        ]
+        rows = self.service._annual_change_rows(
+            months,
+            [],
+            {"series": []},
+            {"series": []},
+            {
+                "metrics": {
+                    "mean": ndvi_series,
+                    "median": ndvi_series,
+                }
+            },
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["water_year"], "1402-1403")
+        self.assertEqual(rows[0]["ndvi_periods"]["warm_months"]["mean"], 0.045)
+        self.assertEqual(rows[0]["ndvi_periods"]["full_year"]["mean"], 0.065)
 
     def test_partial_water_year_is_marked_incomplete(self) -> None:
         group_id, minimum, maximum = self.group_with_span(6)

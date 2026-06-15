@@ -1964,12 +1964,30 @@
     const element = document.getElementById("aquiferAnnualChangesChart");
     const methodSelect = document.getElementById("annualDeclineMethod");
     const ndviSelect = document.getElementById("annualNdviMetric");
-    if (!element || !methodSelect || !ndviSelect || element.closest(".hidden")) return;
+    const ndviPeriodSelect = document.getElementById("annualNdviPeriod");
+    if (
+      !element
+      || !methodSelect
+      || !ndviSelect
+      || !ndviPeriodSelect
+      || element.closest(".hidden")
+    ) return;
     const method = methodSelect.value || "thiessen";
     const ndviMetric = ndviSelect.value || "median";
+    const ndviPeriod = ndviPeriodSelect.value || "warm_months";
     const rows = data.annual_changes || [];
     const methodLabel = method === "thiessen" ? "تیسن" : "حسابی";
     const ndviLabel = ndviMetric === "median" ? "میانه" : "میانگین";
+    const ndviPeriodLabel = ndviPeriod === "warm_months"
+      ? "ماه‌های ۳ تا ۶"
+      : "کل سال";
+    const ndviPeriodData = row => row.ndvi_periods?.[ndviPeriod] || {
+      expected_month_count: 12,
+      selected_month_count: row.selected_month_count,
+      is_complete: row.is_complete,
+      [`${ndviMetric}_month_count`]: row[`ndvi_${ndviMetric}_month_count`],
+      [ndviMetric]: row[`ndvi_${ndviMetric}`]
+    };
     if (!state.aquiferAnnualChangesChart) {
       state.aquiferAnnualChangesChart = echarts.init(element);
       state.charts.push(state.aquiferAnnualChangesChart);
@@ -2083,10 +2101,10 @@
           }
         },
         {
-          name: `NDVI ${ndviLabel}`,
+          name: `NDVI ${ndviLabel} (${ndviPeriodLabel})`,
           type: "line",
           yAxisIndex: 2,
-          data: rows.map(row => row[`ndvi_${ndviMetric}`]),
+          data: rows.map(row => ndviPeriodData(row)[ndviMetric]),
           symbolSize: 7,
           connectNulls: false,
           lineStyle: { width: 2.5, color: "#059669" },
@@ -2111,7 +2129,7 @@
             <th>افت ${methodLabel} (متر)</th>
             <th>بارش (میلی‌متر)</th>
             <th>AET (میلی‌متر)</th>
-            <th>NDVI ${ndviLabel}</th>
+            <th>NDVI ${ndviLabel} (${ndviPeriodLabel})</th>
             <th>پوشش زمانی</th>
           </tr>
         </thead>
@@ -2122,7 +2140,7 @@
               <td>${numberCell(row.decline?.[method])}</td>
               <td>${numberCell(row.precipitation_total)}</td>
               <td>${numberCell(row.aet_total)}</td>
-              <td>${numberCell(row[`ndvi_${ndviMetric}`])}</td>
+              <td>${numberCell(ndviPeriodData(row)[ndviMetric])}</td>
               <td>
                 <span class="${row.is_complete ? "text-teal" : "text-amber-600"}">
                   ${row.is_complete ? "کامل" : "ناقص"} · ${faNumber.format(row.selected_month_count)} ماه
@@ -2130,7 +2148,8 @@
                 <div class="mt-1 text-[9px] text-slate-400">
                   بارش ${faNumber.format(row.precipitation_month_count)} ·
                   AET ${faNumber.format(row.aet_month_count)} ·
-                  NDVI ${faNumber.format(row[`ndvi_${ndviMetric}_month_count`])}
+                  NDVI ${faNumber.format(ndviPeriodData(row)[`${ndviMetric}_month_count`])}
+                  از ${faNumber.format(ndviPeriodData(row).expected_month_count)}
                 </div>
               </td>
             </tr>
@@ -2512,8 +2531,10 @@
     ndviMetric.onchange = () => renderAquiferNdviChart(data);
     const annualDeclineMethod = document.getElementById("annualDeclineMethod");
     const annualNdviMetric = document.getElementById("annualNdviMetric");
+    const annualNdviPeriod = document.getElementById("annualNdviPeriod");
     annualDeclineMethod.onchange = () => renderAquiferAnnualChanges(data);
     annualNdviMetric.onchange = () => renderAquiferAnnualChanges(data);
+    annualNdviPeriod.onchange = () => renderAquiferAnnualChanges(data);
     renderAquiferAnnualTable(data);
     renderSpatialAnalysis(data);
     renderWellCharts(data);

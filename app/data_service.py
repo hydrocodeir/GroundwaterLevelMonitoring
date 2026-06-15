@@ -22,6 +22,7 @@ DATA_DIR = ROOT / "Data"
 MONTHS_PER_YEAR = 12
 WATER_YEAR_START_MONTH = 7
 WATER_YEAR_END_MONTH = 6
+NDVI_WARM_MONTHS = frozenset(range(3, 7))
 DEFAULT_ANALYSIS_YEARS = 4
 NEAREST_PRECIPITATION_STATION_COUNT = 3
 COMPARISON_GEOMETRY_TOLERANCE = 0.001
@@ -1232,11 +1233,19 @@ class GroundwaterData:
                 f"{((index - 1) % MONTHS_PER_YEAR) + 1:02d}"
                 for index in indexes
             ]
+            warm_month_labels = [
+                label
+                for index, label in zip(indexes, labels)
+                if ((index - 1) % MONTHS_PER_YEAR) + 1 in NDVI_WARM_MONTHS
+            ]
 
-            def valid_values(series: dict[str, Any]) -> list[float]:
+            def valid_values(
+                series: dict[str, Any],
+                selected_labels: list[str] = labels,
+            ) -> list[float]:
                 return [
                     float(series[label])
-                    for label in labels
+                    for label in selected_labels
                     if series.get(label) is not None
                     and np.isfinite(series[label])
                 ]
@@ -1245,6 +1254,14 @@ class GroundwaterData:
             aet_items = valid_values(aet_values)
             ndvi_mean_items = valid_values(ndvi_mean_values)
             ndvi_median_items = valid_values(ndvi_median_values)
+            warm_ndvi_mean_items = valid_values(
+                ndvi_mean_values,
+                warm_month_labels,
+            )
+            warm_ndvi_median_items = valid_values(
+                ndvi_median_values,
+                warm_month_labels,
+            )
             water_year_label = f"{water_year}-{water_year + 1}"
             decline = decline_by_year.get(water_year_label, {})
             rows.append({
@@ -1275,6 +1292,48 @@ class GroundwaterData:
                     np.mean(ndvi_median_items) if ndvi_median_items else None,
                     4,
                 ),
+                "ndvi_periods": {
+                    "warm_months": {
+                        "expected_month_count": len(NDVI_WARM_MONTHS),
+                        "selected_month_count": len(warm_month_labels),
+                        "is_complete": (
+                            len(warm_month_labels) == len(NDVI_WARM_MONTHS)
+                        ),
+                        "mean_month_count": len(warm_ndvi_mean_items),
+                        "median_month_count": len(warm_ndvi_median_items),
+                        "mean": finite_or_none(
+                            np.mean(warm_ndvi_mean_items)
+                            if warm_ndvi_mean_items
+                            else None,
+                            4,
+                        ),
+                        "median": finite_or_none(
+                            np.mean(warm_ndvi_median_items)
+                            if warm_ndvi_median_items
+                            else None,
+                            4,
+                        ),
+                    },
+                    "full_year": {
+                        "expected_month_count": MONTHS_PER_YEAR,
+                        "selected_month_count": len(labels),
+                        "is_complete": len(labels) == MONTHS_PER_YEAR,
+                        "mean_month_count": len(ndvi_mean_items),
+                        "median_month_count": len(ndvi_median_items),
+                        "mean": finite_or_none(
+                            np.mean(ndvi_mean_items)
+                            if ndvi_mean_items
+                            else None,
+                            4,
+                        ),
+                        "median": finite_or_none(
+                            np.mean(ndvi_median_items)
+                            if ndvi_median_items
+                            else None,
+                            4,
+                        ),
+                    },
+                },
             })
         return rows
 
