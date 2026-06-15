@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 RiskLevel = Literal["low", "moderate", "high", "critical"]
-ProviderName = Literal["groq", "openrouter"]
+ProviderName = Literal["gemini", "groq", "openrouter"]
 LanguageCode = Literal["fa", "en"]
 
 

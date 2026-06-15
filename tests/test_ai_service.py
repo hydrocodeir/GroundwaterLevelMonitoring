@@ -12,6 +12,7 @@ from app.main import ai_analyze
 from app.services.ai.config import AIConfig
 from app.services.ai.errors import AIValidationError
 from app.services.ai.http_client import post_chat_completion
+from app.services.ai.gemini_client import GeminiClient
 from app.services.ai.schemas import AIAnalysisRequest, AIAnalysisResponse
 from app.services.ai.service import (
     AIAnalysisService,
@@ -186,6 +187,79 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(result.provider, "groq")
         self.assertEqual(result.model, "openai/gpt-oss-20b")
 
+    def test_service_builds_selected_gemini_model(self) -> None:
+        client = FakeClient(
+            {
+                "analysis": "Gemini response.",
+                "risk_level": "high",
+                "key_findings": [],
+                "recommendations": [],
+                "uncertainty_note": "Summary data only.",
+            }
+        )
+        client.provider_name = "gemini"
+        client.model = "gemini-3.5-flash"
+        config = AIConfig(
+            provider="openrouter",
+            groq_api_key="",
+            groq_model="llama-3.1-8b-instant",
+            groq_base_url="https://api.groq.com/openai/v1",
+            openrouter_api_key="openrouter-key",
+            openrouter_model="openrouter/auto",
+            openrouter_base_url="https://openrouter.ai/api/v1",
+            openrouter_site_url="http://localhost:3000",
+            openrouter_app_name="Groundwater Dashboard AI",
+            gemini_api_key="gemini-key",
+        )
+        request = self.build_request(language="en").model_copy(
+            update={"provider": "gemini", "model": "gemini-3.5-flash"}
+        )
+
+        with patch.object(AIAnalysisService, "_build_client", return_value=client) as builder:
+            result = AIAnalysisService(config=config).analyze(request)
+
+        builder.assert_called_once_with(
+            config,
+            provider="gemini",
+            model="gemini-3.5-flash",
+        )
+        self.assertEqual(result.provider, "gemini")
+        self.assertEqual(result.model, "gemini-3.5-flash")
+
+    def test_gemini_client_uses_native_json_generation_contract(self) -> None:
+        client = GeminiClient(
+            api_key="gemini-key",
+            model="gemini-3.5-flash",
+        )
+        with patch(
+            "app.services.ai.gemini_client.post_gemini_generation",
+            return_value='{"analysis":"ok"}',
+        ) as complete:
+            result = client.complete(
+                [
+                    {"role": "system", "content": "System instructions"},
+                    {"role": "user", "content": "Analyze data"},
+                    {"role": "assistant", "content": "Previous response"},
+                    {"role": "user", "content": "Repair it"},
+                ]
+            )
+
+        self.assertEqual(result, '{"analysis":"ok"}')
+        call = complete.call_args.kwargs
+        self.assertIn(
+            "/models/gemini-3.5-flash:generateContent",
+            call["url"],
+        )
+        self.assertEqual(
+            call["payload"]["generationConfig"]["responseMimeType"],
+            "application/json",
+        )
+        self.assertEqual(call["payload"]["contents"][1]["role"], "model")
+        self.assertEqual(
+            call["payload"]["systemInstruction"]["parts"][0]["text"],
+            "System instructions",
+        )
+
     def test_service_rejects_model_outside_server_allowlist(self) -> None:
         request = self.build_request().model_copy(
             update={"provider": "openrouter", "model": "paid/model"}
@@ -218,14 +292,19 @@ class AIServiceTests(unittest.TestCase):
                 openrouter_base_url="https://openrouter.ai/api/v1",
                 openrouter_site_url="http://localhost:3000",
                 openrouter_app_name="Groundwater Dashboard AI",
+                gemini_api_key="gemini-secret",
             )
         )
 
         providers = {provider["id"]: provider for provider in options["providers"]}
         self.assertFalse(providers["openrouter"]["enabled"])
         self.assertEqual(providers["openrouter"]["default_model"], "openrouter/free")
+        self.assertTrue(providers["gemini"]["enabled"])
+        self.assertEqual(providers["gemini"]["default_model"], "gemini-3.5-flash")
+        self.assertTrue(providers["gemini"]["models"][0]["free"])
         self.assertTrue(providers["groq"]["enabled"])
         self.assertNotIn("groq-secret", json.dumps(options))
+        self.assertNotIn("gemini-secret", json.dumps(options))
         self.assertTrue(providers["groq"]["models"])
 
     def test_generic_provider_forbidden_error_gets_actionable_message(self) -> None:
@@ -251,6 +330,33 @@ class AIServiceTests(unittest.TestCase):
                     url="https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": "Bearer test"},
                     payload={"model": "llama-3.1-8b-instant", "messages": []},
+                    timeout_seconds=5,
+                )
+
+    def test_gemini_html_forbidden_error_gets_actionable_message(self) -> None:
+        from urllib.error import HTTPError
+
+        error = HTTPError(
+            url="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
+            fp=BytesIO(b"<html><title>Error 403 (Forbidden)</title></html>"),
+        )
+        with patch(
+            "app.services.ai.http_client.urlrequest.urlopen",
+            side_effect=error,
+        ):
+            with self.assertRaisesRegex(
+                Exception,
+                "project or network location is not permitted",
+            ):
+                from app.services.ai.http_client import post_gemini_generation
+
+                post_gemini_generation(
+                    url=error.url,
+                    api_key="test",
+                    payload={"contents": []},
                     timeout_seconds=5,
                 )
 

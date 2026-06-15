@@ -8,7 +8,12 @@ from app.settings import load_environment
 
 load_environment()
 
-SUPPORTED_PROVIDERS = {"groq", "openrouter"}
+SUPPORTED_PROVIDERS = {"gemini", "groq", "openrouter"}
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+DEFAULT_GEMINI_MODELS = (
+    "gemini-3.5-flash",
+)
+DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
 DEFAULT_GROQ_MODELS = (
     "llama-3.1-8b-instant",
@@ -56,17 +61,25 @@ class AIConfig:
     openrouter_base_url: str
     openrouter_site_url: str
     openrouter_app_name: str
+    gemini_api_key: str = ""
+    gemini_model: str = DEFAULT_GEMINI_MODEL
+    gemini_base_url: str = DEFAULT_GEMINI_BASE_URL
     timeout_seconds: int = 60
     max_request_bytes: int = 64_000
+    gemini_models: tuple[str, ...] = DEFAULT_GEMINI_MODELS
     groq_models: tuple[str, ...] = DEFAULT_GROQ_MODELS
     openrouter_models: tuple[str, ...] = DEFAULT_OPENROUTER_MODELS
 
     def default_model_for(self, provider: str) -> str:
+        if provider == "gemini":
+            return self.gemini_model
         if provider == "groq":
             return self.groq_model
         return self.openrouter_model
 
     def allowed_models_for(self, provider: str) -> tuple[str, ...]:
+        if provider == "gemini":
+            return _unique_models(self.gemini_model, self.gemini_models)
         if provider == "groq":
             return _unique_models(self.groq_model, self.groq_models)
         if provider == "openrouter":
@@ -74,6 +87,8 @@ class AIConfig:
         return ()
 
     def has_api_key_for(self, provider: str) -> bool:
+        if provider == "gemini":
+            return bool(self.gemini_api_key)
         if provider == "groq":
             return bool(self.groq_api_key)
         if provider == "openrouter":
@@ -83,6 +98,12 @@ class AIConfig:
     @classmethod
     def from_env(cls) -> "AIConfig":
         provider = os.getenv("AI_PROVIDER", DEFAULT_AI_PROVIDER).strip().lower()
+        gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
+        gemini_base_url = os.getenv(
+            "GEMINI_BASE_URL",
+            DEFAULT_GEMINI_BASE_URL,
+        ).strip()
         groq_api_key = os.getenv("GROQ_API_KEY", "").strip()
         groq_model = os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL).strip()
         groq_base_url = os.getenv("GROQ_BASE_URL", DEFAULT_GROQ_BASE_URL).strip()
@@ -110,6 +131,13 @@ class AIConfig:
             openrouter_base_url=openrouter_base_url or DEFAULT_OPENROUTER_BASE_URL,
             openrouter_site_url=openrouter_site_url or DEFAULT_OPENROUTER_SITE_URL,
             openrouter_app_name=openrouter_app_name or DEFAULT_OPENROUTER_APP_NAME,
+            gemini_api_key=gemini_api_key,
+            gemini_model=gemini_model or DEFAULT_GEMINI_MODEL,
+            gemini_base_url=gemini_base_url or DEFAULT_GEMINI_BASE_URL,
+            gemini_models=_model_list_from_env(
+                "GEMINI_MODELS",
+                DEFAULT_GEMINI_MODELS,
+            ),
             groq_models=_model_list_from_env("GROQ_MODELS", DEFAULT_GROQ_MODELS),
             openrouter_models=_model_list_from_env(
                 "OPENROUTER_MODELS",

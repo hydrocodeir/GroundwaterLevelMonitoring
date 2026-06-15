@@ -165,6 +165,16 @@ restart داشبورد، تب «تراز + AET» به‌صورت خودکار د
 برای فعال‌سازی تحلیل هوشمند داشبورد، فایل `.env` را بر اساس `.env.example`
 بسازید و یکی از ارائه‌دهنده‌ها را انتخاب کنید.
 
+### Google Gemini
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODELS=gemini-3.5-flash
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+AI_PROVIDER=gemini
+```
+
 ### Groq
 
 ```env
@@ -187,8 +197,10 @@ AI_PROVIDER=openrouter
 ```
 
 - کلیدهای API فقط در بک‌اند خوانده می‌شوند و هرگز به فرانت ارسال نمی‌شوند.
-- در پنجره «تحلیل با AI» می‌توان بین OpenRouter و Groq و مدل‌های مجاز هر
-  ارائه‌دهنده انتخاب کرد.
+- در پنجره «تحلیل با AI» می‌توان بین OpenRouter، Gemini و Groq و مدل‌های
+  مجاز هر ارائه‌دهنده انتخاب کرد.
+- مدل `gemini-3.5-flash` در Free Tier برای ورودی و خروجی رایگان است و
+  محدودیت نرخ حساب Google AI Studio روی آن اعمال می‌شود.
 - مدل‌های OpenRouter با پسوند `:free` یا مدل `openrouter/free` رایگان هستند.
   فهرست آن‌ها ممکن است تغییر کند و از طریق `OPENROUTER_MODELS` قابل تنظیم است.
 - مدل‌های Groq از سهمیه Free Tier حساب استفاده می‌کنند و محدودیت نرخ دارند.

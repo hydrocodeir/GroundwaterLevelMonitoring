@@ -381,7 +381,9 @@
     analyzeButton.disabled = !provider.models.length;
     hint.textContent = provider.id === "groq"
       ? "مدل‌های Groq از سهمیه Free Tier حساب شما استفاده می‌کنند و محدودیت نرخ دارند."
-      : "مدل‌های دارای برچسب رایگان هزینه توکن ندارند؛ دسترسی و ظرفیت آن‌ها ممکن است تغییر کند.";
+      : provider.id === "gemini"
+        ? "Gemini 3.5 Flash در Free Tier ورودی و خروجی رایگان دارد و محدودیت نرخ حساب اعمال می‌شود."
+        : "مدل‌های دارای برچسب رایگان هزینه توکن ندارند؛ دسترسی و ظرفیت آن‌ها ممکن است تغییر کند.";
   }
 
   function renderAiOptions(options) {
@@ -547,11 +549,13 @@
     } catch (error) {
       if (token !== state.aiRequestToken) return;
       const provider = root.querySelector("#aiProvider")?.value;
-      const forbidden = /HTTP 403|not permitted|Forbidden/i.test(error.message || "");
+      const forbidden = /HTTP 403|not permitted|Forbidden|permission denied/i.test(error.message || "");
       if (status) {
         status.textContent = forbidden && provider === "groq"
           ? "Groq دسترسی این حساب یا موقعیت شبکه را با خطای 403 رد کرده است. از OpenRouter استفاده کنید یا وضعیت دسترسی حساب Groq را در کنسول آن بررسی کنید."
-          : error.message || "تحلیل AI ناموفق بود.";
+          : forbidden && provider === "gemini"
+            ? "Gemini دسترسی این کلید یا پروژه را رد کرده است. فعال بودن Gemini API و محدودیت‌های کلید در Google AI Studio را بررسی کنید."
+            : error.message || "تحلیل AI ناموفق بود.";
         status.className = "rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-[10px] leading-6 text-red-700";
       }
       if (card) card.classList.add("hidden");

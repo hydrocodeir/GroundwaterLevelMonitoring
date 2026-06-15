@@ -111,3 +111,93 @@ def post_chat_completion(
             provider,
         )
     return content.strip()
+
+
+def post_gemini_generation(
+    *,
+    url: str,
+    api_key: str,
+    payload: dict[str, Any],
+    timeout_seconds: int,
+) -> str:
+    provider = "gemini"
+    request = urlrequest.Request(
+        url=url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(request, timeout=timeout_seconds) as response:
+            raw = response.read().decode("utf-8")
+    except urlerror.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        message = _extract_error_message(
+            body,
+            f"{provider} API request failed with HTTP {error.code}.",
+        )
+        if error.code == 429:
+            raise AIRateLimitError(message, provider) from error
+        if error.code == 403:
+            if message == f"{provider} API request failed with HTTP 403.":
+                message = (
+                    "gemini rejected access with HTTP 403. "
+                    "The API key is configured, but this project or network location "
+                    "is not permitted to use the Gemini API."
+                )
+            raise AIForbiddenError(message, provider) from error
+        raise AIProviderError(message, provider) from error
+    except urlerror.URLError as error:
+        reason = getattr(error, "reason", error)
+        if isinstance(reason, (socket.timeout, TimeoutError)):
+            raise AITimeoutError(
+                f"{provider} API request timed out.",
+                provider,
+            ) from error
+        raise AIProviderError(
+            f"{provider} API request failed: {reason}",
+            provider,
+        ) from error
+
+    try:
+        response_payload = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise AIProviderError(
+            f"{provider} returned invalid JSON.",
+            provider,
+        ) from error
+
+    candidates = response_payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        prompt_feedback = response_payload.get("promptFeedback")
+        if isinstance(prompt_feedback, dict) and prompt_feedback.get("blockReason"):
+            raise AIProviderError(
+                f"gemini blocked the prompt: {prompt_feedback['blockReason']}.",
+                provider,
+            )
+        raise AIProviderError(
+            f"{provider} returned no completion candidates.",
+            provider,
+        )
+    content = candidates[0].get("content") if isinstance(candidates[0], dict) else None
+    parts = content.get("parts") if isinstance(content, dict) else None
+    if not isinstance(parts, list):
+        raise AIProviderError(
+            f"{provider} returned an invalid response content.",
+            provider,
+        )
+    text = "".join(
+        str(part.get("text", ""))
+        for part in parts
+        if isinstance(part, dict)
+    ).strip()
+    if not text:
+        raise AIProviderError(
+            f"{provider} returned an empty completion.",
+            provider,
+        )
+    return text

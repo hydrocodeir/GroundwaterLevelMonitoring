@@ -18,6 +18,7 @@ from app.services.ai.errors import (
     AIValidationError,
 )
 from app.services.ai.groq_client import GroqClient
+from app.services.ai.gemini_client import GeminiClient
 from app.services.ai.openrouter_client import OpenRouterClient
 from app.services.ai.prompts import build_system_prompt, build_user_prompt
 from app.services.ai.schemas import (
@@ -199,8 +200,17 @@ class AIAnalysisService:
         model = model or config.default_model_for(provider)
         if provider not in SUPPORTED_PROVIDERS:
             raise AIConfigurationError(
-                f"Invalid AI_PROVIDER '{provider}'. Supported providers are groq and openrouter.",
+                f"Invalid AI_PROVIDER '{provider}'. Supported providers are gemini, groq, and openrouter.",
                 provider,
+            )
+        if provider == "gemini":
+            if not config.gemini_api_key:
+                raise AIConfigurationError("GEMINI_API_KEY is missing.", provider)
+            return GeminiClient(
+                api_key=config.gemini_api_key,
+                model=model,
+                base_url=config.gemini_base_url,
+                timeout_seconds=config.timeout_seconds,
             )
         if provider == "groq":
             if not config.groq_api_key:
@@ -370,12 +380,17 @@ def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
     labels = {
         "openrouter": "OpenRouter",
         "groq": "Groq",
+        "gemini": "Gemini",
     }
     providers = []
-    for provider in ("openrouter", "groq"):
+    for provider in ("openrouter", "gemini", "groq"):
         models = []
         for model in config.allowed_models_for(provider):
-            is_free = provider == "groq" or model == "openrouter/free" or model.endswith(":free")
+            is_free = (
+                provider in {"gemini", "groq"}
+                or model == "openrouter/free"
+                or model.endswith(":free")
+            )
             models.append(
                 {
                     "id": model,
