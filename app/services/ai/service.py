@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from app.services.ai.config import AIConfig, SUPPORTED_PROVIDERS
 from app.services.ai.errors import (
     AIConfigurationError,
+    AIForbiddenError,
     AIProviderError,
     AIRateLimitError,
     AIRemoteError,
@@ -273,7 +274,21 @@ class AIAnalysisService:
         )
         return provider_name, model_name
 
-    def analyze(self, request: AIAnalysisRequest) -> AIAnalysisResponse:
+    def _fallback_requests(self, request: AIAnalysisRequest | AIChatRequest) -> list[Any]:
+        current_provider = request.provider or self.config.provider
+        fallback_requests: list[Any] = []
+        for provider in ("openrouter", "gemini", "groq"):
+            if provider == current_provider:
+                continue
+            if not self.config.has_api_key_for(provider):
+                continue
+            model = self.config.default_model_for(provider)
+            if model not in self.config.allowed_models_for(provider):
+                continue
+            fallback_requests.append(request.model_copy(update={"provider": provider, "model": model}))
+        return fallback_requests
+
+    def _analyze_once(self, request: AIAnalysisRequest) -> AIAnalysisResponse:
         if not request.summary_data:
             raise AIValidationError("summary_data cannot be empty.", self.provider_name)
 
@@ -381,7 +396,7 @@ class AIAnalysisService:
             uncertainty_note=llm_output.uncertainty_note.strip(),
         )
 
-    def chat(
+    def _chat_once(
         self,
         request: AIChatRequest,
         aquifer_context: dict[str, Any],
@@ -462,6 +477,48 @@ class AIAnalysisService:
             model=model_name,
             answer=answer,
         )
+
+    def analyze(self, request: AIAnalysisRequest) -> AIAnalysisResponse:
+        try:
+            return self._analyze_once(request)
+        except AIForbiddenError as error:
+            last_error: AIForbiddenError = error
+            for fallback_request in self._fallback_requests(request):
+                LOGGER.warning(
+                    "AI provider %s was forbidden; retrying analysis with provider=%s model=%s.",
+                    request.provider or self.config.provider,
+                    fallback_request.provider,
+                    fallback_request.model,
+                )
+                try:
+                    return self._analyze_once(fallback_request)
+                except AIForbiddenError as fallback_error:
+                    last_error = fallback_error
+                    continue
+            raise last_error
+
+    def chat(
+        self,
+        request: AIChatRequest,
+        aquifer_context: dict[str, Any],
+    ) -> AIChatResponse:
+        try:
+            return self._chat_once(request, aquifer_context)
+        except AIForbiddenError as error:
+            last_error: AIForbiddenError = error
+            for fallback_request in self._fallback_requests(request):
+                LOGGER.warning(
+                    "AI provider %s was forbidden; retrying chat with provider=%s model=%s.",
+                    request.provider or self.config.provider,
+                    fallback_request.provider,
+                    fallback_request.model,
+                )
+                try:
+                    return self._chat_once(fallback_request, aquifer_context)
+                except AIForbiddenError as fallback_error:
+                    last_error = fallback_error
+                    continue
+            raise last_error
 
 
 @lru_cache(maxsize=1)

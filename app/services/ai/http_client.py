@@ -56,13 +56,23 @@ def post_chat_completion(
         )
         if error.code == 429:
             raise AIRateLimitError(message, provider) from error
-        if error.code == 403 and message.strip().lower() == "forbidden":
-            message = (
-                f"{provider} rejected access with HTTP 403. "
-                "The API key is configured, but this account or network location "
-                "is not permitted to use the provider."
-            )
-            raise AIForbiddenError(message, provider) from error
+        if error.code == 403:
+            if provider == "groq":
+                detail = message.strip()
+                if not detail or detail.lower() == "forbidden":
+                    detail = (
+                        "The API key is configured, but this account or network location "
+                        "is not permitted to use the provider."
+                    )
+                message = f"{provider} rejected access with HTTP 403. {detail}"
+                raise AIForbiddenError(message, provider) from error
+            if message.strip().lower() == "forbidden":
+                message = (
+                    f"{provider} rejected access with HTTP 403. "
+                    "The API key is configured, but this account or network location "
+                    "is not permitted to use the provider."
+                )
+                raise AIForbiddenError(message, provider) from error
         raise AIProviderError(message, provider) from error
     except urlerror.URLError as error:
         reason = getattr(error, "reason", error)

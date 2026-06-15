@@ -22,6 +22,7 @@
     currentData: null,
     aiRequestToken: 0,
     aiOptions: null,
+    blockedAiProviders: {},
     chatHistory: [],
     chatAquiferId: null,
     chatContextKey: null,
@@ -361,6 +362,43 @@
     return state.aiOptions?.providers?.find(provider => provider.id === providerId) || null;
   }
 
+  function isAiProviderBlocked(providerId) {
+    return Boolean(state.blockedAiProviders?.[providerId]);
+  }
+
+  function blockAiProvider(providerId) {
+    if (!providerId || isAiProviderBlocked(providerId)) return;
+    state.blockedAiProviders = {
+      ...(state.blockedAiProviders || {}),
+      [providerId]: true
+    };
+  }
+
+  function firstSelectableProviderId(options, preferredProviderId) {
+    const providers = options.providers || [];
+    const preferred = providers.find(provider => (
+      provider.id === preferredProviderId
+      && provider.enabled
+      && !isAiProviderBlocked(provider.id)
+    ));
+    if (preferred) return preferred.id;
+    const fallback = providers.find(provider => provider.enabled && !isAiProviderBlocked(provider.id));
+    return fallback?.id || "";
+  }
+
+  function providerUnavailableHint(providerId) {
+    if (providerId === "groq") {
+      return "Groq موقتاً دسترسی این حساب یا موقعیت شبکه را رد کرده است. OpenRouter یا Gemini را انتخاب کنید.";
+    }
+    if (providerId === "gemini") {
+      return "Gemini موقتاً دسترسی این کلید، پروژه یا موقعیت شبکه را رد کرده است. OpenRouter یا Groq را انتخاب کنید.";
+    }
+    if (providerId === "openrouter") {
+      return "OpenRouter موقتاً در این نشست در دسترس نیست. یک provider دیگر را انتخاب کنید.";
+    }
+    return "این provider موقتاً در دسترس نیست. یک provider دیگر را انتخاب کنید.";
+  }
+
   function syncAiModelOptions() {
     const modelSelect = document.getElementById("aiModel");
     const hint = document.getElementById("aiModelHint");
@@ -368,10 +406,12 @@
     const provider = selectedAiProvider();
     if (!modelSelect || !hint || !analyzeButton) return;
     modelSelect.innerHTML = "";
-    if (!provider?.enabled) {
+    if (!provider?.enabled || isAiProviderBlocked(provider.id)) {
       modelSelect.disabled = true;
       analyzeButton.disabled = true;
-      hint.textContent = "برای استفاده از این ارائه‌دهنده، کلید API آن را در فایل .env وارد و سرور را restart کنید.";
+      hint.textContent = provider
+        ? providerUnavailableHint(provider.id)
+        : "برای استفاده از این ارائه‌دهنده، کلید API آن را در فایل .env وارد و سرور را restart کنید.";
       return;
     }
     provider.models.forEach(model => {
@@ -394,18 +434,21 @@
     const providerSelect = document.getElementById("aiProvider");
     state.aiOptions = options;
     if (providerSelect) {
+      const previousProvider = providerSelect.value || options.default_provider;
+      const selectedProviderId = firstSelectableProviderId(options, previousProvider);
       providerSelect.innerHTML = "";
-      const enabledProviders = (options.providers || []).filter(provider => provider.enabled);
       (options.providers || []).forEach(provider => {
+        const blocked = isAiProviderBlocked(provider.id);
+        const selectable = provider.enabled && !blocked;
         const option = document.createElement("option");
         option.value = provider.id;
-        option.disabled = !provider.enabled;
-        option.textContent = `${provider.label}${provider.enabled ? "" : " · کلید تنظیم نشده"}`;
-        option.selected = provider.id === options.default_provider && provider.enabled;
+        option.disabled = !selectable;
+        option.textContent = `${provider.label}${provider.enabled ? "" : " · کلید تنظیم نشده"}${blocked ? " · موقتاً غیرفعال" : ""}`;
+        option.selected = provider.id === selectedProviderId;
         providerSelect.appendChild(option);
       });
-      if (!providerSelect.value && enabledProviders.length) {
-        providerSelect.value = enabledProviders[0].id;
+      if (selectedProviderId) {
+        providerSelect.value = selectedProviderId;
       }
       syncAiModelOptions();
     }
@@ -452,7 +495,7 @@
     const provider = selectedChatProvider();
     if (!modelSelect || !sendButton) return;
     modelSelect.innerHTML = "";
-    if (!provider?.enabled) {
+    if (!provider?.enabled || isAiProviderBlocked(provider.id)) {
       modelSelect.disabled = true;
       sendButton.disabled = true;
       return;
@@ -471,22 +514,21 @@
   function renderChatAiOptions(options) {
     const providerSelect = document.getElementById("aquiferChatProvider");
     if (!providerSelect) return;
-    const previousProvider = providerSelect.value;
+    const previousProvider = providerSelect.value || options.default_provider;
+    const selectedProviderId = firstSelectableProviderId(options, previousProvider);
     providerSelect.innerHTML = "";
-    const enabledProviders = (options.providers || []).filter(provider => provider.enabled);
     (options.providers || []).forEach(provider => {
+      const blocked = isAiProviderBlocked(provider.id);
+      const selectable = provider.enabled && !blocked;
       const option = document.createElement("option");
       option.value = provider.id;
-      option.disabled = !provider.enabled;
-      option.textContent = `${provider.label}${provider.enabled ? "" : " · غیرفعال"}`;
-      option.selected = (
-        provider.id === previousProvider
-        || (!previousProvider && provider.id === options.default_provider)
-      ) && provider.enabled;
+      option.disabled = !selectable;
+      option.textContent = `${provider.label}${provider.enabled ? "" : " · غیرفعال"}${blocked ? " · موقتاً غیرفعال" : ""}`;
+      option.selected = provider.id === selectedProviderId;
       providerSelect.appendChild(option);
     });
-    if (!providerSelect.value && enabledProviders.length) {
-      providerSelect.value = enabledProviders[0].id;
+    if (selectedProviderId) {
+      providerSelect.value = selectedProviderId;
     }
     syncChatModelOptions();
   }
@@ -639,6 +681,13 @@
     } catch (error) {
       if (token !== state.chatRequestToken) return;
       pending?.remove();
+      const forbidden = /HTTP 403|not permitted|Forbidden|permission denied/i.test(error.message || "");
+      if (forbidden) {
+        blockAiProvider(provider);
+        if (state.aiOptions) {
+          renderAiOptions(state.aiOptions);
+        }
+      }
       appendAquiferChatMessage(
         "assistant error",
         aquiferChatErrorMessage(error, provider)
@@ -792,6 +841,12 @@
       if (token !== state.aiRequestToken) return;
       const provider = root.querySelector("#aiProvider")?.value;
       const forbidden = /HTTP 403|not permitted|Forbidden|permission denied/i.test(error.message || "");
+      if (forbidden) {
+        blockAiProvider(provider);
+        if (state.aiOptions) {
+          renderAiOptions(state.aiOptions);
+        }
+      }
       if (status) {
         status.textContent = forbidden && provider === "groq"
           ? "Groq دسترسی این حساب یا موقعیت شبکه را با خطای 403 رد کرده است. از OpenRouter استفاده کنید یا وضعیت دسترسی حساب Groq را در کنسول آن بررسی کنید."

@@ -4,13 +4,15 @@ import asyncio
 import json
 import unittest
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from starlette.requests import Request
 
 from app.main import ai_analyze, ai_chat
 from app.services.ai.config import AIConfig
-from app.services.ai.errors import AIValidationError
+from app.services.ai.errors import AIForbiddenError, AIValidationError
+from app.services.ai.groq_client import GroqClient
 from app.services.ai.http_client import post_chat_completion
 from app.services.ai.gemini_client import GeminiClient
 from app.services.ai.schemas import (
@@ -437,6 +439,31 @@ class AIServiceTests(unittest.TestCase):
                     timeout_seconds=5,
                 )
 
+    def test_groq_403_with_non_forbidden_body_gets_forbidden_error(self) -> None:
+        from urllib.error import HTTPError
+
+        error = HTTPError(
+            url="https://api.groq.com/openai/v1/chat/completions",
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
+            fp=BytesIO(b'{"error":{"message":"Access denied"}}'),
+        )
+        with patch(
+            "app.services.ai.http_client.urlrequest.urlopen",
+            side_effect=error,
+        ):
+            with self.assertRaises(AIForbiddenError) as ctx:
+                post_chat_completion(
+                    provider="groq",
+                    url="https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": "Bearer test"},
+                    payload={"model": "llama-3.1-8b-instant", "messages": []},
+                    timeout_seconds=5,
+                )
+        self.assertIn("groq rejected access with HTTP 403", str(ctx.exception))
+        self.assertIn("Access denied", str(ctx.exception))
+
     def test_gemini_html_forbidden_error_gets_actionable_message(self) -> None:
         from urllib.error import HTTPError
 
@@ -463,6 +490,87 @@ class AIServiceTests(unittest.TestCase):
                     payload={"contents": []},
                     timeout_seconds=5,
                 )
+
+    def test_groq_client_uses_openai_sdk_payload_without_response_format(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content='{"analysis":"ok"}'
+                            )
+                        )
+                    ]
+                )
+
+        class FakeOpenAIClient:
+            def __init__(self, **kwargs):
+                captured["client_kwargs"] = kwargs
+                self.chat = SimpleNamespace(completions=FakeCompletions())
+
+        fake_module = SimpleNamespace(OpenAI=FakeOpenAIClient)
+
+        with patch("app.services.ai.groq_client.importlib.import_module", return_value=fake_module):
+            client = GroqClient(
+                api_key="test-key",
+                model="llama-3.1-8b-instant",
+                base_url="https://api.groq.com/openai/v1",
+                timeout_seconds=15,
+            )
+            content = client.complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(content, '{"analysis":"ok"}')
+        self.assertEqual(captured["client_kwargs"]["api_key"], "test-key")
+        self.assertEqual(captured["client_kwargs"]["base_url"], "https://api.groq.com/openai/v1")
+        self.assertEqual(captured["client_kwargs"]["timeout"], 15)
+        self.assertEqual(captured["client_kwargs"]["max_retries"], 0)
+        self.assertEqual(captured["model"], "llama-3.1-8b-instant")
+        self.assertEqual(captured["temperature"], 0.2)
+        self.assertNotIn("response_format", captured)
+
+    def test_analysis_falls_back_from_forbidden_groq_to_next_provider(self) -> None:
+        service = AIAnalysisService(
+            config=AIConfig(
+                provider="groq",
+                groq_api_key="groq-key",
+                groq_model="llama-3.1-8b-instant",
+                groq_base_url="https://api.groq.com/openai/v1",
+                openrouter_api_key="openrouter-key",
+                openrouter_model="openrouter/auto",
+                openrouter_base_url="https://openrouter.ai/api/v1",
+                openrouter_site_url="http://localhost:3000",
+                openrouter_app_name="Groundwater Dashboard AI",
+                gemini_api_key="gemini-key",
+            )
+        )
+        request = self.build_request().model_copy(
+            update={"provider": "groq", "model": "llama-3.1-8b-instant"}
+        )
+
+        def fake_analyze_once(current_request):
+            if current_request.provider == "groq":
+                raise AIForbiddenError("groq rejected access with HTTP 403.", "groq")
+            return AIAnalysisResponse(
+                provider=current_request.provider or "openrouter",
+                model=current_request.model or "openrouter/auto",
+                analysis="fallback works",
+                risk_level="high",
+                precomputed_risk_level="high",
+                key_findings=["fallback"],
+                recommendations=["fallback"],
+                uncertainty_note="ok",
+            )
+
+        with patch.object(service, "_analyze_once", side_effect=fake_analyze_once):
+            result = service.analyze(request)
+
+        self.assertEqual(result.provider, "openrouter")
+        self.assertEqual(result.model, "openrouter/auto")
+        self.assertEqual(result.analysis, "fallback works")
 
     def test_ai_endpoint_returns_structured_response(self) -> None:
         client = FakeClient(
