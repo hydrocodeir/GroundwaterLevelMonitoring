@@ -598,6 +598,7 @@ def build_aquifer_chat_context(dashboard: dict[str, Any]) -> dict[str, Any]:
                 "status": well.get("status"),
                 "exclusion_reason": well.get("exclusion_reason"),
                 "elevation_m": well.get("elevation"),
+                "series": series,
                 "latest_observation": latest_observation,
                 "trend": {
                     "direction": trend.get("direction"),

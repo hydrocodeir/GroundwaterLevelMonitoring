@@ -29,6 +29,8 @@
     chatRequestToken: 0
   };
 
+  const CHAT_HISTORY_STORAGE_PREFIX = "hydrocodeir.aquifer-chat-history.v1";
+
   const faNumber = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 });
   const LEAFLET_MAX_ZOOM = 14;
   const SELECTION_MAP_MAX_ZOOM = 12;
@@ -552,6 +554,69 @@
     return message;
   }
 
+  function chatHistoryStorageKey(contextKey) {
+    return `${CHAT_HISTORY_STORAGE_PREFIX}:${contextKey}`;
+  }
+
+  function getLocalStorage() {
+    try {
+      return window.localStorage;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function normalizeChatHistory(history) {
+    if (!Array.isArray(history)) return [];
+    return history
+      .filter(message => (
+        message
+        && (message.role === "user" || message.role === "assistant")
+        && typeof message.content === "string"
+        && message.content.trim()
+      ))
+      .map(message => ({
+        role: message.role,
+        content: message.content.trim()
+      }))
+      .slice(-10);
+  }
+
+  function loadAquiferChatHistory(contextKey) {
+    const storage = getLocalStorage();
+    if (!contextKey || !storage) return [];
+    try {
+      const stored = storage.getItem(chatHistoryStorageKey(contextKey));
+      if (!stored) return [];
+      return normalizeChatHistory(JSON.parse(stored));
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveAquiferChatHistory(contextKey, history) {
+    const storage = getLocalStorage();
+    if (!contextKey || !storage) return;
+    try {
+      storage.setItem(
+        chatHistoryStorageKey(contextKey),
+        JSON.stringify(normalizeChatHistory(history))
+      );
+    } catch (error) {
+      // Ignore storage limits or private-mode failures.
+    }
+  }
+
+  function clearAquiferChatHistory(contextKey) {
+    const storage = getLocalStorage();
+    if (!contextKey || !storage) return;
+    try {
+      storage.removeItem(chatHistoryStorageKey(contextKey));
+    } catch (error) {
+      // Ignore storage failures.
+    }
+  }
+
   function resetAquiferChat(data) {
     const widget = document.getElementById("aquiferChatWidget");
     const title = document.getElementById("aquiferChatTitle");
@@ -573,14 +638,24 @@
     widget.classList.remove("hidden");
     if (title) title.textContent = `آبخوان ${data.aquifer}`;
     if (!changedContext) return;
-    state.chatHistory = [];
     state.chatRequestToken += 1;
+    state.chatHistory = loadAquiferChatHistory(contextKey);
     const messages = document.getElementById("aquiferChatMessages");
     if (messages) messages.innerHTML = "";
-    appendAquiferChatMessage(
-      "assistant",
-      `درباره آبخوان ${data.aquifer}، روند تراز، سال‌های آبی یا پیزومترهای آن سؤال کنید.`
-    );
+    if (state.chatHistory.length === 0) {
+      appendAquiferChatMessage(
+        "assistant",
+        `درباره آبخوان ${data.aquifer}، روند تراز، سال‌های آبی یا پیزومترهای آن سؤال کنید.`
+      );
+    } else {
+      appendAquiferChatMessage(
+        "assistant",
+        "گفتگوی قبلی این آبخوان بازیابی شد."
+      );
+      state.chatHistory.forEach(message => {
+        appendAquiferChatMessage(message.role, message.content);
+      });
+    }
     const status = document.getElementById("aquiferChatStatus");
     status?.classList.add("hidden");
   }
@@ -589,6 +664,7 @@
     if (!state.currentData) return;
     state.chatHistory = [];
     state.chatRequestToken += 1;
+    clearAquiferChatHistory(state.chatContextKey);
     const messages = document.getElementById("aquiferChatMessages");
     if (messages) messages.innerHTML = "";
     appendAquiferChatMessage(
@@ -678,6 +754,7 @@
         { role: "user", content: question },
         { role: "assistant", content: result.answer }
       ].slice(-10);
+      saveAquiferChatHistory(state.chatContextKey, state.chatHistory);
     } catch (error) {
       if (token !== state.chatRequestToken) return;
       pending?.remove();
