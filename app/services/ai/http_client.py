@@ -31,6 +31,17 @@ def _extract_error_message(body: str, fallback: str) -> str:
     return fallback
 
 
+def _normalize_provider_error_message(provider: str, message: str) -> str:
+    normalized = (message or "").strip()
+    if provider == "openrouter" and normalized.lower() == "provider returned error":
+        return (
+            "openrouter provider returned a generic error. "
+            "The selected model may not support response_format=json_object "
+            "or another requested parameter."
+        )
+    return message
+
+
 def post_chat_completion(
     *,
     provider: str,
@@ -54,6 +65,7 @@ def post_chat_completion(
             body,
             f"{provider} API request failed with HTTP {error.code}.",
         )
+        message = _normalize_provider_error_message(provider, message)
         if error.code == 429:
             raise AIRateLimitError(message, provider) from error
         if error.code == 403:
@@ -100,6 +112,7 @@ def post_chat_completion(
             message = error_block.get("message") or f"{provider} returned an error."
         else:
             message = str(error_block)
+        message = _normalize_provider_error_message(provider, message)
         raise AIProviderError(message, provider)
 
     choices = response_payload.get("choices")

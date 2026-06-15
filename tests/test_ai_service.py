@@ -11,10 +11,11 @@ from starlette.requests import Request
 
 from app.main import ai_analyze, ai_chat
 from app.services.ai.config import AIConfig
-from app.services.ai.errors import AIForbiddenError, AIValidationError
+from app.services.ai.errors import AIForbiddenError, AIProviderError, AIValidationError
 from app.services.ai.groq_client import GroqClient
 from app.services.ai.http_client import post_chat_completion
 from app.services.ai.gemini_client import GeminiClient
+from app.services.ai.openrouter_client import OpenRouterClient
 from app.services.ai.schemas import (
     AIAnalysisRequest,
     AIAnalysisResponse,
@@ -550,6 +551,70 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(captured["model"], "llama-3.1-8b-instant")
         self.assertEqual(captured["temperature"], 0.2)
         self.assertNotIn("response_format", captured)
+
+    def test_openrouter_client_uses_json_mode_when_supported(self) -> None:
+        with patch(
+            "app.services.ai.openrouter_client.post_chat_completion",
+            return_value='{"answer":"ok"}',
+        ) as complete:
+            client = OpenRouterClient(
+                api_key="test-key",
+                model="google/gemma-4-31b-it:free",
+            )
+            content = client.complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(content, '{"answer":"ok"}')
+        payload = complete.call_args.kwargs["payload"]
+        self.assertEqual(payload["response_format"], {"type": "json_object"})
+
+    def test_openrouter_client_retries_without_json_mode_when_model_rejects_it(self) -> None:
+        with patch(
+            "app.services.ai.openrouter_client.post_chat_completion",
+            side_effect=[
+                AIProviderError(
+                    "This model does not support response_format json_object.",
+                    "openrouter",
+                ),
+                '{"answer":"ok"}',
+            ],
+        ) as complete:
+            client = OpenRouterClient(
+                api_key="test-key",
+                model="openai/gpt-oss-20b:free",
+            )
+            content = client.complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(content, '{"answer":"ok"}')
+        first_payload = complete.call_args_list[0].kwargs["payload"]
+        second_payload = complete.call_args_list[1].kwargs["payload"]
+        self.assertEqual(first_payload["response_format"], {"type": "json_object"})
+        self.assertNotIn("response_format", second_payload)
+
+    def test_openrouter_generic_provider_error_gets_actionable_message(self) -> None:
+        from urllib.error import HTTPError
+
+        error = HTTPError(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            code=400,
+            msg="Bad Request",
+            hdrs=None,
+            fp=BytesIO(b'{"error":{"message":"Provider returned error"}}'),
+        )
+        with patch(
+            "app.services.ai.http_client.urlrequest.urlopen",
+            side_effect=error,
+        ):
+            with self.assertRaisesRegex(
+                Exception,
+                "may not support response_format=json_object",
+            ):
+                post_chat_completion(
+                    provider="openrouter",
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": "Bearer test"},
+                    payload={"model": "openai/gpt-oss-20b:free", "messages": []},
+                    timeout_seconds=5,
+                )
 
     def test_analysis_falls_back_from_forbidden_groq_to_next_provider(self) -> None:
         service = AIAnalysisService(

@@ -28,9 +28,15 @@ DEFAULT_OPENROUTER_MODELS = (
     "openrouter/free",
     "openai/gpt-oss-120b:free",
     "openai/gpt-oss-20b:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-4-26b-a4b-it:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "google/gemma-4-31b-it:free",
+    "nex-agi/nex-n2-pro:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3-coder:free",
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
 )
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_SITE_URL = "http://localhost:3000"

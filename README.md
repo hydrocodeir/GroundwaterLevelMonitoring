@@ -189,7 +189,7 @@ AI_PROVIDER=groq
 ```env
 OPENROUTER_API_KEY=your_key
 OPENROUTER_MODEL=openrouter/auto
-OPENROUTER_MODELS=openrouter/free,openai/gpt-oss-120b:free,openai/gpt-oss-20b:free,meta-llama/llama-3.3-70b-instruct:free,qwen/qwen3-next-80b-a3b-instruct:free,google/gemma-4-31b-it:free
+OPENROUTER_MODELS=openrouter/free,openai/gpt-oss-120b:free,openai/gpt-oss-20b:free,google/gemma-4-26b-a4b-it:free,qwen/qwen3-next-80b-a3b-instruct:free,google/gemma-4-31b-it:free,nex-agi/nex-n2-pro:free,nvidia/nemotron-3-super-120b-a12b:free,nvidia/nemotron-nano-9b-v2:free,meta-llama/llama-3.3-70b-instruct:free,qwen/qwen3-coder:free,cognitivecomputations/dolphin-mistral-24b-venice-edition:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_SITE_URL=http://localhost:3000
 OPENROUTER_APP_NAME=Groundwater Dashboard AI
@@ -203,6 +203,9 @@ AI_PROVIDER=openrouter
   محدودیت نرخ حساب Google AI Studio روی آن اعمال می‌شود.
 - مدل‌های OpenRouter با پسوند `:free` یا مدل `openrouter/free` رایگان هستند.
   فهرست آن‌ها ممکن است تغییر کند و از طریق `OPENROUTER_MODELS` قابل تنظیم است.
+- بعضی مدل‌های free، `response_format=json_object` را به‌صورت native پشتیبانی
+  نمی‌کنند. در این پروژه اگر OpenRouter چنین خطایی برگرداند، همان درخواست یک
+  بار بدون JSON mode تکرار می‌شود تا مدل‌های سازگار بیشتری قابل استفاده باشند.
 - مدل‌های Groq از سهمیه Free Tier حساب استفاده می‌کنند و محدودیت نرخ دارند.
   فهرست قابل انتخاب از طریق `GROQ_MODELS` کنترل می‌شود.
 - فقط مدل‌های allowlist‌شده در متغیرهای بالا پذیرفته می‌شوند تا model ID
