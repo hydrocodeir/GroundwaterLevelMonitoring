@@ -21,7 +21,7 @@ class OpenRouterClient:
         return "openrouter"
 
     @staticmethod
-    def _supports_native_json_mode_error(message: str) -> bool:
+    def _is_retryable_parameter_error(message: str) -> bool:
         normalized = (message or "").strip().lower()
         return any(
             pattern in normalized
@@ -31,20 +31,27 @@ class OpenRouterClient:
                 "structured_outputs",
                 "json_object",
                 "unsupported parameter",
+                "another requested parameter",
+                "provider returned a generic error",
             )
         )
+
+    def _should_use_json_mode(self) -> bool:
+        return self.model not in {"openrouter/free", "openrouter/auto"}
 
     def _build_payload(
         self,
         messages: list[dict[str, str]],
         *,
         include_response_format: bool,
+        include_temperature: bool = True,
     ) -> dict[str, object]:
         payload: dict[str, object] = {
             "model": self.model,
             "messages": messages,
-            "temperature": 0.2,
         }
+        if include_temperature:
+            payload["temperature"] = 0.2
         if include_response_format:
             payload["response_format"] = {"type": "json_object"}
         return payload
@@ -59,27 +66,44 @@ class OpenRouterClient:
             headers["HTTP-Referer"] = self.site_url
         if self.app_name:
             headers["X-Title"] = self.app_name
-        try:
-            return post_chat_completion(
-                provider=self.provider_name,
-                url=f"{self.base_url.rstrip('/')}/chat/completions",
-                headers=headers,
-                payload=self._build_payload(
-                    messages,
-                    include_response_format=True,
-                ),
-                timeout_seconds=self.timeout_seconds,
-            )
-        except AIProviderError as error:
-            if not self._supports_native_json_mode_error(error.message):
-                raise
-            return post_chat_completion(
-                provider=self.provider_name,
-                url=f"{self.base_url.rstrip('/')}/chat/completions",
-                headers=headers,
-                payload=self._build_payload(
-                    messages,
-                    include_response_format=False,
-                ),
-                timeout_seconds=self.timeout_seconds,
-            )
+        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        attempts = [
+            self._build_payload(
+                messages,
+                include_response_format=self._should_use_json_mode(),
+            ),
+            self._build_payload(
+                messages,
+                include_response_format=False,
+            ),
+            self._build_payload(
+                messages,
+                include_response_format=False,
+                include_temperature=False,
+            ),
+        ]
+        seen_payloads: set[str] = set()
+        last_error: AIProviderError | None = None
+        for payload in attempts:
+            payload_key = repr(payload)
+            if payload_key in seen_payloads:
+                continue
+            seen_payloads.add(payload_key)
+            try:
+                return post_chat_completion(
+                    provider=self.provider_name,
+                    url=url,
+                    headers=headers,
+                    payload=payload,
+                    timeout_seconds=self.timeout_seconds,
+                )
+            except AIProviderError as error:
+                last_error = error
+                if not self._is_retryable_parameter_error(error.message):
+                    raise
+        if last_error is not None:
+            raise last_error
+        raise AIProviderError(
+            "openrouter request failed before a completion attempt was made.",
+            self.provider_name,
+        )

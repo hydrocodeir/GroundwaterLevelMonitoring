@@ -433,6 +433,38 @@ class AIServiceTests(unittest.TestCase):
         self.assertNotIn("gemini-secret", json.dumps(options))
         self.assertTrue(providers["groq"]["models"])
 
+    def test_ai_options_adds_openrouter_credit_hint_for_router_models(self) -> None:
+        with patch(
+            "app.services.ai.service.get_openrouter_credits",
+            return_value={
+                "data": {
+                    "total_credits": 100.5,
+                    "total_usage": 25.25,
+                }
+            },
+        ):
+            options = get_ai_options(
+                AIConfig(
+                    provider="openrouter",
+                    groq_api_key="",
+                    groq_model="llama-3.1-8b-instant",
+                    groq_base_url="https://api.groq.com/openai/v1",
+                    openrouter_api_key="openrouter-key",
+                    openrouter_model="openrouter/free",
+                    openrouter_base_url="https://openrouter.ai/api/v1",
+                    openrouter_site_url="http://localhost:3000",
+                    openrouter_app_name="Groundwater Dashboard AI",
+                    openrouter_models=("openrouter/free", "openrouter/auto"),
+                    gemini_api_key="",
+                )
+            )
+
+        providers = {provider["id"]: provider for provider in options["providers"]}
+        models = {model["id"]: model for model in providers["openrouter"]["models"]}
+        self.assertIn("75.25 credits", models["openrouter/free"]["usage_hint"])
+        self.assertIn("75.25 credits", models["openrouter/auto"]["usage_hint"])
+        self.assertIn("توکن باقی", models["openrouter/free"]["usage_hint"])
+
     def test_generic_provider_forbidden_error_gets_actionable_message(self) -> None:
         from urllib.error import HTTPError
 
@@ -589,6 +621,53 @@ class AIServiceTests(unittest.TestCase):
         second_payload = complete.call_args_list[1].kwargs["payload"]
         self.assertEqual(first_payload["response_format"], {"type": "json_object"})
         self.assertNotIn("response_format", second_payload)
+
+    def test_openrouter_router_models_skip_json_mode(self) -> None:
+        with patch(
+            "app.services.ai.openrouter_client.post_chat_completion",
+            return_value='{"answer":"ok"}',
+        ) as complete:
+            client = OpenRouterClient(
+                api_key="test-key",
+                model="openrouter/free",
+            )
+            content = client.complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(content, '{"answer":"ok"}')
+        payload = complete.call_args.kwargs["payload"]
+        self.assertNotIn("response_format", payload)
+        self.assertEqual(payload["temperature"], 0.2)
+
+    def test_openrouter_generic_provider_error_retries_minimal_payload(self) -> None:
+        with patch(
+            "app.services.ai.openrouter_client.post_chat_completion",
+            side_effect=[
+                AIProviderError(
+                    "openrouter provider returned a generic error. The selected model may not support response_format=json_object or another requested parameter.",
+                    "openrouter",
+                ),
+                AIProviderError(
+                    "openrouter provider returned a generic error. The selected model may not support response_format=json_object or another requested parameter.",
+                    "openrouter",
+                ),
+                '{"answer":"ok"}',
+            ],
+        ) as complete:
+            client = OpenRouterClient(
+                api_key="test-key",
+                model="openai/gpt-oss-20b:free",
+            )
+            content = client.complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(content, '{"answer":"ok"}')
+        first_payload = complete.call_args_list[0].kwargs["payload"]
+        second_payload = complete.call_args_list[1].kwargs["payload"]
+        third_payload = complete.call_args_list[2].kwargs["payload"]
+        self.assertIn("response_format", first_payload)
+        self.assertNotIn("response_format", second_payload)
+        self.assertIn("temperature", second_payload)
+        self.assertNotIn("response_format", third_payload)
+        self.assertNotIn("temperature", third_payload)
 
     def test_openrouter_generic_provider_error_gets_actionable_message(self) -> None:
         from urllib.error import HTTPError

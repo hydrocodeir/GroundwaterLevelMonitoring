@@ -42,6 +42,52 @@ def _normalize_provider_error_message(provider: str, message: str) -> str:
     return message
 
 
+def get_openrouter_credits(
+    *,
+    base_url: str,
+    api_key: str,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    request = urlrequest.Request(
+        f"{base_url.rstrip('/')}/credits",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    try:
+        with urlrequest.urlopen(request, timeout=timeout_seconds) as response:
+            raw = response.read().decode("utf-8")
+    except urlerror.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        message = _extract_error_message(
+            body,
+            f"openrouter credits request failed with HTTP {error.code}.",
+        )
+        raise AIProviderError(message, "openrouter") from error
+    except urlerror.URLError as error:
+        reason = getattr(error, "reason", error)
+        raise AIProviderError(
+            f"openrouter credits request failed: {reason}",
+            "openrouter",
+        ) from error
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise AIProviderError(
+            "openrouter returned invalid credits JSON.",
+            "openrouter",
+        ) from error
+    if not isinstance(payload, dict):
+        raise AIProviderError(
+            "openrouter returned an invalid credits response.",
+            "openrouter",
+        )
+    return payload
+
+
 def post_chat_completion(
     *,
     provider: str,

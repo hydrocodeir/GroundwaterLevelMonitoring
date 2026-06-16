@@ -401,6 +401,34 @@
     return "این provider موقتاً در دسترس نیست. یک provider دیگر را انتخاب کنید.";
   }
 
+  function selectedModel(provider, modelId) {
+    return provider?.models?.find(model => model.id === modelId) || null;
+  }
+
+  function providerModelHint(provider) {
+    if (!provider) return "";
+    if (provider.id === "groq") {
+      return "مدل‌های Groq از سهمیه Free Tier حساب شما استفاده می‌کنند و محدودیت نرخ دارند.";
+    }
+    if (provider.id === "gemini") {
+      return "Gemini 3.5 Flash در Free Tier ورودی و خروجی رایگان دارد و محدودیت نرخ حساب اعمال می‌شود.";
+    }
+    return "مدل‌های دارای برچسب رایگان هزینه توکن ندارند؛ دسترسی و ظرفیت آن‌ها ممکن است تغییر کند.";
+  }
+
+  function joinHints(...items) {
+    return items.filter(Boolean).join(" ");
+  }
+
+  function updateAiModelHint() {
+    const modelSelect = document.getElementById("aiModel");
+    const hint = document.getElementById("aiModelHint");
+    const provider = selectedAiProvider();
+    if (!modelSelect || !hint || !provider?.enabled || isAiProviderBlocked(provider.id)) return;
+    const model = selectedModel(provider, modelSelect.value);
+    hint.textContent = joinHints(model?.usage_hint, providerModelHint(provider));
+  }
+
   function syncAiModelOptions() {
     const modelSelect = document.getElementById("aiModel");
     const hint = document.getElementById("aiModelHint");
@@ -425,11 +453,7 @@
     });
     modelSelect.disabled = !provider.models.length;
     analyzeButton.disabled = !provider.models.length;
-    hint.textContent = provider.id === "groq"
-      ? "مدل‌های Groq از سهمیه Free Tier حساب شما استفاده می‌کنند و محدودیت نرخ دارند."
-      : provider.id === "gemini"
-        ? "Gemini 3.5 Flash در Free Tier ورودی و خروجی رایگان دارد و محدودیت نرخ حساب اعمال می‌شود."
-        : "مدل‌های دارای برچسب رایگان هزینه توکن ندارند؛ دسترسی و ظرفیت آن‌ها ممکن است تغییر کند.";
+    updateAiModelHint();
   }
 
   function renderAiOptions(options) {
@@ -493,6 +517,7 @@
 
   function syncChatModelOptions() {
     const modelSelect = document.getElementById("aquiferChatModel");
+    const hint = document.getElementById("aquiferChatModelHint");
     const sendButton = document.getElementById("aquiferChatSend");
     const provider = selectedChatProvider();
     if (!modelSelect || !sendButton) return;
@@ -500,6 +525,7 @@
     if (!provider?.enabled || isAiProviderBlocked(provider.id)) {
       modelSelect.disabled = true;
       sendButton.disabled = true;
+      if (hint) hint.textContent = provider ? providerUnavailableHint(provider.id) : "";
       return;
     }
     provider.models.forEach(model => {
@@ -511,6 +537,16 @@
     });
     modelSelect.disabled = !provider.models.length;
     sendButton.disabled = !provider.models.length;
+    updateChatModelHint();
+  }
+
+  function updateChatModelHint() {
+    const modelSelect = document.getElementById("aquiferChatModel");
+    const hint = document.getElementById("aquiferChatModelHint");
+    const provider = selectedChatProvider();
+    if (!modelSelect || !hint || !provider?.enabled || isAiProviderBlocked(provider.id)) return;
+    const model = selectedModel(provider, modelSelect.value);
+    hint.textContent = joinHints(model?.usage_hint, providerModelHint(provider));
   }
 
   function renderChatAiOptions(options) {
@@ -788,6 +824,7 @@
       "change",
       syncChatModelOptions
     );
+    document.getElementById("aquiferChatModel")?.addEventListener("change", updateChatModelHint);
     document.getElementById("aquiferChatForm")?.addEventListener("submit", event => {
       event.preventDefault();
       sendAquiferChatMessage();
@@ -3399,6 +3436,7 @@
       analyzeWithAi(root);
     });
     root.querySelector("#aiProvider")?.addEventListener("change", syncAiModelOptions);
+    root.querySelector("#aiModel")?.addEventListener("change", updateAiModelHint);
     root.querySelector("#startYear").addEventListener("change", () => renderMonthOptions("start"));
     root.querySelector("#endYear").addEventListener("change", () => renderMonthOptions("end"));
     root.querySelector("#comparisonStartYear").addEventListener(

@@ -20,6 +20,7 @@ from app.services.ai.errors import (
 )
 from app.services.ai.groq_client import GroqClient
 from app.services.ai.gemini_client import GeminiClient
+from app.services.ai.http_client import get_openrouter_credits
 from app.services.ai.openrouter_client import OpenRouterClient
 from app.services.ai.prompts import (
     build_chat_question_prompt,
@@ -526,6 +527,74 @@ def get_ai_service() -> AIAnalysisService:
     return AIAnalysisService()
 
 
+def _format_openrouter_credits(value: float) -> str:
+    text = f"{value:.4f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _openrouter_credit_status(config: AIConfig) -> dict[str, Any] | None:
+    if not config.openrouter_api_key:
+        return None
+    try:
+        payload = get_openrouter_credits(
+            base_url=config.openrouter_base_url,
+            api_key=config.openrouter_api_key,
+            timeout_seconds=min(config.timeout_seconds, 8),
+        )
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            raise AIProviderError(
+                "openrouter returned an invalid credits response.",
+                "openrouter",
+            )
+        total_credits = _coerce_float(data.get("total_credits"))
+        total_usage = _coerce_float(data.get("total_usage"))
+        remaining = (
+            total_credits - total_usage
+            if total_credits is not None and total_usage is not None
+            else None
+        )
+        return {
+            "available": remaining is not None,
+            "total_credits": total_credits,
+            "total_usage": total_usage,
+            "remaining_credits": remaining,
+        }
+    except Exception as error:
+        LOGGER.info("OpenRouter credit status is unavailable: %s", error)
+        return {
+            "available": False,
+            "message": "وضعیت اعتبار OpenRouter در حال حاضر قابل دریافت نیست.",
+        }
+
+
+def _model_usage_hint(
+    *,
+    provider: str,
+    model: str,
+    openrouter_credit_status: dict[str, Any] | None,
+) -> str:
+    if provider != "openrouter" or model not in {"openrouter/free", "openrouter/auto"}:
+        return ""
+    token_note = (
+        f"OpenRouter برای {model} توکن باقی‌مانده‌ی جداگانه و مدل‌محور گزارش نمی‌کند."
+    )
+    if openrouter_credit_status and openrouter_credit_status.get("available"):
+        remaining = _coerce_float(openrouter_credit_status.get("remaining_credits"))
+        if remaining is not None:
+            return (
+                "اعتبار باقی‌مانده حساب OpenRouter: "
+                f"{_format_openrouter_credits(max(remaining, 0))} credits. "
+                f"{token_note}"
+            )
+    unavailable = (
+        openrouter_credit_status.get("message")
+        if openrouter_credit_status
+        else "وضعیت اعتبار OpenRouter در دسترس نیست."
+    )
+    return f"{unavailable} {token_note}"
+
+
 def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
     config = config or AIConfig.from_env()
     labels = {
@@ -534,6 +603,7 @@ def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
         "gemini": "Gemini",
     }
     providers = []
+    openrouter_credit_status = _openrouter_credit_status(config)
     for provider in ("openrouter", "gemini", "groq"):
         models = []
         for model in config.allowed_models_for(provider):
@@ -547,6 +617,11 @@ def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
                     "id": model,
                     "label": model,
                     "free": is_free,
+                    "usage_hint": _model_usage_hint(
+                        provider=provider,
+                        model=model,
+                        openrouter_credit_status=openrouter_credit_status,
+                    ),
                 }
             )
         default_model = config.default_model_for(provider)
