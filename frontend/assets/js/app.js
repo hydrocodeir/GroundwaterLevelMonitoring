@@ -17,6 +17,7 @@
     aquiferNdviChart: null,
     aquiferAetChart: null,
     aquiferAnnualChangesChart: null,
+    aquiferRiskSignalChart: null,
     observer: null,
     requestToken: 0,
     currentData: null,
@@ -330,6 +331,7 @@
       lag_analysis: llmInput.lag_analysis || {},
       stress_indicators: llmInput.stress_indicators || {},
       agricultural_pressure: analysis.agricultural_pressure || {},
+      risk_assessment: analysis.risk_assessment || llmInput.risk_assessment || {},
       driver_classification: analysis.driver_classification || {},
       data_context: {
         start_month: data.filters.start_month,
@@ -1017,6 +1019,74 @@
   function trendChip(label, trend, variant = "") {
     const direction = trend?.direction || "insufficient";
     return `<span class="trend-chip ${direction} ${variant}"><b>${label}</b><span>${trendText(trend, true)}</span></span>`;
+  }
+
+  function riskLevelLabel(level) {
+    return {
+      low: "کم",
+      moderate: "متوسط",
+      high: "زیاد",
+      critical: "بحرانی",
+      insufficient: "داده ناکافی"
+    }[level] || "نامشخص";
+  }
+
+  function riskLevelColor(level) {
+    return {
+      low: "#059669",
+      moderate: "#D97706",
+      high: "#E76F51",
+      critical: "#DC2626",
+      insufficient: "#94A3B8"
+    }[level] || "#64748B";
+  }
+
+  function riskBadgeClass(level) {
+    return {
+      low: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      moderate: "border-amber-200 bg-amber-50 text-amber-700",
+      high: "border-coral/20 bg-coral/10 text-coral",
+      critical: "border-red-200 bg-red-50 text-red-700",
+      insufficient: "border-slate-200 bg-slate-50 text-slate-500"
+    }[level] || "border-slate-200 bg-slate-50 text-slate-500";
+  }
+
+  function driverLabel(label) {
+    return {
+      "Climate Dominated": "غلبه اقلیمی",
+      "Human Dominated": "غلبه انسانی/کشاورزی",
+      "Mixed Influence": "اثر ترکیبی"
+    }[label] || "نامشخص";
+  }
+
+  function confidenceLabel(confidence) {
+    return {
+      low: "کم",
+      medium: "متوسط",
+      high: "زیاد"
+    }[confidence] || "نامشخص";
+  }
+
+  function scorePercent(value) {
+    const number = toNumber(value);
+    return number === null ? "—" : `${faNumber.format(number)}٪`;
+  }
+
+  function scoreBar(label, score, detail, color = "#087E8B") {
+    const value = toNumber(score);
+    const width = value === null ? 0 : Math.max(0, Math.min(100, value));
+    return `
+      <div class="rounded-xl border border-slate-200 bg-white p-3">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-[11px] font-bold text-navy">${label}</span>
+          <span dir="ltr" class="text-xs font-bold" style="color:${color}">${scorePercent(value)}</span>
+        </div>
+        <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div class="h-full rounded-full" style="width:${width}%;background:${color}"></div>
+        </div>
+        <div class="mt-2 text-[10px] leading-5 text-slate-500">${detail}</div>
+      </div>
+    `;
   }
 
   function alignedTrendSeries(trend, categories) {
@@ -1915,6 +1985,7 @@
     state.aquiferNdviChart = null;
     state.aquiferAetChart = null;
     state.aquiferAnnualChangesChart = null;
+    state.aquiferRiskSignalChart = null;
     document.getElementById("wellDetailModal")?.classList.add("hidden");
     document.getElementById("precipitationDetailModal")?.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
@@ -2956,6 +3027,263 @@
     `;
   }
 
+  function renderAquiferRiskPanel(data) {
+    const panel = document.getElementById("aquiferRiskPanel");
+    if (!panel || panel.closest(".hidden")) return;
+    if (state.aquiferRiskSignalChart) {
+      state.aquiferRiskSignalChart.dispose();
+      state.charts = state.charts.filter(chart => chart !== state.aquiferRiskSignalChart);
+      state.aquiferRiskSignalChart = null;
+    }
+
+    const analysis = data.time_series_analysis || {};
+    const risk = analysis.risk_assessment || {};
+    const driver = analysis.driver_classification || {};
+    const stress = analysis.stress_indicators || {};
+    const factors = risk.factors || {};
+    const level = risk.level || "insufficient";
+    const score = toNumber(risk.score);
+    const color = riskLevelColor(level);
+    const period = analysis.period || {};
+    const climateScore = toNumber(driver.climate_score);
+    const humanScore = toNumber(driver.human_score);
+    const precipitationStrength = toNumber(driver.signals?.precipitation_strength);
+    const declinePersistence = factors.decline_persistence || {};
+    const meanDecline = factors.mean_decline || {};
+    const maxDecline = factors.max_decline || {};
+    const anomalyFactor = factors.anomaly_frequency || {};
+    const pressureFactor = factors.agricultural_pressure || {};
+    const anomalyYears = anomalyFactor.years || [];
+    const pressureYears = pressureFactor.years || [];
+    const declinePeriods = stress.consecutive_decline_periods || [];
+    const driverSummary = {
+      "Climate Dominated": "پاسخ آبخوان به بارش پررنگ‌تر از سیگنال‌های کشاورزی دیده شده است.",
+      "Human Dominated": "افت پایدار است و همزمان شاخص‌های کشاورزی یا سطح کشت آبی سیگنال افزایشی دارند.",
+      "Mixed Influence": "هم اقلیم و هم فشار کشاورزی در تغییرات تراز نقش قابل مشاهده دارند."
+    }[driver.label] || "برای تفکیک محرک غالب، داده کافی یا سیگنال روشن وجود ندارد.";
+
+    const factorRows = [
+      scoreBar(
+        "پایداری افت",
+        declinePersistence.score,
+        `${faNumber.format(declinePersistence.declining_year_count || 0)} سال افت از ${faNumber.format(declinePersistence.water_year_count || period.water_year_count || 0)} سال آبی`,
+        color
+      ),
+      scoreBar(
+        "میانگین افت سالانه",
+        meanDecline.score,
+        `${formatNumber(meanDecline.value_m, " متر")} در سال آبی`,
+        "#E76F51"
+      ),
+      scoreBar(
+        "بیشینه افت سالانه",
+        maxDecline.score,
+        `${formatNumber(maxDecline.value_m, " متر")} در شدیدترین سال`,
+        "#DC2626"
+      ),
+      scoreBar(
+        "سال‌های نابهنجار",
+        anomalyFactor.score,
+        `${faNumber.format(anomalyFactor.count || 0)} سال با افت غیرعادی`,
+        "#7C3AED"
+      ),
+      scoreBar(
+        "فشار کشاورزی همزمان",
+        pressureFactor.score,
+        `${faNumber.format(pressureFactor.simultaneous_pressure_year_count || 0)} سال با رشد کشت/NDVI و افت همزمان`,
+        "#D97706"
+      )
+    ].join("");
+
+    const correlations = [
+      ["بارش همان سال", analysis.correlations?.precipitation],
+      ["بارش با تاخیر ۱ سال", analysis.lag_analysis?.lag_1],
+      ["بارش با تاخیر ۲ سال", analysis.lag_analysis?.lag_2],
+      ["AET", analysis.correlations?.aet],
+      ["NDVI", analysis.correlations?.ndvi],
+      ["سطح کشت آبی", analysis.correlations?.irrigated_area]
+    ];
+    const correlationCards = correlations.map(([label, item]) => {
+      const coefficient = toNumber(
+        item?.spearman?.coefficient ?? item?.pearson?.coefficient
+      );
+      const count = item?.n ?? 0;
+      const tone = coefficient === null
+        ? "text-slate-400"
+        : coefficient < 0
+          ? "text-teal"
+          : "text-coral";
+      return `
+        <div class="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          <div class="text-[10px] text-slate-500">${label}</div>
+          <div dir="ltr" class="mt-1 text-base font-bold ${tone}">
+            ${coefficient === null ? "—" : faNumber.format(coefficient)}
+          </div>
+          <div class="mt-1 text-[9px] text-slate-400">${faNumber.format(count)} سال مشترک</div>
+        </div>
+      `;
+    }).join("");
+
+    const yearPills = (items, emptyText, formatter) => (
+      items.length
+        ? items.map(formatter).join("")
+        : `<span class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-400">${emptyText}</span>`
+    );
+
+    panel.innerHTML = `
+      <div class="grid gap-4 xl:grid-cols-[1.1fr_1.4fr]">
+        <section class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+          <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <div class="flex h-32 w-32 shrink-0 items-center justify-center rounded-full p-2" style="background:conic-gradient(${color} ${score || 0}%, #E2E8F0 0)">
+              <div class="flex h-full w-full flex-col items-center justify-center rounded-full bg-white text-center shadow-sm">
+                <div dir="ltr" class="text-3xl font-bold text-navy">${score === null ? "—" : faNumber.format(score)}</div>
+                <div class="mt-1 text-[10px] text-slate-400">از ۱۰۰</div>
+              </div>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-full border px-3 py-1 text-[10px] font-bold ${riskBadgeClass(level)}">ریسک ${riskLevelLabel(level)}</span>
+                <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] text-slate-500">اطمینان ${confidenceLabel(risk.confidence || driver.confidence)}</span>
+              </div>
+              <h4 class="mt-3 text-lg font-bold text-navy">محرک غالب: ${driverLabel(driver.label)}</h4>
+              <p class="mt-2 text-xs leading-6 text-slate-600">${driverSummary}</p>
+              <div class="mt-4 grid grid-cols-3 gap-2">
+                <div class="rounded-xl bg-white px-3 py-2 text-center">
+                  <div class="text-[9px] text-slate-400">اقلیم</div>
+                  <div dir="ltr" class="mt-1 text-sm font-bold text-sky-700">${scorePercent(climateScore === null ? null : climateScore * 100)}</div>
+                </div>
+                <div class="rounded-xl bg-white px-3 py-2 text-center">
+                  <div class="text-[9px] text-slate-400">کشاورزی/انسانی</div>
+                  <div dir="ltr" class="mt-1 text-sm font-bold text-amber-700">${scorePercent(humanScore === null ? null : humanScore * 100)}</div>
+                </div>
+                <div class="rounded-xl bg-white px-3 py-2 text-center">
+                  <div class="text-[9px] text-slate-400">ارتباط بارش</div>
+                  <div dir="ltr" class="mt-1 text-sm font-bold text-teal">${scorePercent(precipitationStrength === null ? null : precipitationStrength * 100)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="aquiferRiskSignalChart" class="mt-5 h-56 w-full"></div>
+        </section>
+
+        <section class="grid gap-3 sm:grid-cols-2">
+          ${factorRows}
+        </section>
+      </div>
+
+      <div class="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <section class="rounded-2xl border border-slate-200 bg-white p-4">
+          <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+            <div>
+              <h4 class="text-sm font-bold text-navy">سال‌های هشدار و دوره‌های افت</h4>
+              <p class="mt-1 text-[10px] leading-5 text-slate-500">همه سال‌ها بر اساس سال آبی فارسی مهر تا شهریور گزارش می‌شوند.</p>
+            </div>
+            <span dir="ltr" class="rounded-lg bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-500">
+              ${period.start_water_year || "—"} تا ${period.end_water_year || "—"}
+            </span>
+          </div>
+          <div class="mt-4 grid gap-3 md:grid-cols-3">
+            <div>
+              <div class="mb-2 text-[10px] font-bold text-slate-500">افت نابهنجار</div>
+              <div class="flex flex-wrap gap-2">
+                ${yearPills(anomalyYears, "سال نابهنجار دیده نشد", item => `
+                  <span class="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[10px] text-red-700">
+                    <b dir="ltr">${item.water_year}</b>
+                    <span dir="ltr" class="block">${formatNumber(item.value_m, " m")}</span>
+                  </span>
+                `)}
+              </div>
+            </div>
+            <div>
+              <div class="mb-2 text-[10px] font-bold text-slate-500">فشار کشاورزی همزمان</div>
+              <div class="flex flex-wrap gap-2">
+                ${yearPills(pressureYears, "سال همزمان شناسایی نشد", item => `
+                  <span class="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] text-amber-700">
+                    <b dir="ltr">${item.water_year}</b>
+                    <span dir="ltr" class="block">${formatNumber(item.groundwater_decline_m, " m")}</span>
+                  </span>
+                `)}
+              </div>
+            </div>
+            <div>
+              <div class="mb-2 text-[10px] font-bold text-slate-500">طولانی‌ترین دوره‌های افت</div>
+              <div class="flex flex-wrap gap-2">
+                ${yearPills(
+                  [...declinePeriods].sort((a, b) => (
+                    (b.length_years || 0) - (a.length_years || 0)
+                  )).slice(0, 3),
+                  "دوره پیوسته‌ای ثبت نشد",
+                  item => `
+                    <span class="rounded-lg border border-coral/20 bg-coral/10 px-3 py-2 text-[10px] text-coral">
+                      <b dir="ltr">${item.start_water_year}</b>
+                      <span class="block">${faNumber.format(item.length_years || 0)} سال · ${formatNumber(item.total_decline_m, " متر")}</span>
+                    </span>
+                  `
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+          <h4 class="text-sm font-bold text-navy">همبستگی با افت سالانه</h4>
+          <p class="mt-1 text-[10px] leading-5 text-slate-500">عددها ضریب همبستگی رتبه‌ای/پیرسون قابل محاسبه برای سال‌های مشترک هستند.</p>
+          <div class="mt-4 grid grid-cols-2 gap-2">
+            ${correlationCards}
+          </div>
+        </section>
+      </div>
+    `;
+
+    const chartElement = document.getElementById("aquiferRiskSignalChart");
+    if (!chartElement) return;
+    const chartScores = [
+      ["پایداری افت", toNumber(declinePersistence.score)],
+      ["میانگین افت", toNumber(meanDecline.score)],
+      ["بیشینه افت", toNumber(maxDecline.score)],
+      ["سال نابهنجار", toNumber(anomalyFactor.score)],
+      ["فشار کشاورزی", toNumber(pressureFactor.score)]
+    ];
+    state.aquiferRiskSignalChart = echarts.init(chartElement);
+    state.charts.push(state.aquiferRiskSignalChart);
+    state.aquiferRiskSignalChart.setOption({
+      animationDuration: 450,
+      textStyle: { fontFamily: "Vazirmatn", color: "#475569" },
+      grid: { top: 12, right: 18, bottom: 24, left: 92 },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        textStyle: { fontFamily: "Vazirmatn" },
+        valueFormatter: value => value == null ? "بدون داده" : `${faNumber.format(value)}٪`
+      },
+      xAxis: {
+        type: "value",
+        min: 0,
+        max: 100,
+        axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
+        splitLine: { lineStyle: { color: "#E9EFF2", type: "dashed" } }
+      },
+      yAxis: {
+        type: "category",
+        data: chartScores.map(item => item[0]),
+        axisLabel: { fontSize: 10 },
+        axisLine: { show: false },
+        axisTick: { show: false }
+      },
+      series: [{
+        name: "امتیاز عامل",
+        type: "bar",
+        data: chartScores.map(item => item[1]),
+        barMaxWidth: 14,
+        itemStyle: {
+          color,
+          borderRadius: [0, 5, 5, 0]
+        }
+      }]
+    }, true);
+    state.aquiferRiskSignalChart.resize();
+  }
+
   function renderAquiferAnnualTable(data) {
     const container = document.getElementById("aquiferAnnualTable");
     const rows = data.annual_decline.map(row => `
@@ -3358,7 +3686,7 @@
     scope.querySelectorAll(`[data-tab-panel^="${group}-"]`).forEach(panel => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== `${group}-${tab}`);
     });
-    if (tab === "chart" || tab === "ndvi" || tab === "aet" || tab === "annual") {
+    if (tab === "chart" || tab === "ndvi" || tab === "aet" || tab === "annual" || tab === "risk") {
       const chartElement = scope.querySelector("[data-well-chart]");
       if (chartElement && state.observer) state.observer.observe(chartElement);
       if (group === "aquifer" && tab === "ndvi") {
@@ -3369,6 +3697,9 @@
       }
       if (group === "aquifer" && tab === "annual") {
         window.requestAnimationFrame(() => renderAquiferAnnualChanges(state.currentData));
+      }
+      if (group === "aquifer" && tab === "risk") {
+        window.requestAnimationFrame(() => renderAquiferRiskPanel(state.currentData));
       }
       window.setTimeout(() => state.charts.forEach(chart => chart.resize()), 50);
       window.setTimeout(() => state.modalChart?.resize(), 50);

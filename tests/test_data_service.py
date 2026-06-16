@@ -340,8 +340,10 @@ class GroundwaterDataTests(unittest.TestCase):
         self.assertIn("lag_analysis", analysis)
         self.assertIn("stress_indicators", analysis)
         self.assertIn("agricultural_pressure", analysis)
+        self.assertIn("risk_assessment", analysis)
         self.assertIn("driver_classification", analysis)
         self.assertIn("llm_input", analysis)
+        self.assertIn("risk_assessment", analysis["llm_input"])
         self.assertNotIn("period", analysis["llm_input"])
 
     def test_time_series_analysis_derives_driver_classification(self) -> None:
@@ -405,6 +407,8 @@ class GroundwaterDataTests(unittest.TestCase):
             analysis["driver_classification"]["label"],
             "Human Dominated",
         )
+        self.assertEqual(analysis["risk_assessment"]["level"], "critical")
+        self.assertGreaterEqual(analysis["risk_assessment"]["score"], 75)
         self.assertTrue(
             analysis["agricultural_pressure"]["joint_growth_index"][
                 "simultaneous_pressure_years"

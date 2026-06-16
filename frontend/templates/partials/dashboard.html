@@ -173,6 +173,7 @@
             <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="ndvi">تراز + NDVI</button>
             <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="aet">تراز + AET</button>
             <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="annual">تغییرات سالانه</button>
+            <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="risk">ریسک و محرک افت</button>
             <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
           </div>
         </div>
@@ -216,6 +217,9 @@
         <div class="mx-5 mb-5 mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[9px] leading-5 text-slate-500">
           بارش و AET مجموع ماه‌های موجود در سال آبی هستند. NDVI به‌صورت پیش‌فرض میانگین شاخص انتخابی در ماه‌های خرداد تا شهریور (۳ تا ۶ شمسی) است و از فهرست بالا می‌توان آن را به کل سال آبی تغییر داد. خط بنفش مساحت احتمالی کشت آبی همین چهار ماه را بر حسب هکتار نشان می‌دهد. سال‌های کمتر از ۱۲ ماه با برچسب «ناقص» مشخص شده‌اند.
         </div>
+      </div>
+      <div class="hidden" data-tab-panel="aquifer-risk">
+        <div id="aquiferRiskPanel" class="p-5"></div>
       </div>
       <div class="hidden" data-tab-panel="aquifer-ndvi">
         <div class="flex justify-end border-b border-slate-100 bg-slate-50/70 px-5 py-3">

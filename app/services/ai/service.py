@@ -729,6 +729,7 @@ def build_aquifer_chat_context(dashboard: dict[str, Any]) -> dict[str, Any]:
             "correlations": analysis.get("correlations", {}),
             "lag_analysis": analysis.get("lag_analysis", {}),
             "stress_indicators": analysis.get("stress_indicators", {}),
+            "risk_assessment": analysis.get("risk_assessment", {}),
             "llm_input": analysis.get("llm_input", {}),
             "agricultural_pressure": analysis.get("agricultural_pressure", {}),
             "driver_classification": analysis.get("driver_classification", {}),

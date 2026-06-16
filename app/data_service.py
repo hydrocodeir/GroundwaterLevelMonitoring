@@ -1560,6 +1560,42 @@ class GroundwaterData:
         self,
         annual_changes: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        def empty_risk_assessment() -> dict[str, Any]:
+            return {
+                "score": None,
+                "level": "insufficient",
+                "label": "Insufficient Data",
+                "confidence": "low",
+                "confidence_score": 0.0,
+                "factors": {
+                    "decline_persistence": {
+                        "score": None,
+                        "value": None,
+                        "declining_year_count": 0,
+                        "water_year_count": 0,
+                    },
+                    "mean_decline": {
+                        "score": None,
+                        "value_m": None,
+                    },
+                    "max_decline": {
+                        "score": None,
+                        "value_m": None,
+                    },
+                    "anomaly_frequency": {
+                        "score": None,
+                        "count": 0,
+                        "years": [],
+                    },
+                    "agricultural_pressure": {
+                        "score": None,
+                        "simultaneous_pressure_year_count": 0,
+                        "years": [],
+                    },
+                },
+                "evidence": [],
+            }
+
         frame = pd.DataFrame(
             [
                 {
@@ -1597,6 +1633,7 @@ class GroundwaterData:
                 "lag_analysis": {},
                 "stress_indicators": {},
                 "agricultural_pressure": {},
+                "risk_assessment": empty_risk_assessment(),
                 "driver_classification": {
                     "label": "Mixed Influence",
                     "confidence": "low",
@@ -1608,6 +1645,7 @@ class GroundwaterData:
                     "correlations": {},
                     "lag_analysis": {},
                     "stress_indicators": {},
+                    "risk_assessment": empty_risk_assessment(),
                     "anomaly_years": [],
                 },
             }
@@ -1882,6 +1920,101 @@ class GroundwaterData:
                 f"{stress_indicators['declining_year_count']} years show groundwater decline."
             ),
         ]
+        anomaly_years = stress_indicators["groundwater_decline_anomaly_years"]
+        simultaneous_pressure_years = joint_summary[
+            "simultaneous_pressure_years"
+        ]
+        year_count = len(years)
+        mean_decline = (
+            stress_indicators["mean_annual_groundwater_decline_m"] or 0
+        )
+        max_decline = (
+            stress_indicators["max_annual_groundwater_decline_m"] or 0
+        )
+        persistence_score = float(np.clip(decline_persistence, 0, 1))
+        mean_decline_score = float(np.clip(max(mean_decline, 0) / 1.0, 0, 1))
+        max_decline_score = float(np.clip(max(max_decline, 0) / 2.0, 0, 1))
+        anomaly_score = float(
+            np.clip((len(anomaly_years) / max(year_count, 1)) * 3, 0, 1)
+        )
+        pressure_score = float(
+            np.clip(
+                max(
+                    human_score,
+                    (
+                        len(simultaneous_pressure_years)
+                        / max(year_count - 1, 1)
+                    )
+                    * 2,
+                ),
+                0,
+                1,
+            )
+        )
+        risk_score = (
+            0.40 * persistence_score
+            + 0.25 * mean_decline_score
+            + 0.15 * max_decline_score
+            + 0.10 * anomaly_score
+            + 0.10 * pressure_score
+        ) * 100
+        risk_level = (
+            "critical"
+            if risk_score >= 75
+            else "high"
+            if risk_score >= 55
+            else "moderate"
+            if risk_score >= 30
+            else "low"
+        )
+        risk_assessment = {
+            "score": finite_or_none(risk_score, 1),
+            "level": risk_level,
+            "label": {
+                "low": "Low",
+                "moderate": "Moderate",
+                "high": "High",
+                "critical": "Critical",
+            }[risk_level],
+            "confidence": confidence,
+            "confidence_score": finite_or_none(confidence_score, 2),
+            "factors": {
+                "decline_persistence": {
+                    "score": finite_or_none(persistence_score * 100, 1),
+                    "value": finite_or_none(decline_persistence, 3),
+                    "declining_year_count": stress_indicators[
+                        "declining_year_count"
+                    ],
+                    "water_year_count": year_count,
+                },
+                "mean_decline": {
+                    "score": finite_or_none(mean_decline_score * 100, 1),
+                    "value_m": finite_or_none(mean_decline, 3),
+                },
+                "max_decline": {
+                    "score": finite_or_none(max_decline_score * 100, 1),
+                    "value_m": finite_or_none(max_decline, 3),
+                },
+                "anomaly_frequency": {
+                    "score": finite_or_none(anomaly_score * 100, 1),
+                    "count": len(anomaly_years),
+                    "years": anomaly_years,
+                },
+                "agricultural_pressure": {
+                    "score": finite_or_none(pressure_score * 100, 1),
+                    "simultaneous_pressure_year_count": len(
+                        simultaneous_pressure_years
+                    ),
+                    "years": simultaneous_pressure_years,
+                },
+            },
+            "evidence": [
+                f"{stress_indicators['declining_year_count']} of {year_count} water years show decline.",
+                f"Mean annual groundwater decline is {mean_decline:.2f} m.",
+                f"{len(anomaly_years)} anomalous decline years were detected.",
+                f"{len(simultaneous_pressure_years)} years combine agricultural growth signals with groundwater decline.",
+            ],
+        }
 
         return {
             "period": {
@@ -1903,6 +2036,7 @@ class GroundwaterData:
                 "ndvi_trend": ndvi_trend,
                 "joint_growth_index": joint_summary,
             },
+            "risk_assessment": risk_assessment,
             "driver_classification": {
                 "label": driver_label,
                 "confidence": confidence,
@@ -1925,6 +2059,7 @@ class GroundwaterData:
                 "correlations": correlations,
                 "lag_analysis": lag_analysis,
                 "stress_indicators": stress_indicators,
+                "risk_assessment": risk_assessment,
                 "anomaly_years": stress_indicators[
                     "groundwater_decline_anomaly_years"
                 ],
