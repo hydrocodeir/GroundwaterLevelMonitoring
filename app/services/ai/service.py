@@ -721,6 +721,7 @@ def build_aquifer_chat_context(dashboard: dict[str, Any]) -> dict[str, Any]:
             if key.endswith("_trend")
         },
         "hydrographs": dashboard.get("hydrographs", {}),
+        "five_year_scenario": dashboard.get("five_year_scenario", {}),
         "annual_decline": dashboard.get("annual_decline", []),
         "annual_changes": dashboard.get("annual_changes", []),
         "time_series_analysis": {

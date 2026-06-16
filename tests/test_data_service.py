@@ -345,6 +345,32 @@ class GroundwaterDataTests(unittest.TestCase):
         self.assertIn("llm_input", analysis)
         self.assertIn("risk_assessment", analysis["llm_input"])
         self.assertNotIn("period", analysis["llm_input"])
+        self.assertIn("five_year_scenario", payload)
+        self.assertIn("thiessen", payload["five_year_scenario"])
+        self.assertEqual(
+            payload["five_year_scenario"]["thiessen"]["forecast_years"],
+            5,
+        )
+
+    def test_five_year_scenario_continues_selected_trend(self) -> None:
+        months = [(1400 * MONTHS_PER_YEAR + month, f"1400-{month:02d}") for month in range(1, 13)]
+        values = {index: 100 - offset for offset, (index, _) in enumerate(months)}
+        trend = self.service._trend(values, months)
+        scenario = self.service._five_year_scenario(
+            values,
+            months,
+            trend,
+            "thiessen",
+        )
+
+        self.assertEqual(scenario["status"], "ok")
+        self.assertEqual(len(scenario["series"]), 5)
+        self.assertAlmostEqual(scenario["decline_per_year_m"], 12, places=3)
+        self.assertAlmostEqual(
+            scenario["series"][-1]["cumulative_decline_m"],
+            60,
+            places=3,
+        )
 
     def test_time_series_analysis_derives_driver_classification(self) -> None:
         rows = [

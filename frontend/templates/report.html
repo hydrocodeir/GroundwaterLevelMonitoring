@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>گزارش آبخوان {{ data.aquifer }}</title>
+    <style>
+      @font-face {
+        font-family: Vazirmatn;
+        src: url("{{ url_for('assets', path='fonts/vazirmatn-arabic-400.woff2') }}") format("woff2");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: Vazirmatn;
+        src: url("{{ url_for('assets', path='fonts/vazirmatn-arabic-700.woff2') }}") format("woff2");
+        font-weight: 700;
+      }
+      @page {
+        size: A4;
+        margin: 10mm;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #e9eff2;
+        color: #172a3a;
+        font-family: Vazirmatn, sans-serif;
+      }
+      .toolbar {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        padding: 14px;
+      }
+      .toolbar button {
+        background: #11395b;
+        border: 0;
+        border-radius: 10px;
+        color: white;
+        cursor: pointer;
+        font-family: inherit;
+        font-weight: 700;
+        padding: 10px 18px;
+      }
+      .page {
+        background: white;
+        box-shadow: 0 18px 45px rgba(17, 57, 91, 0.18);
+        margin: 0 auto 24px;
+        min-height: 277mm;
+        overflow: hidden;
+        padding: 12mm;
+        width: 190mm;
+      }
+      header {
+        align-items: center;
+        border-bottom: 2px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 10px;
+      }
+      h1 {
+        font-size: 22px;
+        line-height: 1.6;
+        margin: 0;
+      }
+      h2 {
+        color: #087e8b;
+        font-size: 11px;
+        margin: 0 0 6px;
+      }
+      .logo {
+        align-items: center;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        display: flex;
+        height: 48px;
+        justify-content: center;
+        overflow: hidden;
+        padding: 4px;
+        width: 48px;
+      }
+      .logo img {
+        max-height: 100%;
+        max-width: 100%;
+      }
+      .meta {
+        color: #64748b;
+        font-size: 10px;
+        line-height: 1.9;
+      }
+      .grid {
+        display: grid;
+        gap: 8px;
+      }
+      .grid.cols-4 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .grid.cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .grid.cols-2 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .card {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px;
+      }
+      .soft {
+        background: #f8fafc;
+      }
+      .label {
+        color: #64748b;
+        font-size: 9px;
+        margin-bottom: 5px;
+      }
+      .value {
+        color: #11395b;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.4;
+      }
+      .note {
+        color: #64748b;
+        font-size: 9px;
+        line-height: 1.8;
+        margin-top: 4px;
+      }
+      .risk {
+        align-items: center;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 86px 1fr;
+      }
+      .ring {
+        align-items: center;
+        background: conic-gradient({% if data.time_series_analysis.risk_assessment.level == 'critical' %}#dc2626{% elif data.time_series_analysis.risk_assessment.level == 'high' %}#e76f51{% elif data.time_series_analysis.risk_assessment.level == 'moderate' %}#d97706{% else %}#059669{% endif %} {{ data.time_series_analysis.risk_assessment.score or 0 }}%, #e2e8f0 0);
+        border-radius: 999px;
+        display: flex;
+        height: 86px;
+        justify-content: center;
+        width: 86px;
+      }
+      .ring-inner {
+        align-items: center;
+        background: white;
+        border-radius: 999px;
+        display: flex;
+        flex-direction: column;
+        height: 66px;
+        justify-content: center;
+        width: 66px;
+      }
+      .pill {
+        background: #f1f5f9;
+        border-radius: 999px;
+        color: #475569;
+        display: inline-block;
+        font-size: 9px;
+        font-weight: 700;
+        margin: 0 0 5px 4px;
+        padding: 4px 8px;
+      }
+      .pill.red {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+      .pill.orange {
+        background: #ffedd5;
+        color: #c2410c;
+      }
+      .pill.teal {
+        background: rgba(8, 126, 139, 0.1);
+        color: #087e8b;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 9px;
+        width: 100%;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #e2e8f0;
+        padding: 6px;
+        text-align: right;
+        white-space: nowrap;
+      }
+      th {
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 700;
+      }
+      .section {
+        margin-top: 10px;
+      }
+      .footer {
+        border-top: 1px solid #e2e8f0;
+        color: #64748b;
+        font-size: 8px;
+        line-height: 1.8;
+        margin-top: 10px;
+        padding-top: 8px;
+      }
+      @media print {
+        body {
+          background: white;
+        }
+        .toolbar {
+          display: none;
+        }
+        .page {
+          box-shadow: none;
+          margin: 0;
+          min-height: auto;
+          padding: 0;
+          width: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button type="button" onclick="window.print()">ذخیره به صورت PDF</button>
+    </div>
+
+    {% set analysis = data.time_series_analysis %}
+    {% set risk = analysis.risk_assessment %}
+    {% set driver = analysis.driver_classification %}
+    {% set scenario = data.five_year_scenario.thiessen %}
+    {% set latest = data.annual_changes|last %}
+
+    <main class="page">
+      <header>
+        <div>
+          <div class="meta">سامانه پایش آب زیرزمینی · گزارش تک‌برگی آبخوان</div>
+          <h1>آبخوان {{ data.aquifer }}</h1>
+          <div class="meta">
+            محدوده مطالعاتی {{ data.mahdoude }} ·
+            بازه {{ data.filters.start_year }}/{{ "%02d"|format(data.filters.start_month) }}
+            تا {{ data.filters.end_year }}/{{ "%02d"|format(data.filters.end_month) }}
+            · سال آبی: مهر تا شهریور
+          </div>
+        </div>
+        <div class="logo">
+          <img src="{{ url_for('assets', path='img/HydroCode.png') }}" alt="HydroCode">
+        </div>
+      </header>
+
+      <section class="section grid cols-4">
+        <div class="card soft">
+          <div class="label">پیزومترهای کل</div>
+          <div class="value">{{ data.stats.total_wells }}</div>
+          <div class="note">داخل محاسبات: {{ data.stats.selected_wells }}</div>
+        </div>
+        <div class="card soft">
+          <div class="label">روش مبنا</div>
+          <div class="value">تیسن</div>
+          <div class="note">{{ data.stats.selected_sites }} ایستگاه مکانی</div>
+        </div>
+        <div class="card soft">
+          <div class="label">شیب تراز</div>
+          <div class="value">{{ data.hydrographs.thiessen_trend.decline_per_year or "—" }}</div>
+          <div class="note">متر افت در سال</div>
+        </div>
+        <div class="card soft">
+          <div class="label">تغییر دوره</div>
+          <div class="value">{{ data.stats.change or "—" }}</div>
+          <div class="note">متر؛ مقدار منفی یعنی افت</div>
+        </div>
+      </section>
+
+      <section class="section grid cols-2">
+        <div class="card risk">
+          <div class="ring">
+            <div class="ring-inner">
+              <strong>{{ risk.score or "—" }}</strong>
+              <span class="label">از ۱۰۰</span>
+            </div>
+          </div>
+          <div>
+            <h2>ریسک و محرک افت</h2>
+            <div>
+              <span class="pill {% if risk.level in ['critical', 'high'] %}red{% elif risk.level == 'moderate' %}orange{% else %}teal{% endif %}">
+                {% if risk.level == "critical" %}بحرانی{% elif risk.level == "high" %}زیاد{% elif risk.level == "moderate" %}متوسط{% elif risk.level == "low" %}کم{% else %}داده ناکافی{% endif %}
+              </span>
+              <span class="pill">
+                {% if driver.label == "Human Dominated" %}غلبه انسانی/کشاورزی{% elif driver.label == "Climate Dominated" %}غلبه اقلیمی{% else %}اثر ترکیبی{% endif %}
+              </span>
+            </div>
+            <div class="note">
+              {{ risk.factors.decline_persistence.declining_year_count or 0 }}
+              سال افت از
+              {{ risk.factors.decline_persistence.water_year_count or analysis.period.water_year_count or 0 }}
+              سال آبی · اطمینان {{ risk.confidence or driver.confidence }}
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>آخرین سال آبی موجود</h2>
+          <table>
+            <tbody>
+              <tr><th>سال آبی</th><td dir="ltr">{{ latest.water_year if latest else "—" }}</td></tr>
+              <tr><th>افت تیسن</th><td>{{ latest.decline.thiessen if latest else "—" }} متر</td></tr>
+              <tr><th>بارش</th><td>{{ latest.precipitation_total if latest else "—" }} میلی‌متر</td></tr>
+              <tr><th>AET</th><td>{{ latest.aet_total if latest else "—" }} میلی‌متر</td></tr>
+              <tr><th>سطح کشت آبی احتمالی</th><td>{{ latest.warm_season_irrigated_area.probable_area_ha if latest else "—" }} هکتار</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section card">
+        <h2>سناریوی ۵ سال آینده با ادامه روند فعلی</h2>
+        <div class="note">
+          مبنا: {{ scenario.baseline_month or "—" }} ·
+          تراز مبنا: {{ scenario.baseline_level_m or "—" }} متر ·
+          نرخ افت روندی: {{ scenario.decline_per_year_m or "—" }} متر/سال
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>افق</th>
+              <th>سال آبی</th>
+              <th>تراز برآوردی</th>
+              <th>افت تجمعی نسبت به مبنا</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in scenario.series %}
+              <tr>
+                <td>{{ row.horizon_year }} سال</td>
+                <td dir="ltr">{{ row.water_year }}</td>
+                <td>{{ row.projected_level_m }} متر</td>
+                <td>{{ row.cumulative_decline_m }} متر</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4">داده کافی برای سناریو وجود ندارد.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section grid cols-3">
+        <div class="card">
+          <h2>سیگنال اقلیمی</h2>
+          <div class="value">{{ driver.climate_score or "—" }}</div>
+          <div class="note">امتیاز نسبی پاسخ به بارش و تاخیرها</div>
+        </div>
+        <div class="card">
+          <h2>سیگنال انسانی/کشاورزی</h2>
+          <div class="value">{{ driver.human_score or "—" }}</div>
+          <div class="note">ترکیب پایداری افت، NDVI و سطح کشت آبی</div>
+        </div>
+        <div class="card">
+          <h2>سال‌های نابهنجار</h2>
+          <div class="value">{{ risk.factors.anomaly_frequency.count or 0 }}</div>
+          <div class="note">
+            {% for item in risk.factors.anomaly_frequency.years[:3] %}
+              <span dir="ltr">{{ item.water_year }}</span>{% if not loop.last %}، {% endif %}
+            {% else %}
+              موردی ثبت نشده است
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <div class="footer">
+        سناریو پیش‌بینی قطعی نیست و فقط ادامه خطی روند منتخب را نشان می‌دهد. همه شاخص‌های سالانه با سال آبی فارسی، از ۱ مهر تا ۳۱ شهریور، محاسبه شده‌اند.
+      </div>
+    </main>
+  </body>
+</html>

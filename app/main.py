@@ -131,6 +131,38 @@ def dashboard_partial(
     )
 
 
+def _dashboard_payload(
+    aquifer_id: str,
+    start_year: int | None = None,
+    start_month: int | None = None,
+    end_year: int | None = None,
+    end_month: int | None = None,
+    comparison_start_year: int | None = None,
+    comparison_start_month: int | None = None,
+    comparison_end_year: int | None = None,
+    comparison_end_month: int | None = None,
+    comparison_enabled: bool = False,
+    continuous_only: bool = True,
+    manual_selection: bool = False,
+    selected_well_ids: list[str] | None = None,
+) -> dict:
+    return get_data_service().dashboard(
+        aquifer_id,
+        start_year=start_year,
+        start_month=start_month,
+        end_year=end_year,
+        end_month=end_month,
+        comparison_start_year=comparison_start_year,
+        comparison_start_month=comparison_start_month,
+        comparison_end_year=comparison_end_year,
+        comparison_end_month=comparison_end_month,
+        comparison_enabled=comparison_enabled,
+        continuous_only=continuous_only,
+        manual_selection=manual_selection,
+        selected_well_ids=selected_well_ids,
+    )
+
+
 @app.get("/api/aquifers/{aquifer_id}")
 def aquifer_data(
     aquifer_id: str,
@@ -148,7 +180,7 @@ def aquifer_data(
     selected_well_ids: list[str] | None = Query(default=None),
 ) -> dict:
     try:
-        return get_data_service().dashboard(
+        return _dashboard_payload(
             aquifer_id,
             start_year=start_year,
             start_month=start_month,
@@ -167,6 +199,51 @@ def aquifer_data(
         raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/reports/aquifer/{aquifer_id}", response_class=HTMLResponse)
+def aquifer_report(
+    request: Request,
+    aquifer_id: str,
+    start_year: int | None = Query(default=None),
+    start_month: int | None = Query(default=None),
+    end_year: int | None = Query(default=None),
+    end_month: int | None = Query(default=None),
+    comparison_start_year: int | None = Query(default=None),
+    comparison_start_month: int | None = Query(default=None),
+    comparison_end_year: int | None = Query(default=None),
+    comparison_end_month: int | None = Query(default=None),
+    comparison_enabled: bool = Query(default=False),
+    continuous_only: bool = Query(default=True),
+    manual_selection: bool = Query(default=False),
+    selected_well_ids: list[str] | None = Query(default=None),
+) -> HTMLResponse:
+    try:
+        payload = _dashboard_payload(
+            aquifer_id,
+            start_year=start_year,
+            start_month=start_month,
+            end_year=end_year,
+            end_month=end_month,
+            comparison_start_year=comparison_start_year,
+            comparison_start_month=comparison_start_month,
+            comparison_end_year=comparison_end_year,
+            comparison_end_month=comparison_end_month,
+            comparison_enabled=comparison_enabled,
+            continuous_only=continuous_only,
+            manual_selection=manual_selection,
+            selected_well_ids=selected_well_ids,
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return templates.TemplateResponse(
+        request=request,
+        name="report.html",
+        context={"data": payload},
+    )
 
 
 @app.get("/api/comparison")

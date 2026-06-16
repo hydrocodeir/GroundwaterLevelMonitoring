@@ -18,6 +18,7 @@
     aquiferAetChart: null,
     aquiferAnnualChangesChart: null,
     aquiferRiskSignalChart: null,
+    aquiferScenarioChart: null,
     observer: null,
     requestToken: 0,
     currentData: null,
@@ -333,6 +334,7 @@
       agricultural_pressure: analysis.agricultural_pressure || {},
       risk_assessment: analysis.risk_assessment || llmInput.risk_assessment || {},
       driver_classification: analysis.driver_classification || {},
+      five_year_scenario: data.five_year_scenario || {},
       data_context: {
         start_month: data.filters.start_month,
         start_year: data.filters.start_year,
@@ -1986,6 +1988,7 @@
     state.aquiferAetChart = null;
     state.aquiferAnnualChangesChart = null;
     state.aquiferRiskSignalChart = null;
+    state.aquiferScenarioChart = null;
     document.getElementById("wellDetailModal")?.classList.add("hidden");
     document.getElementById("precipitationDetailModal")?.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
@@ -3027,6 +3030,194 @@
     `;
   }
 
+  function renderAquiferScenarioPanel(data) {
+    const panel = document.getElementById("aquiferScenarioPanel");
+    if (!panel || panel.closest(".hidden")) return;
+    if (state.aquiferScenarioChart) {
+      state.aquiferScenarioChart.dispose();
+      state.charts = state.charts.filter(chart => chart !== state.aquiferScenarioChart);
+      state.aquiferScenarioChart = null;
+    }
+
+    const previousMethod = document.getElementById("scenarioMethod")?.value || "thiessen";
+    const method = data.five_year_scenario?.[previousMethod]
+      ? previousMethod
+      : "thiessen";
+    const scenario = data.five_year_scenario?.[method] || {};
+    const methodLabel = method === "thiessen" ? "میانگین وزنی تیسن" : "میانگین حسابی";
+    const declineRate = toNumber(scenario.decline_per_year_m);
+    const finalRow = scenario.series?.at(-1);
+    const finalDecline = finalRow?.cumulative_decline_m;
+    const finalLevel = finalRow?.projected_level_m;
+    const directionText = scenario.direction === "decline"
+      ? "ادامه روند افت"
+      : scenario.direction === "rise"
+        ? "ادامه روند افزایش تراز"
+        : scenario.direction === "stable"
+          ? "تراز تقریباً پایدار"
+          : "روند نامشخص";
+
+    panel.innerHTML = `
+      <div class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <section class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+          <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <h4 class="text-base font-bold text-navy">سناریوی ۵ سال آینده</h4>
+              <p class="mt-1 text-[10px] leading-5 text-slate-500">ادامه خطی روند فعلی در بازه منتخب؛ سال‌ها با سال آبی فارسی گزارش می‌شوند.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
+                روش
+                <select id="scenarioMethod" class="field h-9 w-40 text-xs">
+                  <option value="thiessen" ${method === "thiessen" ? "selected" : ""}>تیسن</option>
+                  <option value="arithmetic" ${method === "arithmetic" ? "selected" : ""}>حسابی</option>
+                </select>
+              </label>
+              <button id="scenarioReportButton" type="button" class="secondary-button h-9">گزارش PDF</button>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3 sm:grid-cols-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-3">
+              <div class="text-[10px] text-slate-500">روش مبنا</div>
+              <div class="mt-2 text-sm font-bold text-navy">${methodLabel}</div>
+              <div class="mt-1 text-[9px] text-slate-400">${directionText}</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3">
+              <div class="text-[10px] text-slate-500">تراز مبنا</div>
+              <div dir="ltr" class="mt-2 text-sm font-bold text-navy">${formatNumber(scenario.baseline_level_m, " m")}</div>
+              <div dir="ltr" class="mt-1 text-[9px] text-slate-400">${scenario.baseline_month || "—"}</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3">
+              <div class="text-[10px] text-slate-500">نرخ روندی</div>
+              <div dir="ltr" class="mt-2 text-sm font-bold ${declineRate > 0 ? "text-coral" : declineRate < 0 ? "text-teal" : "text-slate-500"}">${formatSignedNumber(declineRate, " m/y")}</div>
+              <div class="mt-1 text-[9px] text-slate-400">مثبت یعنی افت سالانه</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3">
+              <div class="text-[10px] text-slate-500">نتیجه سال پنجم</div>
+              <div dir="ltr" class="mt-2 text-sm font-bold text-coral">${formatSignedNumber(finalDecline, " m")}</div>
+              <div dir="ltr" class="mt-1 text-[9px] text-slate-400">تراز: ${formatNumber(finalLevel, " m")}</div>
+            </div>
+          </div>
+
+          <div id="aquiferScenarioChart" class="mt-4 h-[360px] w-full"></div>
+        </section>
+
+        <section class="rounded-2xl border border-slate-200 bg-white p-4">
+          <h4 class="text-sm font-bold text-navy">جدول سناریو</h4>
+          <p class="mt-1 text-[10px] leading-5 text-slate-500">مقادیر نسبت به آخرین تراز موجود در بازه انتخابی محاسبه می‌شوند.</p>
+          <div class="table-scroll mt-3 max-h-[430px]">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>افق</th>
+                  <th>سال آبی</th>
+                  <th>تراز برآوردی</th>
+                  <th>افت تجمعی</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${(scenario.series || []).map(row => `
+                  <tr>
+                    <td>${faNumber.format(row.horizon_year)} سال</td>
+                    <td dir="ltr" class="font-bold text-navy">${row.water_year}</td>
+                    <td>${numberCell(row.projected_level_m)}</td>
+                    <td>${metricCell(row.cumulative_decline_m)}</td>
+                  </tr>
+                `).join("") || `
+                  <tr>
+                    <td colspan="4" class="text-center text-slate-400">داده کافی برای ساخت سناریو وجود ندارد.</td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-3 rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-[10px] leading-6 text-slate-600">
+            این سناریو قطعیت پیش‌بینی ندارد و فقط ادامه روند خطی فعلی را نشان می‌دهد؛ تغییر برداشت، تغذیه، خشکسالی یا ترسالی می‌تواند مسیر واقعی را عوض کند.
+          </div>
+        </section>
+      </div>
+    `;
+
+    document.getElementById("scenarioMethod").onchange = () => renderAquiferScenarioPanel(data);
+    document.getElementById("scenarioReportButton").onclick = openPdfReport;
+
+    const chartElement = document.getElementById("aquiferScenarioChart");
+    if (!chartElement) return;
+    const rows = scenario.series || [];
+    const categories = ["مبنا", ...rows.map(row => row.water_year)];
+    const levelData = [scenario.baseline_level_m ?? null, ...rows.map(row => row.projected_level_m)];
+    const declineData = [0, ...rows.map(row => row.cumulative_decline_m)];
+    state.aquiferScenarioChart = echarts.init(chartElement);
+    state.charts.push(state.aquiferScenarioChart);
+    state.aquiferScenarioChart.setOption({
+      animationDuration: 450,
+      textStyle: { fontFamily: "Vazirmatn", color: "#475569" },
+      tooltip: {
+        trigger: "axis",
+        textStyle: { fontFamily: "Vazirmatn" }
+      },
+      legend: {
+        top: 8,
+        right: 12,
+        textStyle: { fontFamily: "Vazirmatn", fontSize: 10 },
+        itemWidth: 16
+      },
+      grid: { top: 64, right: 76, bottom: 48, left: 64 },
+      xAxis: {
+        type: "category",
+        data: categories,
+        axisLabel: { fontSize: 9 },
+        axisLine: { lineStyle: { color: "#CBD5E1" } }
+      },
+      yAxis: [
+        {
+          type: "value",
+          name: "تراز (متر)",
+          scale: true,
+          nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, color: "#11395B" },
+          axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
+          splitLine: { lineStyle: { color: "#E9EFF2", type: "dashed" } }
+        },
+        {
+          type: "value",
+          name: "افت تجمعی",
+          position: "right",
+          nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, color: "#E76F51" },
+          axisLabel: { formatter: value => faNumber.format(value), fontSize: 9 },
+          splitLine: { show: false }
+        }
+      ],
+      series: [
+        {
+          name: "تراز برآوردی",
+          type: "line",
+          yAxisIndex: 0,
+          data: levelData,
+          symbolSize: 8,
+          lineStyle: { width: 3, color: "#11395B" },
+          itemStyle: { color: "#11395B", borderColor: "#FFFFFF", borderWidth: 1.5 },
+          tooltip: {
+            valueFormatter: value => value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          },
+          z: 5
+        },
+        {
+          name: "افت تجمعی",
+          type: "bar",
+          yAxisIndex: 1,
+          data: declineData,
+          barMaxWidth: 24,
+          itemStyle: { color: "#E76F51", borderRadius: [5, 5, 0, 0] },
+          tooltip: {
+            valueFormatter: value => value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          }
+        }
+      ]
+    }, true);
+    state.aquiferScenarioChart.resize();
+  }
+
   function renderAquiferRiskPanel(data) {
     const panel = document.getElementById("aquiferRiskPanel");
     if (!panel || panel.closest(".hidden")) return;
@@ -3647,6 +3838,40 @@
     if (button) switchTab(button);
   }
 
+  function dashboardFilterParams(data) {
+    const filters = data?.filters || {};
+    const params = new URLSearchParams();
+    [
+      "start_year",
+      "start_month",
+      "end_year",
+      "end_month",
+      "comparison_start_year",
+      "comparison_start_month",
+      "comparison_end_year",
+      "comparison_end_month"
+    ].forEach(key => {
+      if (filters[key] !== null && filters[key] !== undefined) {
+        params.set(key, filters[key]);
+      }
+    });
+    params.set("comparison_enabled", String(Boolean(filters.comparison_enabled)));
+    params.set("continuous_only", String(Boolean(filters.continuous_only)));
+    params.set("manual_selection", String(Boolean(filters.manual_selection)));
+    (filters.selected_well_ids || []).forEach(wellId => {
+      params.append("selected_well_ids", wellId);
+    });
+    return params;
+  }
+
+  function openPdfReport() {
+    const data = state.currentData;
+    if (!data?.id) return;
+    const params = dashboardFilterParams(data);
+    const query = params.toString() ? `?${params}` : "";
+    window.open(`/reports/aquifer/${encodeURIComponent(data.id)}${query}`, "_blank", "noopener");
+  }
+
   function renderDashboardData(data, activeTab = "chart") {
     disposeVisuals();
     renderFilterControls(data);
@@ -3686,7 +3911,7 @@
     scope.querySelectorAll(`[data-tab-panel^="${group}-"]`).forEach(panel => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== `${group}-${tab}`);
     });
-    if (tab === "chart" || tab === "ndvi" || tab === "aet" || tab === "annual" || tab === "risk") {
+    if (tab === "chart" || tab === "ndvi" || tab === "aet" || tab === "annual" || tab === "scenario" || tab === "risk") {
       const chartElement = scope.querySelector("[data-well-chart]");
       if (chartElement && state.observer) state.observer.observe(chartElement);
       if (group === "aquifer" && tab === "ndvi") {
@@ -3697,6 +3922,9 @@
       }
       if (group === "aquifer" && tab === "annual") {
         window.requestAnimationFrame(() => renderAquiferAnnualChanges(state.currentData));
+      }
+      if (group === "aquifer" && tab === "scenario") {
+        window.requestAnimationFrame(() => renderAquiferScenarioPanel(state.currentData));
       }
       if (group === "aquifer" && tab === "risk") {
         window.requestAnimationFrame(() => renderAquiferRiskPanel(state.currentData));
@@ -3762,6 +3990,7 @@
 
   function initializeDashboard(root) {
     const form = root.querySelector("#analysisFilters");
+    root.querySelector("#reportPdfButton")?.addEventListener("click", openPdfReport);
     root.querySelector("#aiOpenModalButton")?.addEventListener("click", openAiModal);
     root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => {
       analyzeWithAi(root);

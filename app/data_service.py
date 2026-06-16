@@ -1287,6 +1287,79 @@ class GroundwaterData:
             ],
         }
 
+    def _five_year_scenario(
+        self,
+        values: dict[int, float],
+        months: list[tuple[int, str]],
+        trend: dict[str, Any],
+        method: str,
+    ) -> dict[str, Any]:
+        observed = [
+            (index, float(values[index]))
+            for index, _ in months
+            if index in values
+            and values[index] is not None
+            and np.isfinite(values[index])
+        ]
+        decline_per_year = trend.get("decline_per_year")
+        if not observed or decline_per_year is None or not np.isfinite(decline_per_year):
+            return {
+                "method": method,
+                "forecast_years": 5,
+                "status": "insufficient",
+                "baseline_month": None,
+                "baseline_level_m": None,
+                "decline_per_year_m": None,
+                "direction": "insufficient",
+                "series": [],
+                "note": (
+                    "Scenario requires a valid current trend and at least one "
+                    "observed groundwater level."
+                ),
+            }
+
+        last_index, baseline_level = observed[-1]
+        baseline_year = (last_index - 1) // MONTHS_PER_YEAR
+        baseline_month = (last_index - 1) % MONTHS_PER_YEAR + 1
+        baseline_water_year = self._water_year_for_month(
+            baseline_year,
+            baseline_month,
+        )
+        decline_value = float(decline_per_year)
+        series = []
+        for horizon in range(1, 6):
+            projected_level = baseline_level - decline_value * horizon
+            series.append(
+                {
+                    "horizon_year": horizon,
+                    "water_year": self._water_year_label(
+                        baseline_water_year + horizon
+                    ),
+                    "projected_level_m": finite_or_none(projected_level, 3),
+                    "cumulative_decline_m": finite_or_none(
+                        decline_value * horizon,
+                        3,
+                    ),
+                }
+            )
+
+        return {
+            "method": method,
+            "forecast_years": 5,
+            "status": "ok",
+            "baseline_month": f"{baseline_year}-{baseline_month:02d}",
+            "baseline_water_year": self._water_year_label(baseline_water_year),
+            "baseline_level_m": finite_or_none(baseline_level, 3),
+            "decline_per_year_m": finite_or_none(decline_value, 3),
+            "direction": trend.get("direction"),
+            "series": series,
+            "note": (
+                "Linear continuation of the selected-period representative "
+                "groundwater trend. Positive cumulative decline means lower "
+                "groundwater level."
+            ),
+        }
+
     @staticmethod
     def _trend_statistics(
         years: list[int],
@@ -2564,6 +2637,32 @@ class GroundwaterData:
             warm_season_irrigated_area,
         )
         time_series_analysis = self._time_series_analysis(annual_changes)
+        arithmetic_trend = self._trend(arithmetic_values, months)
+        thiessen_trend = self._trend(thiessen_values, months)
+        arithmetic_comparison_trend = (
+            self._trend(comparison_arithmetic_values, comparison_months)
+            if comparison_enabled
+            else None
+        )
+        thiessen_comparison_trend = (
+            self._trend(comparison_thiessen_values, comparison_months)
+            if comparison_enabled
+            else None
+        )
+        five_year_scenario = {
+            "arithmetic": self._five_year_scenario(
+                arithmetic_values,
+                months,
+                arithmetic_trend,
+                "arithmetic",
+            ),
+            "thiessen": self._five_year_scenario(
+                thiessen_values,
+                months,
+                thiessen_trend,
+                "thiessen",
+            ),
+        }
         group_minimum = int(group_monthly["_month_index"].min())
         group_maximum = int(group_monthly["_month_index"].max())
         active_wells = sum(well["has_range_data"] for well in wells)
@@ -2633,19 +2732,12 @@ class GroundwaterData:
             "hydrographs": {
                 "arithmetic": arithmetic,
                 "thiessen": thiessen,
-                "arithmetic_trend": self._trend(arithmetic_values, months),
-                "thiessen_trend": self._trend(thiessen_values, months),
-                "arithmetic_comparison_trend": (
-                    self._trend(comparison_arithmetic_values, comparison_months)
-                    if comparison_enabled
-                    else None
-                ),
-                "thiessen_comparison_trend": (
-                    self._trend(comparison_thiessen_values, comparison_months)
-                    if comparison_enabled
-                    else None
-                ),
+                "arithmetic_trend": arithmetic_trend,
+                "thiessen_trend": thiessen_trend,
+                "arithmetic_comparison_trend": arithmetic_comparison_trend,
+                "thiessen_comparison_trend": thiessen_comparison_trend,
             },
+            "five_year_scenario": five_year_scenario,
             "annual_decline": aquifer_annual_decline,
             "annual_changes": annual_changes,
             "time_series_analysis": time_series_analysis,
