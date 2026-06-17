@@ -98,11 +98,35 @@
   }
 
   .analysis-filter-grid {
-    @apply grid items-center gap-3 p-4 md:grid-cols-2 xl:grid-cols-[1fr_auto_1fr_1.1fr_auto];
+    @apply grid gap-3 p-3;
+  }
+
+  .analysis-filter-section {
+    @apply grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3;
+  }
+
+  .analysis-filter-section--primary {
+    @apply xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(15rem,0.9fr)_7rem];
+  }
+
+  .analysis-filter-section--secondary {
+    @apply items-start xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_15rem];
+  }
+
+  .analysis-filter-field {
+    @apply grid gap-1.5;
+  }
+
+  .analysis-filter-field--compact {
+    @apply max-w-28;
+  }
+
+  .analysis-filter-arrow {
+    @apply items-center justify-center self-end pb-3 text-slate-300;
   }
 
   .compact-date-group {
-    @apply grid grid-cols-[auto_minmax(5.5rem,0.85fr)_minmax(6.5rem,1.15fr)] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2;
+    @apply grid grid-cols-2 items-center gap-2 rounded-xl border border-slate-200 bg-white p-2;
   }
 
   .compact-date-label {
@@ -114,7 +138,27 @@
   }
 
   .compact-filter-toggle {
-    @apply flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 transition hover:border-teal/30 hover:bg-teal/[0.03];
+    @apply flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-teal/30 hover:bg-teal/[0.03];
+  }
+
+  .analysis-filter-toggle-card {
+    @apply self-end;
+  }
+
+  .method-chip-group {
+    @apply flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2;
+  }
+
+  .method-chip {
+    @apply inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600;
+  }
+
+  .method-chip-active {
+    @apply border-teal/15 bg-teal/5 text-navy;
+  }
+
+  .analysis-apply-button {
+    @apply h-11 self-end rounded-xl;
   }
 
   .analysis-options {
@@ -122,7 +166,7 @@
   }
 
   .analysis-options > summary {
-    @apply flex cursor-pointer list-none items-center justify-between px-5 py-3 text-[10px] text-slate-500 transition hover:bg-slate-50;
+    @apply flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-[10px] text-slate-500 transition hover:bg-slate-50;
   }
 
   .analysis-options > summary::-webkit-details-marker {
@@ -199,7 +243,7 @@
   }
 
   .stat-card {
-    @apply relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-lg;
+    @apply relative overflow-hidden rounded-xl border border-slate-200/70 bg-white p-4 shadow-card transition hover:-translate-y-0.5 hover:shadow-lg;
   }
 
   .chart-box {
@@ -207,7 +251,7 @@
   }
 
   .section-heading {
-    @apply flex min-h-[105px] flex-col justify-between gap-4 border-b border-slate-100 px-5 py-5 md:flex-row md:items-center md:px-6;
+    @apply flex min-h-[86px] flex-col justify-between gap-3 border-b border-slate-100 px-4 py-4 md:flex-row md:items-center md:px-5;
   }
 
   .section-kicker {
@@ -384,11 +428,11 @@
   }
 
   .selection-tab-list {
-    @apply inline-flex rounded-t-xl bg-slate-100 p-1;
+    @apply inline-flex rounded-t-lg bg-slate-100 p-1;
   }
 
   .selection-tab-button {
-    @apply rounded-lg px-5 py-2.5 text-xs font-medium text-slate-500 transition hover:text-navy;
+    @apply rounded-lg px-3 py-1.5 text-[11px] font-medium text-slate-500 transition hover:text-navy;
   }
 
   .selection-tab-button.is-active {
@@ -396,7 +440,7 @@
   }
 
   .selection-badge {
-    @apply rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-medium text-slate-500 transition;
+    @apply rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-500 transition;
   }
 
   .selection-badge.is-selected {

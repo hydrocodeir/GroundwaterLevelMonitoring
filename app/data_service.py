@@ -1228,6 +1228,13 @@ class GroundwaterData:
     ) -> tuple[pd.DataFrame, set[str], list[dict[str, Any]]]:
         group_monthly = self.monthly[self.monthly["_aquifer_id"] == group_id]
         locations = self.locations[self.locations["_aquifer_id"] == group_id]
+        if manual_selection:
+            group_monthly = group_monthly[
+                group_monthly["_join_key"].isin(selected_join_keys)
+            ]
+            locations = locations[
+                locations["_join_key"].isin(selected_join_keys)
+            ]
         month_indexes = [index for index, _ in months]
         month_labels = dict(months)
         start_index = month_indexes[0]
@@ -1521,6 +1528,10 @@ class GroundwaterData:
         surface_methods: dict[str, dict[str, Any]],
         primary_surface_method: str,
         corrected_support_method: str,
+        start_water_year: int,
+        annual_end_water_year: int,
+        storage_coefficient: float | None,
+        aquifer_area_m2: float | None,
     ) -> dict[str, Any]:
         corrected_frame, support_join_keys, network_transitions = (
             self._corrected_well_month_frame(
@@ -1543,6 +1554,7 @@ class GroundwaterData:
                 "corrected_well_month": [],
                 "network_transitions": [],
                 "hydrographs": {},
+                "annual_decline": {},
                 "validation": {},
                 "note": "داده‌ای برای ساخت هیدروگراف اصلاح‌شده وجود ندارد.",
             }
@@ -1682,6 +1694,39 @@ class GroundwaterData:
             hydrographs[f"corrected_{method}"] = payload["series"]
             hydrographs[f"corrected_{method}_trend"] = payload["trend"]
 
+        corrected_annual_decline = {
+            "corrected_arithmetic": self._apply_storage_to_annual_rows(
+                self._annual_decline_rows(
+                    corrected_arithmetic_values,
+                    start_water_year,
+                    annual_end_water_year,
+                ),
+                storage_coefficient,
+                aquifer_area_m2,
+            ),
+            "corrected_thiessen": self._apply_storage_to_annual_rows(
+                self._annual_decline_rows(
+                    corrected_thiessen_values,
+                    start_water_year,
+                    annual_end_water_year,
+                ),
+                storage_coefficient,
+                aquifer_area_m2,
+            ),
+        }
+        for method, payload in corrected_surface_methods.items():
+            corrected_annual_decline[f"corrected_{method}"] = (
+                self._apply_storage_to_annual_rows(
+                    self._annual_decline_rows(
+                        payload["values"],
+                        start_water_year,
+                        annual_end_water_year,
+                    ),
+                    storage_coefficient,
+                    aquifer_area_m2,
+                )
+            )
+
         raw_status_counts = []
         for month_index, month_label in months:
             month_frame = raw_frame[raw_frame["_month_index"] == month_index]
@@ -1713,6 +1758,7 @@ class GroundwaterData:
             ),
             "network_transitions": network_transitions,
             "surface_methods": corrected_surface_methods,
+            "annual_decline": corrected_annual_decline,
             "hydrographs": hydrographs,
             "validation": validation,
             "note": (
@@ -3722,6 +3768,10 @@ class GroundwaterData:
             surface_methods,
             primary_surface_method,
             corrected_support_method,
+            start_water_year,
+            annual_end_water_year,
+            storage_coefficient,
+            piezometric_surface_metadata["area_m2"],
         )
         (
             comparison_arithmetic_values,

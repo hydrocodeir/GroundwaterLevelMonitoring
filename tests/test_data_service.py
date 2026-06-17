@@ -145,6 +145,9 @@ class GroundwaterDataTests(unittest.TestCase):
         self.assertGreater(len(payload["corrected_well_month"]), 0)
         self.assertIn("network_transitions", payload)
         self.assertIn("corrected_thiessen", payload["corrected"]["hydrographs"])
+        self.assertIn("corrected_thiessen", payload["corrected"]["annual_decline"])
+        self.assertIn("corrected_arithmetic", payload["corrected"]["annual_decline"])
+        self.assertIn("corrected_idw", payload["corrected"]["annual_decline"])
         self.assertEqual(
             payload["corrected"]["validation"]["head_limit_violations"],
             0,
@@ -177,6 +180,53 @@ class GroundwaterDataTests(unittest.TestCase):
             payload["corrected_hydrograph"][0]["method"],
             "corrected_idw",
         )
+
+    def test_manual_selection_limits_corrected_status_outputs(self) -> None:
+        group_id = next(iter(self.service.groups))
+        base_payload = self.service.dashboard(group_id, storage_coefficient=0.08)
+        selected_ids = [
+            well["id"]
+            for well in base_payload["wells"]
+            if well["has_range_data"]
+        ][:2]
+        if len(selected_ids) < 2:
+            self.skipTest("این آبخوان حداقل دو پیزومتر قابل انتخاب ندارد")
+
+        payload = self.service.dashboard(
+            group_id,
+            storage_coefficient=0.08,
+            manual_selection=True,
+            selected_well_ids=selected_ids,
+            corrected_support_method="fixed_thiessen",
+        )
+
+        selected_id_set = set(selected_ids)
+        self.assertEqual(payload["stats"]["selected_wells"], len(selected_ids))
+        self.assertLessEqual(
+            payload["corrected"]["fixed_support_well_count"],
+            len(selected_ids),
+        )
+        self.assertTrue(
+            {
+                row["well_id"]
+                for row in payload["corrected_well_month"]
+            }.issubset(selected_id_set)
+        )
+        self.assertTrue(
+            {
+                row["well_id"]
+                for row in payload["network_transitions"]
+            }.issubset(selected_id_set)
+        )
+        for row in payload["corrected"]["status_counts"]:
+            counted = (
+                row["measured_count"]
+                + row["missing_count"]
+                + row["out_of_range_count"]
+                + row["retired_count"]
+                + row["new_well_count"]
+            )
+            self.assertLessEqual(counted, len(selected_ids))
 
     def test_default_period_uses_latest_group_data(self) -> None:
         group_id = next(iter(self.service.groups))

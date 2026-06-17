@@ -1,22 +1,22 @@
-<div class="space-y-6" data-dashboard data-aquifer-id="{{ group.id }}">
-  <section class="panel relative overflow-hidden p-6 md:p-7">
+<div class="space-y-4" data-dashboard data-aquifer-id="{{ group.id }}">
+  <section class="panel relative overflow-hidden p-4 md:p-5">
     <div class="absolute inset-y-0 right-0 w-1.5 bg-gradient-to-b from-teal to-aqua"></div>
-    <div class="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+    <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
       <div class="pr-3">
-        <div class="mb-2 flex items-center gap-2 text-xs font-medium text-teal">
+        <div class="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-teal">
           <span class="inline-block h-2 w-2 rounded-full bg-teal"></span>
           محدوده مطالعاتی {{ group.mahdoude }}
         </div>
-        <h2 class="text-2xl font-bold tracking-tight text-navy md:text-3xl">آبخوان {{ group.aquifer }}</h2>
-        <p class="mt-2 text-xs leading-6 text-slate-500">
+        <h2 class="text-xl font-bold tracking-tight text-navy md:text-2xl">آبخوان {{ group.aquifer }}</h2>
+        <p class="mt-1 text-[11px] leading-5 text-slate-500">
           تحلیل یکپارچه تراز آب، افت سالانه، شبکه پایش و پهنه‌بندی تیسن
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <span id="periodBadge" class="rounded-xl border border-teal/15 bg-teal/5 px-4 py-2.5 text-xs font-medium text-teal">
+        <span id="periodBadge" class="rounded-lg border border-teal/15 bg-teal/5 px-3 py-2 text-[11px] font-medium text-teal">
           در حال خواندن دوره آماری...
         </span>
-        <span class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
+        <span class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
           واحد تراز و افت: متر
         </span>
       </div>
@@ -24,7 +24,7 @@
   </section>
 
   <form id="analysisFilters" class="panel scroll-mt-5 overflow-hidden">
-    <div class="flex flex-col justify-between gap-2 border-b border-slate-100 px-5 py-4 md:flex-row md:items-center">
+    <div class="flex flex-col justify-between gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center">
       <div>
         <h3 class="text-sm font-bold text-navy">تنظیم بازه تحلیل</h3>
         <p class="mt-1 text-[10px] text-slate-500">بازه اصلی و چاه‌های مورد استفاده در محاسبات</p>
@@ -32,71 +32,81 @@
       <span class="text-[10px] text-slate-400">سال آبی: مهر تا شهریور</span>
     </div>
     <div class="analysis-filter-grid">
-      <div class="compact-date-group">
-        <span class="compact-date-label">از</span>
-        <select id="startYear" class="field compact-field year-field" name="start_year" aria-label="سال شروع"></select>
-        <select id="startMonth" class="field compact-field" name="start_month" aria-label="ماه شروع"></select>
-      </div>
-      <span class="hidden text-slate-300 xl:block" aria-hidden="true">←</span>
-      <div class="compact-date-group">
-        <span class="compact-date-label">تا</span>
-        <select id="endYear" class="field compact-field year-field" name="end_year" aria-label="سال پایان"></select>
-        <select id="endMonth" class="field compact-field" name="end_month" aria-label="ماه پایان"></select>
-      </div>
-      <label class="compact-filter-toggle">
-        <input id="continuousOnly" type="checkbox" class="peer sr-only" checked>
-        <span class="toggle-track"><span class="toggle-thumb"></span></span>
-        <span>
-          <strong class="block text-[11px] font-bold text-navy">پوشش کامل بازه</strong>
-          <small class="block text-[9px] text-slate-400">فقط چاه‌های پیوسته</small>
-        </span>
-      </label>
-      <label class="block">
-        <span class="compact-date-label">Sy / S</span>
-        <input
-          id="storageCoefficient"
-          class="field compact-field text-left"
-          name="storage_coefficient"
-          type="number"
-          min="0.0001"
-          max="1"
-          step="0.0001"
-          value="0.1"
-          required
-          inputmode="decimal"
-          aria-label="ضریب ذخیره یا آبدهی ویژه"
-        >
-      </label>
-      <label class="block">
-        <span class="compact-date-label">درون‌یابی سطح</span>
-        <div id="surfaceInterpolationMethods" class="flex flex-wrap gap-2">
-          <label class="inline-flex items-center gap-2 rounded-xl border border-teal/15 bg-teal/5 px-3 py-2 text-[10px] font-medium text-navy">
-            <input type="checkbox" value="idw" checked disabled class="h-3.5 w-3.5 accent-teal">
-            <span>IDW</span>
-          </label>
-          <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600">
-            <input type="checkbox" value="ordinary_kriging" class="h-3.5 w-3.5 accent-teal">
-            <span>Ordinary Kriging</span>
-          </label>
-          <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600">
-            <input type="checkbox" value="spline" class="h-3.5 w-3.5 accent-teal">
-            <span>Thin Plate Spline</span>
-          </label>
+      <section class="analysis-filter-section analysis-filter-section--primary">
+        <div class="analysis-filter-field">
+          <span class="compact-date-label">از</span>
+          <div class="compact-date-group">
+            <select id="startYear" class="field compact-field year-field" name="start_year" aria-label="سال شروع"></select>
+            <select id="startMonth" class="field compact-field" name="start_month" aria-label="ماه شروع"></select>
+          </div>
         </div>
-        <small class="mt-1 block text-[9px] leading-5 text-slate-400">روش‌های خام/مرسوم حفظ شده‌اند؛ اصلاح‌شده‌ها با پشتیبان ثابت از همین روش‌ها ساخته می‌شوند.</small>
-      </label>
-      <label class="block">
-        <span class="compact-date-label">پشتیبان ثابت اصلاح</span>
-        <select id="correctedSupportMethod" class="field compact-field" name="corrected_support_method" aria-label="روش پشتیبان ثابت اصلاح هیدروگراف">
-          <option value="fixed_thiessen">تیسن ثابت</option>
-          <option value="fixed_grid">شبکه ثابت</option>
-          <option value="fixed_arithmetic">چاه‌های ثابت</option>
-        </select>
-      </label>
-      <button id="applyAnalysisFilters" type="submit" class="primary-button">
-        <span>به‌روزرسانی تحلیل</span>
-        <span aria-hidden="true">←</span>
-      </button>
+        <div class="analysis-filter-arrow hidden xl:flex" aria-hidden="true">←</div>
+        <div class="analysis-filter-field">
+          <span class="compact-date-label">تا</span>
+          <div class="compact-date-group">
+            <select id="endYear" class="field compact-field year-field" name="end_year" aria-label="سال پایان"></select>
+            <select id="endMonth" class="field compact-field" name="end_month" aria-label="ماه پایان"></select>
+          </div>
+        </div>
+        <label class="compact-filter-toggle analysis-filter-toggle-card">
+          <input id="continuousOnly" type="checkbox" class="peer sr-only" checked>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span>
+            <strong class="block text-[11px] font-bold text-navy">پوشش کامل بازه</strong>
+            <small class="block text-[9px] text-slate-400">فقط چاه‌های پیوسته</small>
+          </span>
+        </label>
+        <label class="analysis-filter-field analysis-filter-field--compact">
+          <span class="compact-date-label">Sy / S</span>
+          <input
+            id="storageCoefficient"
+            class="field compact-field text-left"
+            name="storage_coefficient"
+            type="number"
+            min="0.0001"
+            max="1"
+            step="0.0001"
+            value="0.1"
+            required
+            inputmode="decimal"
+            aria-label="ضریب ذخیره یا آبدهی ویژه"
+          >
+        </label>
+      </section>
+
+      <section class="analysis-filter-section analysis-filter-section--secondary">
+        <label class="analysis-filter-field">
+          <span class="compact-date-label">درون‌یابی سطح</span>
+          <div id="surfaceInterpolationMethods" class="method-chip-group">
+            <label class="method-chip method-chip-active">
+              <input type="checkbox" value="idw" checked disabled class="h-3.5 w-3.5 accent-teal">
+              <span>IDW</span>
+            </label>
+            <label class="method-chip">
+              <input type="checkbox" value="ordinary_kriging" class="h-3.5 w-3.5 accent-teal">
+              <span>Ordinary Kriging</span>
+            </label>
+            <label class="method-chip">
+              <input type="checkbox" value="spline" class="h-3.5 w-3.5 accent-teal">
+              <span>Thin Plate Spline</span>
+            </label>
+          </div>
+          <small class="mt-1 block text-[9px] leading-5 text-slate-400">روش‌های خام/مرسوم حفظ شده‌اند؛ اصلاح‌شده‌ها با پشتیبان ثابت از همین روش‌ها ساخته می‌شوند.</small>
+        </label>
+        <label class="analysis-filter-field">
+          <span class="compact-date-label">پشتیبان ثابت اصلاح</span>
+          <select id="correctedSupportMethod" class="field compact-field" name="corrected_support_method" aria-label="روش پشتیبان ثابت اصلاح هیدروگراف">
+            <option value="fixed_thiessen">تیسن ثابت</option>
+            <option value="fixed_grid">شبکه ثابت</option>
+            <option value="fixed_arithmetic">چاه‌های ثابت</option>
+          </select>
+          <small id="correctedSupportHint" class="mt-1 block text-[9px] leading-5 text-slate-400"></small>
+        </label>
+        <button id="applyAnalysisFilters" type="submit" class="primary-button analysis-apply-button">
+          <span>به‌روزرسانی تحلیل</span>
+          <span aria-hidden="true">←</span>
+        </button>
+      </section>
     </div>
     <details class="analysis-options">
       <summary>
@@ -162,9 +172,9 @@
     </details>
   </form>
 
-  <section id="statsGrid" class="grid grid-cols-2 gap-4 lg:grid-cols-5"></section>
+  <section id="statsGrid" class="grid grid-cols-2 gap-3 lg:grid-cols-5"></section>
 
-  <section class="grid gap-6 xl:grid-cols-12">
+  <section class="grid gap-4 xl:grid-cols-12">
     <article class="panel overflow-hidden xl:col-span-5" data-aquifer-map-panel>
       <div class="section-heading" data-aquifer-map-heading>
         <div>
@@ -197,7 +207,7 @@
           </div>
         </div>
       </div>
-      <div id="map" class="h-[520px] w-full"></div>
+      <div id="map" class="h-[460px] w-full"></div>
     </article>
 
     <article class="panel overflow-hidden xl:col-span-7" data-aquifer-analysis-panel>
@@ -217,7 +227,19 @@
               <span>تحلیل با AI</span>
             </button>
           </div>
-          <div class="tab-list" role="tablist" aria-label="نمای تحلیل آبخوان">
+          <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
+            نمای کارت
+            <select id="aquiferViewSelect" class="field h-10 w-44 text-xs">
+              <option value="chart">هیدروگراف + بارش</option>
+              <option value="annual">تغییرات سالانه</option>
+              <option value="ndvi">تراز + NDVI</option>
+              <option value="aet">تراز + AET</option>
+              <option value="risk">ریسک و محرک افت</option>
+              <option value="scenario">سناریوی ۵ ساله</option>
+              <option value="table">جدول افت</option>
+            </select>
+          </label>
+          <div class="tab-list hidden" role="tablist" aria-label="نمای تحلیل آبخوان">
             <button class="tab-button is-active" type="button" data-tab-group="aquifer" data-tab="chart">تراز + بارش</button>
             <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="ndvi">تراز + NDVI</button>
             <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="aet">تراز + AET</button>
@@ -229,7 +251,7 @@
         </div>
       </div>
       <div data-tab-panel="aquifer-chart">
-        <div id="aquiferChart" class="h-[430px] w-full px-2 pb-2"></div>
+        <div id="aquiferChart" class="h-[390px] w-full px-2 pb-2"></div>
         <div id="precipitationSource" class="mx-5 mb-3 rounded-xl border border-sky-100 bg-sky-50/70 px-4 py-2.5 text-[10px] leading-6 text-slate-600"></div>
         <div class="mx-5 mb-5 rounded-2xl border border-sand bg-sand/30 px-4 py-3 text-[10px] leading-6 text-slate-600">
           خط‌چین قرمز شیب بازه اصلی است؛ با فعال‌کردن مقایسه، خط‌چین مشکی بازه دوم نیز اضافه می‌شود. جدول فقط از ماه‌های بازه اصلی استفاده می‌کند.
@@ -272,23 +294,33 @@
         <div id="aquiferScenarioPanel" class="p-5"></div>
       </div>
       <div class="hidden" data-tab-panel="aquifer-ndvi">
-        <div class="flex justify-end border-b border-slate-100 bg-slate-50/70 px-5 py-3">
-          <label class="flex items-center gap-3 text-[11px] font-medium text-slate-600">
+        <div class="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
+          <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
+            روش تراز
+            <select id="ndviGroundwaterMethod" class="field h-9 w-44 text-xs"></select>
+          </label>
+          <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
             شاخص آماری NDVI
-            <select id="ndviMetric" class="field h-10 w-36">
+            <select id="ndviMetric" class="field h-9 w-32 text-xs">
               <option value="median">میانه</option>
               <option value="mean">میانگین</option>
               <option value="max">بیشینه</option>
             </select>
           </label>
         </div>
-        <div id="aquiferNdviChart" class="h-[430px] w-full px-2 pb-2"></div>
+        <div id="aquiferNdviChart" class="h-[390px] w-full px-2 pb-2"></div>
         <div class="mx-5 mb-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-[10px] leading-6 text-slate-600">
           ستون‌ها NDVI ماهانه آبخوان را از Landsat 8 نشان می‌دهند. شاخص آماری از فهرست بالا قابل تغییر است.
         </div>
       </div>
       <div class="hidden" data-tab-panel="aquifer-aet">
-        <div id="aquiferAetChart" class="h-[430px] w-full px-2 pb-2"></div>
+        <div class="flex justify-end border-b border-slate-100 bg-slate-50/70 px-5 py-3">
+          <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
+            روش تراز
+            <select id="aetGroundwaterMethod" class="field h-9 w-44 text-xs"></select>
+          </label>
+        </div>
+        <div id="aquiferAetChart" class="h-[390px] w-full px-2 pb-2"></div>
         <div class="mx-5 mb-5 rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-[10px] leading-6 text-slate-600">
           ستون‌ها میانگین مکانی تبخیر و تعرق واقعی و تبخیر آب رهگیری‌شده ماهانه آبخوان را از WaPOR 3 نشان می‌دهند. واحد مقادیر میلی‌متر در ماه است.
         </div>

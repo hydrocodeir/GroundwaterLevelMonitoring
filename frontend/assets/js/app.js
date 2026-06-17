@@ -12,6 +12,8 @@
     spatialContourSeriesIds: [],
     spatialSurfaceMethod: "idw",
     annualSurfaceMethod: "idw",
+    ndviGroundwaterMethod: "surface_idw",
+    aetGroundwaterMethod: "surface_idw",
     contourIntervalInitialized: false,
     spatialViewInitialized: false,
     modalChart: null,
@@ -61,6 +63,11 @@
     fixed_thiessen: "تیسن ثابت",
     fixed_grid: "شبکه ثابت",
     fixed_arithmetic: "چاه‌های ثابت"
+  };
+  const correctedSupportHints = {
+    fixed_thiessen: "وزن‌های تیسن یک‌بار از چاه‌های منتخب ساخته می‌شوند و در همه ماه‌ها ثابت می‌مانند؛ چاه حذف‌شده با مقدار اصلاحی وارد محاسبه می‌شود.",
+    fixed_grid: "یک شبکه ثابت روی مرز آبخوان ساخته می‌شود و مقدار اصلاح‌شده چاه‌ها هر ماه روی همان سلول‌ها درون‌یابی و میانگین مساحتی می‌شود.",
+    fixed_arithmetic: "مجموعه چاه‌های مبنا ثابت می‌ماند و میانگین حسابی از مقدار اصلاح‌شده همان چاه‌ها محاسبه می‌شود."
   };
   const correctedStatusLabels = {
     measured: "اندازه‌گیری‌شده",
@@ -149,6 +156,19 @@
     map.setMinZoom(minimumZoom);
   }
 
+  function resizeSelectionMap() {
+    if (!state.selectionMap) return;
+    const refresh = () => {
+      state.selectionMap.invalidateSize({ animate: false, pan: false });
+      refreshLeafletMinimumZoom(state.selectionMap);
+    };
+    refresh();
+    window.requestAnimationFrame(refresh);
+    [80, 220, 500].forEach(delay => {
+      window.setTimeout(refresh, delay);
+    });
+  }
+
   async function initializeAquiferSelection() {
     const mapElement = document.getElementById("aquiferSelectionMap");
     if (!mapElement || state.selectionMap) return;
@@ -215,7 +235,7 @@
       aquiferLayer.bringToFront();
       const bounds = mahdoudeLayer.getBounds();
       fitLeafletBoundsAndLockZoom(map, bounds, [4, 4]);
-      window.setTimeout(() => map.invalidateSize(), 100);
+      resizeSelectionMap();
     } catch (error) {
       console.error("Aquifer selection map failed:", error);
       mapElement.innerHTML = `<div class="flex h-full items-center justify-center p-8 text-center text-xs text-coral">${escapeHtml(error.message)}</div>`;
@@ -233,7 +253,7 @@
           panel.classList.toggle("hidden", panel.dataset.selectionPanel !== tab);
         });
         if (tab === "map") {
-          window.setTimeout(() => state.selectionMap?.invalidateSize(), 50);
+          resizeSelectionMap();
         } else {
           syncDropdownSelection();
         }
@@ -1094,11 +1114,11 @@
   }
 
   function currentAnnualSurfaceMethod(data) {
-    const methods = selectedSurfaceMethods(data);
+    const methods = annualDeclineMethods(data).map(method => method.key);
     if (methods.includes(state.annualSurfaceMethod)) {
       return state.annualSurfaceMethod;
     }
-    return primarySurfaceMethod(data);
+    return methods[0] || "thiessen";
   }
 
   function selectedSurfaceMethods(data) {
@@ -1135,6 +1155,75 @@
     );
   }
 
+  function annualRowsForPayload(rows, method) {
+    return (rows || []).map(row => ({
+      water_year: row.water_year,
+      start_level: row[method]?.start_level ?? null,
+      end_level: row[method]?.end_level ?? null,
+      end_month: row[`${method}_end_month`] ?? row[method]?.end_month ?? null,
+      decline: row[method]?.decline ?? null,
+      cumulative_decline: row[method]?.cumulative_decline ?? null,
+      storage_change_mcm: row[method]?.storage_change_mcm ?? null,
+      cumulative_storage_change_mcm: row[method]?.cumulative_storage_change_mcm ?? null
+    }));
+  }
+
+  function annualDeclineMethods(data) {
+    const methods = [
+      {
+        key: "thiessen",
+        label: "تیسن خام",
+        color: "#E76F51",
+        rows: annualRowsForPayload(data?.annual_decline, "thiessen")
+      },
+      {
+        key: "arithmetic",
+        label: "حسابی خام",
+        color: "#11395B",
+        rows: annualRowsForPayload(data?.annual_decline, "arithmetic")
+      }
+    ];
+    selectedSurfaceMethods(data).forEach(method => {
+      const payload = surfaceMethodPayload(data, method);
+      if (!payload?.annual_decline) return;
+      methods.push({
+        key: `surface_${method}`,
+        label: `${surfaceMethodLabel(data, method, true)} خام`,
+        color: surfaceMethodColor(method),
+        rows: payload.annual_decline || []
+      });
+    });
+    const correctedAnnual = data?.corrected?.annual_decline || {};
+    [
+      ["corrected_thiessen", "تیسن اصلاحی", "#16A34A"],
+      ["corrected_arithmetic", "حسابی اصلاحی", "#0F766E"]
+    ].forEach(([key, label, color]) => {
+      if (correctedAnnual[key]) {
+        methods.push({ key, label, color, rows: correctedAnnual[key] });
+      }
+    });
+    selectedSurfaceMethods(data).forEach(method => {
+      const key = `corrected_${method}`;
+      if (correctedAnnual[key]) {
+        methods.push({
+          key,
+          label: `${surfaceMethodLabels[method] || method} اصلاحی`,
+          color: surfaceMethodTrendColor(method),
+          rows: correctedAnnual[key]
+        });
+      }
+    });
+    return methods.filter((method, index, all) => (
+      method.rows?.length
+      && all.findIndex(item => item.key === method.key) === index
+    ));
+  }
+
+  function annualDeclineMethod(data, key) {
+    const methods = annualDeclineMethods(data);
+    return methods.find(method => method.key === key) || methods[0] || null;
+  }
+
   function correctedSupportMethod(data) {
     return data?.filters?.corrected_support_method || data?.corrected?.support_method || "fixed_thiessen";
   }
@@ -1148,6 +1237,102 @@
 
   function correctedSeries(data, key) {
     return data?.corrected?.hydrographs?.[key] || [];
+  }
+
+  function groundwaterChartMethods(data) {
+    const methods = [
+      {
+        key: "arithmetic",
+        label: "میانگین حسابی",
+        color: "#11395B",
+        series: data?.hydrographs?.arithmetic || []
+      },
+      {
+        key: "thiessen",
+        label: "میانگین تیسن",
+        color: "#E76F51",
+        series: data?.hydrographs?.thiessen || []
+      }
+    ];
+    selectedSurfaceMethods(data).forEach(method => {
+      const payload = surfaceMethodPayload(data, method);
+      if (!payload?.series?.length) return;
+      methods.push({
+        key: `surface_${method}`,
+        label: surfaceMethodLabel(data, method, true),
+        color: surfaceMethodColor(method),
+        series: payload.series || []
+      });
+    });
+    [
+      ["corrected_arithmetic", "اصلاح‌شده حسابی", "#0F766E"],
+      ["corrected_thiessen", "اصلاح‌شده تیسن", "#16A34A"]
+    ].forEach(([key, label, color]) => {
+      const series = correctedSeries(data, key);
+      if (series.length) {
+        methods.push({ key, label, color, series });
+      }
+    });
+    selectedSurfaceMethods(data).forEach(method => {
+      const key = `corrected_${method}`;
+      const series = correctedSeries(data, key);
+      if (!series.length) return;
+      methods.push({
+        key,
+        label: `اصلاح‌شده ${surfaceMethodLabels[method] || method}`,
+        color: surfaceMethodTrendColor(method),
+        series
+      });
+    });
+    return methods.filter((method, index, all) => (
+      method.series?.length
+      && all.findIndex(item => item.key === method.key) === index
+    ));
+  }
+
+  function defaultGroundwaterChartMethod(data) {
+    const methods = groundwaterChartMethods(data);
+    return methods.find(method => method.key === "surface_idw") || methods[0] || null;
+  }
+
+  function groundwaterChartMethod(data, key) {
+    const methods = groundwaterChartMethods(data);
+    return methods.find(method => method.key === key)
+      || methods.find(method => method.key === "surface_idw")
+      || methods[0]
+      || null;
+  }
+
+  function populateGroundwaterMethodSelect(select, data, selectedKey) {
+    if (!select) return null;
+    const methods = groundwaterChartMethods(data);
+    const selected = methods.find(method => method.key === selectedKey)
+      || defaultGroundwaterChartMethod(data);
+    select.innerHTML = methods
+      .map(method => `<option value="${method.key}">${escapeHtml(method.label)}</option>`)
+      .join("");
+    if (selected) {
+      select.value = selected.key;
+    }
+    return selected;
+  }
+
+  function groundwaterLineSeries(method) {
+    return {
+      name: method.label,
+      type: "line",
+      data: (method.series || []).map(item => item[1]),
+      showSymbol: false,
+      connectNulls: false,
+      lineStyle: { width: 2.6, color: method.color },
+      itemStyle: { color: method.color },
+      tooltip: {
+        valueFormatter: value => (
+          value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+        )
+      },
+      z: 3
+    };
   }
 
   function correctedTrend(data, key) {
@@ -2713,6 +2898,14 @@
     const correctedSupportSelect = document.getElementById("correctedSupportMethod");
     if (correctedSupportSelect) {
       correctedSupportSelect.value = correctedSupportMethod(data);
+      const hint = document.getElementById("correctedSupportHint");
+      const updateHint = () => {
+        if (hint) {
+          hint.textContent = correctedSupportHints[correctedSupportSelect.value] || "";
+        }
+      };
+      correctedSupportSelect.onchange = updateHint;
+      updateHint();
     }
     const spatialSurfaceMethod = document.getElementById("spatialSurfaceMethod");
     if (spatialSurfaceMethod) {
@@ -2724,13 +2917,29 @@
     }
     const annualSurfaceMethod = document.getElementById("annualSurfaceMethod");
     if (annualSurfaceMethod) {
-      const methods = selectedSurfaceMethods(data);
+      const methods = annualDeclineMethods(data);
       const method = currentAnnualSurfaceMethod(data);
       annualSurfaceMethod.innerHTML = methods
-        .map(item => `<option value="${item}">${escapeHtml(surfaceMethodLabel(data, item, true))}</option>`)
+        .map(item => `<option value="${item.key}">${escapeHtml(item.label)}</option>`)
         .join("");
       annualSurfaceMethod.value = method;
       state.annualSurfaceMethod = method;
+    }
+    const ndviGroundwaterMethod = populateGroundwaterMethodSelect(
+      document.getElementById("ndviGroundwaterMethod"),
+      data,
+      state.ndviGroundwaterMethod
+    );
+    if (ndviGroundwaterMethod) {
+      state.ndviGroundwaterMethod = ndviGroundwaterMethod.key;
+    }
+    const aetGroundwaterMethod = populateGroundwaterMethodSelect(
+      document.getElementById("aetGroundwaterMethod"),
+      data,
+      state.aetGroundwaterMethod
+    );
+    if (aetGroundwaterMethod) {
+      state.aetGroundwaterMethod = aetGroundwaterMethod.key;
     }
     document.getElementById("comparisonTrendEnabled").checked =
       Boolean(data.filters.comparison_enabled);
@@ -3109,7 +3318,7 @@
           analysisPanel.getBoundingClientRect().height
         );
         const mapHeight = Math.max(
-          520,
+          460,
           panelHeight - mapHeading.getBoundingClientRect().height
         );
         mapElement.style.height = `${mapHeight}px`;
@@ -3134,25 +3343,24 @@
     const legendSelected = {};
     surfacePayloads.forEach(([method, payload]) => {
       const label = surfaceMethodLabel(data, method, true);
-      legendSelected[label] = true;
-      legendSelected[`روند ${label} (بازه اصلی)`] = true;
+      legendSelected[label] = method === "idw";
+      legendSelected[`روند ${label} (بازه اصلی)`] = false;
       if (comparisonEnabled && payload?.comparison_trend) {
-        legendSelected[`روند ${label} (مقایسه‌ای)`] = true;
+        legendSelected[`روند ${label} (مقایسه‌ای)`] = false;
       }
     });
-    const primaryCorrectedKey = correctedPrimarySeriesKey(data);
     const correctedLegendSelected = {
-      "اصلاح‌شده حسابی": primaryCorrectedKey === "corrected_arithmetic",
-      "اصلاح‌شده تیسن": primaryCorrectedKey === "corrected_thiessen",
-      "اصلاح‌شده IDW": primaryCorrectedKey === "corrected_idw",
-      "اصلاح‌شده Ordinary Kriging": primaryCorrectedKey === "corrected_ordinary_kriging",
-      "اصلاح‌شده Thin Plate Spline": primaryCorrectedKey === "corrected_spline",
-      [`روند اصلاح‌شده ${correctedPrimaryLabel(data, true)}`]: true,
+      "اصلاح‌شده حسابی": false,
+      "اصلاح‌شده تیسن": false,
+      "اصلاح‌شده IDW": true,
+      "اصلاح‌شده Ordinary Kriging": false,
+      "اصلاح‌شده Thin Plate Spline": false,
+      [`روند اصلاح‌شده ${correctedPrimaryLabel(data, true)}`]: false,
       "اختلاف خام-اصلاح‌شده": false,
-      "وضعیت: اندازه‌گیری": false,
-      "وضعیت: بازنشسته": false,
-      "وضعیت: چاه جدید": false,
-      "وضعیت: برآورد": false
+      "وضعیت: اندازه‌گیری": true,
+      "وضعیت: بازنشسته": true,
+      "وضعیت: چاه جدید": true,
+      "وضعیت: برآورد": true
     };
     option.xAxis.data = categories;
     option.yAxis[2] = {
@@ -3182,15 +3390,15 @@
       selected: {
         "میانگین حسابی": false,
         "روند حسابی (بازه اصلی)": false,
-        "میانگین تیسن": true,
-        "روند تیسن (بازه اصلی)": true,
+        "میانگین تیسن": false,
+        "روند تیسن (بازه اصلی)": false,
         ...(comparisonEnabled ? {
           "روند حسابی (مقایسه‌ای)": false,
-          "روند تیسن (مقایسه‌ای)": true
+          "روند تیسن (مقایسه‌ای)": false
         } : {}),
         ...legendSelected,
         ...correctedLegendSelected,
-        "بارش ماهانه": true
+        "بارش ماهانه": false
       }
     };
     option.grid.top = 112;
@@ -3317,8 +3525,13 @@
   function renderAquiferNdviChart(data) {
     const element = document.getElementById("aquiferNdviChart");
     const metricSelect = document.getElementById("ndviMetric");
-    if (!element || !metricSelect || element.closest(".hidden")) return;
+    const groundwaterSelect = document.getElementById("ndviGroundwaterMethod");
+    if (!element || !metricSelect || !groundwaterSelect || element.closest(".hidden")) return;
     const metric = metricSelect.value || data.ndvi.default_metric;
+    const groundwaterMethod = groundwaterChartMethod(data, groundwaterSelect.value);
+    if (!groundwaterMethod) return;
+    groundwaterSelect.value = groundwaterMethod.key;
+    state.ndviGroundwaterMethod = groundwaterMethod.key;
     if (!state.aquiferNdviChart) {
       state.aquiferNdviChart = echarts.init(element);
       state.charts.push(state.aquiferNdviChart);
@@ -3326,10 +3539,6 @@
 
     const option = baseChartOption();
     option.xAxis.data = data.hydrographs.arithmetic.map(item => item[0]);
-    const surfaceMethods = selectedSurfaceMethods(data);
-    const surfacePayloads = surfaceMethods
-      .map(method => [method, surfaceMethodPayload(data, method)])
-      .filter(([, payload]) => Boolean(payload));
     option.yAxis[1] = {
       type: "value",
       name: "NDVI",
@@ -3355,63 +3564,14 @@
       textStyle: { fontFamily: "Vazirmatn", fontSize: 11 },
       itemWidth: 18,
       selected: {
-        "میانگین حسابی": false,
-        "میانگین تیسن": true,
-        ...Object.fromEntries(surfacePayloads.map(([method]) => [
-          surfaceMethodLabel(data, method, true),
-          true
-        ])),
+        [groundwaterMethod.label]: true,
         [`NDVI ${ndviMetricLabel(metric)}`]: true
       }
     };
     option.grid.top = 76;
     option.series = [
       ndviBarSeries(data.ndvi, metric),
-      {
-        name: "میانگین حسابی",
-        type: "line",
-        data: data.hydrographs.arithmetic.map(item => item[1]),
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2.5, color: "#11395B" },
-        itemStyle: { color: "#11395B" },
-        tooltip: {
-          valueFormatter: value => (
-            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
-          )
-        },
-        z: 3
-      },
-      {
-        name: "میانگین تیسن",
-        type: "line",
-        data: data.hydrographs.thiessen.map(item => item[1]),
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2.5, color: "#E76F51" },
-        itemStyle: { color: "#E76F51" },
-        tooltip: {
-          valueFormatter: value => (
-            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
-          )
-        },
-        z: 3
-      },
-      ...surfacePayloads.map(([method, payload]) => ({
-        name: surfaceMethodLabel(data, method),
-        type: "line",
-        data: payload.series.map(item => item[1]),
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2.5, color: surfaceMethodColor(method) },
-        itemStyle: { color: surfaceMethodColor(method) },
-        tooltip: {
-          valueFormatter: value => (
-            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
-          )
-        },
-        z: 3
-      }))
+      groundwaterLineSeries(groundwaterMethod)
     ];
     state.aquiferNdviChart.setOption(option, true);
     state.aquiferNdviChart.resize();
@@ -3419,7 +3579,12 @@
 
   function renderAquiferAetChart(data) {
     const element = document.getElementById("aquiferAetChart");
-    if (!element || element.closest(".hidden")) return;
+    const groundwaterSelect = document.getElementById("aetGroundwaterMethod");
+    if (!element || !groundwaterSelect || element.closest(".hidden")) return;
+    const groundwaterMethod = groundwaterChartMethod(data, groundwaterSelect.value);
+    if (!groundwaterMethod) return;
+    groundwaterSelect.value = groundwaterMethod.key;
+    state.aetGroundwaterMethod = groundwaterMethod.key;
     if (!state.aquiferAetChart) {
       state.aquiferAetChart = echarts.init(element);
       state.charts.push(state.aquiferAetChart);
@@ -3427,10 +3592,6 @@
 
     const option = baseChartOption();
     option.xAxis.data = data.hydrographs.arithmetic.map(item => item[0]);
-    const surfaceMethods = selectedSurfaceMethods(data);
-    const surfacePayloads = surfaceMethods
-      .map(method => [method, surfaceMethodPayload(data, method)])
-      .filter(([, payload]) => Boolean(payload));
     option.yAxis[1] = {
       type: "value",
       name: "AET (mm/month)",
@@ -3456,63 +3617,14 @@
       textStyle: { fontFamily: "Vazirmatn", fontSize: 11 },
       itemWidth: 18,
       selected: {
-        "میانگین حسابی": false,
-        "میانگین تیسن": true,
-        ...Object.fromEntries(surfacePayloads.map(([method]) => [
-          surfaceMethodLabel(data, method, true),
-          true
-        ])),
+        [groundwaterMethod.label]: true,
         "AET ماهانه": true
       }
     };
     option.grid.top = 76;
     option.series = [
       aetBarSeries(data.aet),
-      {
-        name: "میانگین حسابی",
-        type: "line",
-        data: data.hydrographs.arithmetic.map(item => item[1]),
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2.5, color: "#11395B" },
-        itemStyle: { color: "#11395B" },
-        tooltip: {
-          valueFormatter: value => (
-            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
-          )
-        },
-        z: 3
-      },
-      {
-        name: "میانگین تیسن",
-        type: "line",
-        data: data.hydrographs.thiessen.map(item => item[1]),
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2.5, color: "#E76F51" },
-        itemStyle: { color: "#E76F51" },
-        tooltip: {
-          valueFormatter: value => (
-            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
-          )
-        },
-        z: 3
-      },
-      ...surfacePayloads.map(([method, payload]) => ({
-        name: surfaceMethodLabel(data, method),
-        type: "line",
-        data: payload.series.map(item => item[1]),
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2.5, color: surfaceMethodColor(method) },
-        itemStyle: { color: surfaceMethodColor(method) },
-        tooltip: {
-          valueFormatter: value => (
-            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
-          )
-        },
-        z: 3
-      }))
+      groundwaterLineSeries(groundwaterMethod)
     ];
     state.aquiferAetChart.setOption(option, true);
     state.aquiferAetChart.resize();
@@ -3530,18 +3642,16 @@
       || !ndviPeriodSelect
       || element.closest(".hidden")
     ) return;
-    const selectedMethod = (
-      selectedSurfaceMethods(data).includes(methodSelect.value)
-        ? methodSelect.value
-        : currentAnnualSurfaceMethod(data)
-    );
-    methodSelect.value = selectedMethod;
-    state.annualSurfaceMethod = selectedMethod;
+    const selectedMethod = annualDeclineMethod(data, methodSelect.value)
+      || annualDeclineMethod(data, currentAnnualSurfaceMethod(data));
+    if (!selectedMethod) return;
+    methodSelect.value = selectedMethod.key;
+    state.annualSurfaceMethod = selectedMethod.key;
     const ndviMetric = ndviSelect.value || "median";
     const ndviPeriod = ndviPeriodSelect.value || "warm_months";
     const rows = data.annual_changes || [];
     const annualRowsByWaterYear = new Map(
-      (surfaceMethodPayload(data, selectedMethod)?.annual_decline || [])
+      (selectedMethod.rows || [])
         .filter(row => row?.water_year)
         .map(row => [row.water_year, row])
     );
@@ -3561,7 +3671,7 @@
       state.charts.push(state.aquiferAnnualChangesChart);
     }
     const surfaceSeries = [{
-      name: `افت ${surfaceMethodLabel(data, selectedMethod, true)}`,
+      name: `افت ${selectedMethod.label}`,
       type: "bar",
       yAxisIndex: 0,
       data: rows.map(row => (
@@ -3569,7 +3679,7 @@
       )),
       barMaxWidth: 18,
       itemStyle: {
-        color: surfaceMethodColor(selectedMethod),
+        color: selectedMethod.color,
         borderRadius: [4, 4, 0, 0]
       },
       tooltip: {
@@ -3592,7 +3702,7 @@
         textStyle: { fontFamily: "Vazirmatn", fontSize: 10 },
         itemWidth: 16,
         selected: Object.fromEntries([
-          [`افت ${surfaceMethodLabel(data, selectedMethod, true)}`, true],
+          [`افت ${selectedMethod.label}`, true],
           ["مجموع بارش", true],
           ["مجموع AET", true],
           [`NDVI ${ndviLabel} (${ndviPeriodLabel})`, true],
@@ -3745,8 +3855,8 @@
             <th>NDVI ${ndviLabel} (${ndviPeriodLabel})</th>
             <th>سطح کشت آبی احتمالی (هکتار)</th>
             <th>پوشش زمانی</th>
-            <th>افت ${escapeHtml(surfaceMethodLabel(data, selectedMethod, true))}</th>
-            <th>ذخیره ${escapeHtml(surfaceMethodLabel(data, selectedMethod, true))}</th>
+            <th>افت ${escapeHtml(selectedMethod.label)}</th>
+            <th>ذخیره ${escapeHtml(selectedMethod.label)}</th>
           </tr>
         </thead>
         <tbody>
@@ -4264,24 +4374,27 @@
 
   function renderAquiferAnnualTable(data) {
     const container = document.getElementById("aquiferAnnualTable");
-    const rows = data.annual_decline.map(row => `
+    const methods = annualDeclineMethods(data);
+    const years = (data.annual_decline || []).map(row => row.water_year);
+    const rowsByMethod = new Map(
+      methods.map(method => [
+        method.key,
+        new Map((method.rows || []).map(row => [row.water_year, row]))
+      ])
+    );
+    const rows = years.map(waterYear => `
       <tr>
-        <td dir="ltr" class="font-bold text-navy">${row.water_year}</td>
-        <td>${numberCell(row.piezometric_surface.start_level)}</td>
-        <td>${endpointCell(row.piezometric_surface.end_level, row.piezometric_surface_end_month)}</td>
-        <td>${metricCell(row.piezometric_surface.decline)}</td>
-        <td>${metricCell(row.piezometric_surface.cumulative_decline)}</td>
-        <td>${metricCell(row.piezometric_surface.storage_change_mcm)}</td>
-        <td>${numberCell(row.thiessen.start_level)}</td>
-        <td>${endpointCell(row.thiessen.end_level, row.thiessen_end_month)}</td>
-        <td>${metricCell(row.thiessen.decline)}</td>
-        <td>${metricCell(row.thiessen.cumulative_decline)}</td>
-        <td>${metricCell(row.thiessen.storage_change_mcm)}</td>
-        <td>${numberCell(row.arithmetic.start_level)}</td>
-        <td>${endpointCell(row.arithmetic.end_level, row.arithmetic_end_month)}</td>
-        <td>${metricCell(row.arithmetic.decline)}</td>
-        <td>${metricCell(row.arithmetic.cumulative_decline)}</td>
-        <td>${metricCell(row.arithmetic.storage_change_mcm)}</td>
+        <td dir="ltr" class="sticky right-0 z-10 bg-white font-bold text-navy">${waterYear}</td>
+        ${methods.map(method => {
+          const row = rowsByMethod.get(method.key)?.get(waterYear) || {};
+          return `
+            <td>${numberCell(row.start_level)}</td>
+            <td>${endpointCell(row.end_level, row.end_month)}</td>
+            <td>${metricCell(row.decline)}</td>
+            <td>${metricCell(row.cumulative_decline)}</td>
+            <td>${metricCell(row.storage_change_mcm)}</td>
+          `;
+        }).join("")}
       </tr>
     `).join("");
     container.innerHTML = `
@@ -4289,26 +4402,18 @@
         <thead>
           <tr>
             <th rowspan="2">سال آبی</th>
-            <th colspan="5" class="group-heading">${surfaceHydrographLabel(data)}</th>
-            <th colspan="5" class="group-heading">میانگین وزنی تیسن</th>
-            <th colspan="5" class="group-heading">میانگین حسابی</th>
+            ${methods.map(method => `
+              <th colspan="5" class="group-heading">${escapeHtml(method.label)}</th>
+            `).join("")}
           </tr>
           <tr>
-            <th>تراز مهر شروع</th>
-            <th>تراز پایان</th>
-            <th>افت سالانه</th>
-            <th>افت تجمعی</th>
-            <th>تغییر ذخیره</th>
-            <th>تراز مهر شروع</th>
-            <th>تراز پایان</th>
-            <th>افت سالانه</th>
-            <th>افت تجمعی</th>
-            <th>تغییر ذخیره</th>
-            <th>تراز مهر شروع</th>
-            <th>تراز پایان</th>
-            <th>افت سالانه</th>
-            <th>افت تجمعی</th>
-            <th>تغییر ذخیره</th>
+            ${methods.map(() => `
+              <th>تراز مهر شروع</th>
+              <th>تراز پایان</th>
+              <th>افت سالانه</th>
+              <th>افت تجمعی</th>
+              <th>تغییر ذخیره</th>
+            `).join("")}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -4695,14 +4800,30 @@
     renderMap(data);
     renderAquiferChart(data);
     const ndviMetric = document.getElementById("ndviMetric");
-    ndviMetric.value = data.ndvi.default_metric;
-    ndviMetric.onchange = () => renderAquiferNdviChart(data);
+    if (ndviMetric) {
+      ndviMetric.value = data.ndvi.default_metric;
+      ndviMetric.onchange = () => renderAquiferNdviChart(data);
+    }
+    const ndviGroundwaterMethod = document.getElementById("ndviGroundwaterMethod");
+    if (ndviGroundwaterMethod) {
+      ndviGroundwaterMethod.onchange = () => renderAquiferNdviChart(data);
+    }
+    const aetGroundwaterMethod = document.getElementById("aetGroundwaterMethod");
+    if (aetGroundwaterMethod) {
+      aetGroundwaterMethod.onchange = () => renderAquiferAetChart(data);
+    }
     const annualSurfaceMethod = document.getElementById("annualSurfaceMethod");
     const annualNdviMetric = document.getElementById("annualNdviMetric");
     const annualNdviPeriod = document.getElementById("annualNdviPeriod");
-    annualSurfaceMethod.onchange = () => renderAquiferAnnualChanges(data);
-    annualNdviMetric.onchange = () => renderAquiferAnnualChanges(data);
-    annualNdviPeriod.onchange = () => renderAquiferAnnualChanges(data);
+    if (annualSurfaceMethod) {
+      annualSurfaceMethod.onchange = () => renderAquiferAnnualChanges(data);
+    }
+    if (annualNdviMetric) {
+      annualNdviMetric.onchange = () => renderAquiferAnnualChanges(data);
+    }
+    if (annualNdviPeriod) {
+      annualNdviPeriod.onchange = () => renderAquiferAnnualChanges(data);
+    }
     renderAquiferAnnualTable(data);
     renderSpatialAnalysis(data);
     renderWellCharts(data);
@@ -4746,6 +4867,8 @@
       window.setTimeout(() => state.modalChart?.resize(), 50);
     }
     if (group === "aquifer") {
+      const viewSelect = document.getElementById("aquiferViewSelect");
+      if (viewSelect) viewSelect.value = tab;
       syncAquiferPanelHeights();
     }
   }
@@ -4820,6 +4943,13 @@
     root.querySelector("#aiOpenModalButton")?.addEventListener("click", openAiModal);
     root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => {
       analyzeWithAi(root);
+    });
+    root.querySelector("#aquiferViewSelect")?.addEventListener("change", event => {
+      const tab = event.target.value;
+      const button = root.querySelector(
+        `[data-tab-group="aquifer"][data-tab="${tab}"]`
+      );
+      if (button) switchTab(button);
     });
     root.querySelector("#aiProvider")?.addEventListener("change", syncAiModelOptions);
     root.querySelector("#aiModel")?.addEventListener("change", updateAiModelHint);
@@ -4945,8 +5075,7 @@
       refreshLeafletMinimumZoom(state.map);
     }
     if (state.selectionMap) {
-      state.selectionMap.invalidateSize();
-      refreshLeafletMinimumZoom(state.selectionMap);
+      resizeSelectionMap();
     }
     window.requestAnimationFrame(applyHeatmapClip);
   });
