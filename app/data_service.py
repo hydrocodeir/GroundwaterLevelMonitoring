@@ -11,6 +11,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.interpolate import RBFInterpolator
+from scipy.optimize import curve_fit
 from scipy.stats import kendalltau, pearsonr, spearmanr, theilslopes
 from pyproj import Transformer
 from shapely import voronoi_polygons
@@ -29,6 +31,12 @@ NEAREST_PRECIPITATION_STATION_COUNT = 3
 COMPARISON_GEOMETRY_TOLERANCE = 0.001
 PIEZOMETRIC_SURFACE_GRID_SIZE = 48
 IDW_POWER = 2.0
+SURFACE_INTERPOLATION_METHODS = frozenset({"idw", "ordinary_kriging", "spline"})
+SURFACE_INTERPOLATION_LABELS = {
+    "idw": "IDW",
+    "ordinary_kriging": "Ordinary Kriging",
+    "spline": "Thin Plate Spline",
+}
 TREND_STRONG_THRESHOLD = 0.6
 TREND_WEAK_THRESHOLD = 0.3
 DECLINE_ANOMALY_Z_THRESHOLD = 1.5
@@ -855,21 +863,182 @@ class GroundwaterData:
             interpolated[exact_rows] = point_values[exact_columns]
         return interpolated
 
+    @staticmethod
+    def _spherical_variogram(
+        distances: np.ndarray,
+        nugget: float,
+        sill: float,
+        variogram_range: float,
+    ) -> np.ndarray:
+        distances = np.asarray(distances, dtype=float)
+        safe_range = max(float(variogram_range), 1e-9)
+        ratio = np.clip(distances / safe_range, 0.0, 1.0)
+        structure = np.where(
+            distances < safe_range,
+            1.5 * ratio - 0.5 * ratio**3,
+            1.0,
+        )
+        return float(nugget) + float(sill) * structure
+
+    @classmethod
+    def _fit_spherical_variogram(
+        cls,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> tuple[float, float, float] | None:
+        if len(point_values) < 3 or np.nanstd(point_values) <= 1e-9:
+            return None
+        dx = point_xy[:, None, 0] - point_xy[None, :, 0]
+        dy = point_xy[:, None, 1] - point_xy[None, :, 1]
+        distances = np.sqrt(dx * dx + dy * dy)
+        value_diff = point_values[:, None] - point_values[None, :]
+        semivariances = 0.5 * value_diff * value_diff
+        upper = np.triu_indices(len(point_values), k=1)
+        h = distances[upper]
+        gamma = semivariances[upper]
+        valid = np.isfinite(h) & np.isfinite(gamma) & (h > 0)
+        h = h[valid]
+        gamma = gamma[valid]
+        if len(h) < 3 or np.nanmax(h) <= 0:
+            return None
+        max_distance = float(np.nanmax(h))
+        max_gamma = float(max(np.nanmax(gamma), np.nanvar(point_values), 1e-9))
+        try:
+            parameters, _ = curve_fit(
+                cls._spherical_variogram,
+                h,
+                gamma,
+                p0=(0.0, max_gamma, max_distance / 2),
+                bounds=(
+                    (0.0, 1e-12, max_distance * 0.05),
+                    (max_gamma, max_gamma * 5, max_distance * 3),
+                ),
+                maxfev=5000,
+            )
+        except (RuntimeError, ValueError, FloatingPointError):
+            return None
+        nugget, sill, variogram_range = (float(value) for value in parameters)
+        if not all(np.isfinite([nugget, sill, variogram_range])):
+            return None
+        return nugget, sill, variogram_range
+
+    @classmethod
+    def _ordinary_kriging_values(
+        cls,
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> np.ndarray | None:
+        parameters = cls._fit_spherical_variogram(point_xy, point_values)
+        if parameters is None:
+            return None
+        n_points = len(point_values)
+        dx = point_xy[:, None, 0] - point_xy[None, :, 0]
+        dy = point_xy[:, None, 1] - point_xy[None, :, 1]
+        point_distances = np.sqrt(dx * dx + dy * dy)
+        gamma_matrix = cls._spherical_variogram(point_distances, *parameters)
+        np.fill_diagonal(gamma_matrix, 0.0)
+
+        system = np.empty((n_points + 1, n_points + 1), dtype=float)
+        system[:n_points, :n_points] = gamma_matrix
+        system[:n_points, n_points] = 1.0
+        system[n_points, :n_points] = 1.0
+        system[n_points, n_points] = 0.0
+
+        dx0 = point_xy[:, None, 0] - samples_xy[None, :, 0]
+        dy0 = point_xy[:, None, 1] - samples_xy[None, :, 1]
+        sample_distances = np.sqrt(dx0 * dx0 + dy0 * dy0)
+        rhs = np.vstack(
+            [
+                cls._spherical_variogram(sample_distances, *parameters),
+                np.ones(len(samples_xy), dtype=float),
+            ]
+        )
+        try:
+            solution = np.linalg.solve(system, rhs)
+        except np.linalg.LinAlgError:
+            try:
+                solution = np.linalg.lstsq(system, rhs, rcond=None)[0]
+            except np.linalg.LinAlgError:
+                return None
+        interpolated = point_values @ solution[:n_points, :]
+        return interpolated.astype(float)
+
+    @staticmethod
+    def _spline_values(
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> np.ndarray | None:
+        if len(point_values) < 3:
+            return None
+        smoothing = max(float(np.nanstd(point_values)) * 0.01, 0.0)
+        try:
+            interpolator = RBFInterpolator(
+                point_xy,
+                point_values,
+                kernel="thin_plate_spline",
+                smoothing=smoothing,
+            )
+            interpolated = interpolator(samples_xy)
+        except (ValueError, np.linalg.LinAlgError):
+            return None
+        return np.asarray(interpolated, dtype=float)
+
+    @classmethod
+    def _surface_interpolation_values(
+        cls,
+        method: str,
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> tuple[np.ndarray, str]:
+        if len(point_values) <= 1 or method == "idw":
+            return cls._idw_values(samples_xy, point_xy, point_values), "idw"
+        if method == "ordinary_kriging":
+            kriging_values = cls._ordinary_kriging_values(
+                samples_xy,
+                point_xy,
+                point_values,
+            )
+            if kriging_values is not None and np.isfinite(kriging_values).all():
+                return kriging_values, "ordinary_kriging"
+            return cls._idw_values(samples_xy, point_xy, point_values), "idw"
+        if method == "spline":
+            spline_values = cls._spline_values(samples_xy, point_xy, point_values)
+            if spline_values is not None and np.isfinite(spline_values).all():
+                return spline_values, "spline"
+        return cls._idw_values(samples_xy, point_xy, point_values), "idw"
+
+    @staticmethod
+    def _surface_method_metadata(method: str) -> dict[str, str]:
+        label = SURFACE_INTERPOLATION_LABELS.get(
+            method,
+            SURFACE_INTERPOLATION_LABELS["idw"],
+        )
+        return {
+            "method": method,
+            "method_label": f"میانگین مساحتی سطح پیزومتریک ماهانه ({label})",
+            "short_label": f"سطح پیزومتریک {label}",
+        }
+
     def _piezometric_surface_value_map(
         self,
         group_id: str,
         frame: pd.DataFrame,
         selected_sites: pd.DataFrame,
+        interpolation_method: str,
     ) -> tuple[dict[int, float], dict[str, Any]]:
         values: dict[int, float] = {}
         boundary_area_m2 = None
+        metadata = self._surface_method_metadata(interpolation_method)
         if frame.empty or selected_sites.empty:
             return values, {
-                "method": "idw",
-                "method_label": "میانگین مساحتی سطح پیزومتریک ماهانه (IDW)",
+                **metadata,
                 "grid_size": PIEZOMETRIC_SURFACE_GRID_SIZE,
                 "area_m2": None,
                 "area_km2": None,
+                "fallback_month_count": 0,
             }
 
         projected_boundary, forward = self._projected_boundary(group_id, selected_sites)
@@ -894,16 +1063,26 @@ class GroundwaterData:
             point_values = month_frame["level"].to_numpy(dtype=float)
             if not len(point_values):
                 continue
-            interpolated = self._idw_values(samples_xy, point_xy, point_values)
+            interpolated, actual_method = self._surface_interpolation_values(
+                interpolation_method,
+                samples_xy,
+                point_xy,
+                point_values,
+            )
+            if actual_method != interpolation_method:
+                metadata["fallback_month_count"] = str(
+                    int(metadata.get("fallback_month_count", "0")) + 1
+                )
             values[int(month_index)] = float(
                 np.average(interpolated, weights=sample_weights)
             )
         return values, {
-            "method": "idw",
-            "method_label": "میانگین مساحتی سطح پیزومتریک ماهانه (IDW)",
+            **metadata,
             "grid_size": PIEZOMETRIC_SURFACE_GRID_SIZE,
             "area_m2": finite_or_none(boundary_area_m2, 2),
             "area_km2": finite_or_none(boundary_area_m2 / 1_000_000, 3),
+            "fallback_method": "idw",
+            "fallback_month_count": int(metadata.get("fallback_month_count", "0")),
         }
 
     def _prepare_monthly_measurements(self) -> pd.DataFrame:
@@ -2702,6 +2881,7 @@ class GroundwaterData:
         manual_selection: bool = False,
         selected_well_ids: list[str] | None = None,
         storage_coefficient: float | None = None,
+        surface_interpolation_method: str = "idw",
     ) -> dict[str, Any]:
         if group_id not in self.groups:
             raise KeyError(group_id)
@@ -2709,6 +2889,8 @@ class GroundwaterData:
             not np.isfinite(storage_coefficient) or storage_coefficient <= 0
         ):
             raise ValueError("ضریب ذخیره/آبدهی ویژه باید عددی مثبت باشد")
+        if surface_interpolation_method not in SURFACE_INTERPOLATION_METHODS:
+            raise ValueError("روش درون‌یابی سطح پیزومتریک معتبر نیست")
         (
             start_year_value,
             start_month_value,
@@ -2806,6 +2988,7 @@ class GroundwaterData:
             group_id,
             display_calculation_frame,
             selected_sites,
+            surface_interpolation_method,
         )
         (
             arithmetic,
@@ -2828,6 +3011,7 @@ class GroundwaterData:
                 group_id,
                 comparison_calculation_frame,
                 selected_sites,
+                surface_interpolation_method,
             )
         else:
             comparison_piezometric_surface_values = {}
@@ -2971,6 +3155,7 @@ class GroundwaterData:
                     well["id"] for well in wells if well["included"]
                 ],
                 "storage_coefficient": storage_coefficient,
+                "surface_interpolation_method": surface_interpolation_method,
             },
             "calendar": {
                 "months_per_year": MONTHS_PER_YEAR,

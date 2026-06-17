@@ -67,6 +67,19 @@
           aria-label="ضریب ذخیره یا آبدهی ویژه"
         >
       </label>
+      <label class="block">
+        <span class="compact-date-label">درون‌یابی سطح</span>
+        <select
+          id="surfaceInterpolationMethod"
+          class="field compact-field"
+          name="surface_interpolation_method"
+          aria-label="روش درون‌یابی سطح پیزومتریک"
+        >
+          <option value="idw">IDW</option>
+          <option value="ordinary_kriging">Ordinary Kriging</option>
+          <option value="spline">Thin Plate Spline</option>
+        </select>
+      </label>
       <button id="applyAnalysisFilters" type="submit" class="primary-button">
         <span>به‌روزرسانی تحلیل</span>
         <span aria-hidden="true">←</span>
@@ -215,7 +228,7 @@
           <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
             روش محاسبه افت
             <select id="annualDeclineMethod" class="field h-9 w-40 text-xs">
-              <option value="piezometric_surface">سطح IDW</option>
+              <option value="piezometric_surface">سطح درون‌یابی</option>
               <option value="thiessen">تیسن</option>
               <option value="arithmetic">حسابی</option>
             </select>

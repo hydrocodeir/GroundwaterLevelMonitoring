@@ -82,6 +82,11 @@ class AIChatFilters(BaseModel):
     manual_selection: bool = False
     selected_well_ids: list[str] = Field(default_factory=list, max_length=250)
     storage_coefficient: float | None = Field(default=None, gt=0)
+    surface_interpolation_method: Literal[
+        "idw",
+        "ordinary_kriging",
+        "spline",
+    ] = "idw"
 
 
 class AIChatRequest(BaseModel):

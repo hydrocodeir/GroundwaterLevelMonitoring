@@ -146,6 +146,7 @@ def _dashboard_payload(
     manual_selection: bool = False,
     selected_well_ids: list[str] | None = None,
     storage_coefficient: float | None = None,
+    surface_interpolation_method: str = "idw",
 ) -> dict:
     return get_data_service().dashboard(
         aquifer_id,
@@ -162,6 +163,7 @@ def _dashboard_payload(
         manual_selection=manual_selection,
         selected_well_ids=selected_well_ids,
         storage_coefficient=storage_coefficient,
+        surface_interpolation_method=surface_interpolation_method,
     )
 
 
@@ -181,6 +183,7 @@ def aquifer_data(
     manual_selection: bool = Query(default=False),
     selected_well_ids: list[str] | None = Query(default=None),
     storage_coefficient: float = Query(..., gt=0),
+    surface_interpolation_method: str = Query(default="idw"),
 ) -> dict:
     try:
         return _dashboard_payload(
@@ -198,6 +201,7 @@ def aquifer_data(
             manual_selection=manual_selection,
             selected_well_ids=selected_well_ids,
             storage_coefficient=storage_coefficient,
+            surface_interpolation_method=surface_interpolation_method,
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
@@ -222,6 +226,7 @@ def aquifer_report(
     manual_selection: bool = Query(default=False),
     selected_well_ids: list[str] | None = Query(default=None),
     storage_coefficient: float = Query(..., gt=0),
+    surface_interpolation_method: str = Query(default="idw"),
 ) -> HTMLResponse:
     try:
         payload = _dashboard_payload(
@@ -239,6 +244,7 @@ def aquifer_report(
             manual_selection=manual_selection,
             selected_well_ids=selected_well_ids,
             storage_coefficient=storage_coefficient,
+            surface_interpolation_method=surface_interpolation_method,
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
@@ -338,6 +344,7 @@ async def ai_chat(request: Request) -> JSONResponse:
             manual_selection=filters.manual_selection,
             selected_well_ids=filters.selected_well_ids or None,
             storage_coefficient=filters.storage_coefficient,
+            surface_interpolation_method=filters.surface_interpolation_method,
         )
     except KeyError:
         return _ai_error_response(

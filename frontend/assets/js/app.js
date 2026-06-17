@@ -671,7 +671,8 @@
       Boolean(filters.continuous_only),
       Boolean(filters.manual_selection),
       filters.selected_well_ids || [],
-      filters.storage_coefficient
+      filters.storage_coefficient,
+      filters.surface_interpolation_method
     ]);
     const changedContext = state.chatContextKey !== contextKey;
     state.chatAquiferId = data.id;
@@ -776,7 +777,8 @@
             continuous_only: Boolean(filters.continuous_only),
             manual_selection: Boolean(filters.manual_selection),
             selected_well_ids: filters.selected_well_ids || [],
-            storage_coefficient: filters.storage_coefficient
+            storage_coefficient: filters.storage_coefficient,
+            surface_interpolation_method: filters.surface_interpolation_method
           }
         })
       });
@@ -1022,10 +1024,19 @@
 
   function groundwaterMethodLabel(method, compact = false) {
     if (method === "piezometric_surface") {
-      return compact ? "سطح IDW" : "میانگین مساحتی سطح پیزومتریک IDW";
+      return compact ? "سطح درون‌یابی" : "میانگین مساحتی سطح پیزومتریک";
     }
     if (method === "arithmetic") return compact ? "حسابی" : "میانگین حسابی";
     return compact ? "تیسن" : "میانگین وزنی تیسن";
+  }
+
+  function surfaceHydrographLabel(data, compact = false) {
+    const label = data?.piezometric_surface?.short_label || "سطح پیزومتریک";
+    if (!compact) return label;
+    return label
+      .replace("سطح پیزومتریک ", "سطح ")
+      .replace("Ordinary Kriging", "Kriging")
+      .replace("Thin Plate Spline", "Spline");
   }
 
   function trendChip(label, trend, variant = "") {
@@ -2181,6 +2192,10 @@
     if (storageInput && data.filters.storage_coefficient != null) {
       storageInput.value = String(data.filters.storage_coefficient);
     }
+    const surfaceMethodSelect = document.getElementById("surfaceInterpolationMethod");
+    if (surfaceMethodSelect && data.filters.surface_interpolation_method) {
+      surfaceMethodSelect.value = data.filters.surface_interpolation_method;
+    }
     document.getElementById("comparisonTrendEnabled").checked =
       Boolean(data.filters.comparison_enabled);
     syncComparisonTrendUI();
@@ -2313,7 +2328,7 @@
         data.storage?.coefficient == null ? "—" : faNumber.format(data.storage.coefficient),
         data.storage?.area_km2 == null
           ? "مساحت آبخوان نامشخص"
-          : `${formatNumber(data.storage.area_km2, " km²")} مساحت آبخوان`,
+          : `${formatNumber(data.storage.area_km2, " km²")} · ${surfaceHydrographLabel(data, true)}`,
         "bg-violet-600"
       ],
       ["تغییر دوره", changeLabel, "اولین تا آخرین مقدار موجود", change < 0 ? "bg-coral" : "bg-teal"]
@@ -2523,6 +2538,9 @@
     const option = baseChartOption();
     const categories = data.hydrographs.arithmetic.map(item => item[0]);
     const comparisonEnabled = data.filters.comparison_enabled;
+    const surfaceLabel = surfaceHydrographLabel(data);
+    const surfaceTrendLabel = `روند ${surfaceHydrographLabel(data, true)} (بازه اصلی)`;
+    const surfaceComparisonTrendLabel = `روند ${surfaceHydrographLabel(data, true)} (مقایسه‌ای)`;
     option.xAxis.data = categories;
     option.legend = {
       top: 4,
@@ -2534,12 +2552,12 @@
         "روند حسابی (بازه اصلی)": false,
         "میانگین تیسن": true,
         "روند تیسن (بازه اصلی)": true,
-        "سطح پیزومتریک IDW": true,
-        "روند سطح IDW (بازه اصلی)": true,
+        [surfaceLabel]: true,
+        [surfaceTrendLabel]: true,
         ...(comparisonEnabled ? {
           "روند حسابی (مقایسه‌ای)": false,
           "روند تیسن (مقایسه‌ای)": true,
-          "روند سطح IDW (مقایسه‌ای)": true
+          [surfaceComparisonTrendLabel]: true
         } : {}),
         "بارش ماهانه": true
       }
@@ -2618,7 +2636,7 @@
           z: 5
         }] : []),
       {
-        name: "سطح پیزومتریک IDW",
+        name: surfaceLabel,
         type: "line",
         data: data.hydrographs.piezometric_surface.map(item => item[1]),
         showSymbol: false,
@@ -2628,7 +2646,7 @@
         z: 3
       },
       {
-        name: "روند سطح IDW (بازه اصلی)",
+        name: surfaceTrendLabel,
         type: "line",
         data: data.hydrographs.piezometric_surface_trend.series.map(item => item[1]),
         showSymbol: false,
@@ -2639,7 +2657,7 @@
         z: 4
       },
       ...(comparisonEnabled ? [{
-          name: "روند سطح IDW (مقایسه‌ای)",
+          name: surfaceComparisonTrendLabel,
           type: "line",
           data: alignedTrendSeries(
             data.hydrographs.piezometric_surface_comparison_trend,
@@ -2658,7 +2676,7 @@
     document.getElementById("aquiferTrendSummary").innerHTML = [
       trendChip("حسابی اصلی", data.hydrographs.arithmetic_trend),
       trendChip("تیسن اصلی", data.hydrographs.thiessen_trend),
-      trendChip("سطح IDW اصلی", data.hydrographs.piezometric_surface_trend),
+      trendChip(`${surfaceHydrographLabel(data, true)} اصلی`, data.hydrographs.piezometric_surface_trend),
       ...(comparisonEnabled ? [
         trendChip(
           "حسابی مقایسه‌ای",
@@ -2671,7 +2689,7 @@
           "comparison"
         ),
         trendChip(
-          "سطح IDW مقایسه‌ای",
+          `${surfaceHydrographLabel(data, true)} مقایسه‌ای`,
           data.hydrographs.piezometric_surface_comparison_trend,
           "comparison"
         )
@@ -2726,7 +2744,7 @@
       selected: {
         "میانگین حسابی": false,
         "میانگین تیسن": true,
-        "سطح پیزومتریک IDW": true,
+        [surfaceHydrographLabel(data)]: true,
         [`NDVI ${ndviMetricLabel(metric)}`]: true
       }
     };
@@ -2764,7 +2782,7 @@
         z: 3
       },
       {
-        name: "سطح پیزومتریک IDW",
+        name: surfaceHydrographLabel(data),
         type: "line",
         data: data.hydrographs.piezometric_surface.map(item => item[1]),
         showSymbol: false,
@@ -2820,7 +2838,7 @@
       selected: {
         "میانگین حسابی": false,
         "میانگین تیسن": true,
-        "سطح پیزومتریک IDW": true,
+        [surfaceHydrographLabel(data)]: true,
         "AET ماهانه": true
       }
     };
@@ -2858,7 +2876,7 @@
         z: 3
       },
       {
-        name: "سطح پیزومتریک IDW",
+        name: surfaceHydrographLabel(data),
         type: "line",
         data: data.hydrographs.piezometric_surface.map(item => item[1]),
         showSymbol: false,
@@ -3171,7 +3189,7 @@
               <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
                 روش
                 <select id="scenarioMethod" class="field h-9 w-40 text-xs">
-                  <option value="piezometric_surface" ${method === "piezometric_surface" ? "selected" : ""}>سطح IDW</option>
+                  <option value="piezometric_surface" ${method === "piezometric_surface" ? "selected" : ""}>${surfaceHydrographLabel(data, true)}</option>
                   <option value="thiessen" ${method === "thiessen" ? "selected" : ""}>تیسن</option>
                   <option value="arithmetic" ${method === "arithmetic" ? "selected" : ""}>حسابی</option>
                 </select>
@@ -3605,7 +3623,7 @@
         <thead>
           <tr>
             <th rowspan="2">سال آبی</th>
-            <th colspan="5" class="group-heading">سطح پیزومتریک IDW</th>
+            <th colspan="5" class="group-heading">${surfaceHydrographLabel(data)}</th>
             <th colspan="5" class="group-heading">میانگین وزنی تیسن</th>
             <th colspan="5" class="group-heading">میانگین حسابی</th>
           </tr>
@@ -3979,6 +3997,9 @@
     if (filters.storage_coefficient !== null && filters.storage_coefficient !== undefined) {
       params.set("storage_coefficient", filters.storage_coefficient);
     }
+    if (filters.surface_interpolation_method) {
+      params.set("surface_interpolation_method", filters.surface_interpolation_method);
+    }
     (filters.selected_well_ids || []).forEach(wellId => {
       params.append("selected_well_ids", wellId);
     });
@@ -4078,6 +4099,8 @@
         return;
       }
       params.set("storage_coefficient", String(storageCoefficient));
+      const surfaceMethod = root.querySelector("#surfaceInterpolationMethod")?.value || "idw";
+      params.set("surface_interpolation_method", surfaceMethod);
       if (filters) {
         params.set("start_year", filters.startYear);
         params.set("start_month", filters.startMonth);

@@ -104,6 +104,32 @@ class GroundwaterDataTests(unittest.TestCase):
             places=3,
         )
 
+    def test_piezometric_surface_supports_multiple_interpolation_methods(self) -> None:
+        group_id = next(iter(self.service.groups))
+        for method in ("idw", "ordinary_kriging", "spline"):
+            with self.subTest(method=method):
+                payload = self.service.dashboard(
+                    group_id,
+                    storage_coefficient=0.08,
+                    surface_interpolation_method=method,
+                )
+
+                self.assertEqual(
+                    payload["filters"]["surface_interpolation_method"],
+                    method,
+                )
+                self.assertEqual(payload["piezometric_surface"]["method"], method)
+                self.assertEqual(
+                    [item[0] for item in payload["hydrographs"]["piezometric_surface"]],
+                    [item[0] for item in payload["hydrographs"]["thiessen"]],
+                )
+                self.assertTrue(
+                    any(
+                        value is not None
+                        for _, value in payload["hydrographs"]["piezometric_surface"]
+                    )
+                )
+
     def test_default_period_uses_latest_group_data(self) -> None:
         group_id = next(iter(self.service.groups))
         frame = self.service.monthly[
