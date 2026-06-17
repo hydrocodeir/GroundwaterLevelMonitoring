@@ -83,7 +83,15 @@
             <span>Thin Plate Spline</span>
           </label>
         </div>
-        <small class="mt-1 block text-[9px] leading-5 text-slate-400">IDW همیشه فعال است و می‌توانید یک یا چند روش دیگر را هم اضافه کنید.</small>
+        <small class="mt-1 block text-[9px] leading-5 text-slate-400">روش‌های خام/مرسوم حفظ شده‌اند؛ اصلاح‌شده‌ها با پشتیبان ثابت از همین روش‌ها ساخته می‌شوند.</small>
+      </label>
+      <label class="block">
+        <span class="compact-date-label">پشتیبان ثابت اصلاح</span>
+        <select id="correctedSupportMethod" class="field compact-field" name="corrected_support_method" aria-label="روش پشتیبان ثابت اصلاح هیدروگراف">
+          <option value="fixed_thiessen">تیسن ثابت</option>
+          <option value="fixed_grid">شبکه ثابت</option>
+          <option value="fixed_arithmetic">چاه‌های ثابت</option>
+        </select>
       </label>
       <button id="applyAnalysisFilters" type="submit" class="primary-button">
         <span>به‌روزرسانی تحلیل</span>
@@ -169,6 +177,8 @@
             <span class="legend-item"><i class="bg-teal"></i> داخل محاسبات</span>
             <span class="legend-item"><i class="bg-amber-400"></i> خارج از محاسبات</span>
             <span class="legend-item"><i class="bg-coral"></i> فاقد داده</span>
+            <span class="legend-item"><b class="text-base leading-none text-coral">×</b> بازنشسته</span>
+            <span class="legend-item"><b class="text-base leading-none text-teal">+</b> چاه جدید</span>
             <span class="legend-item"><b class="text-base leading-none text-violet-700">×</b> ایستگاه بارش منتخب</span>
           </div>
           <div class="flex flex-wrap gap-2" aria-label="فیلتر نمایش چاه‌ها روی نقشه">
@@ -195,7 +205,7 @@
         <div>
           <span class="section-kicker">تحلیل آبخوان</span>
           <h3 class="section-title">هیدروگراف معرف و افت سالانه</h3>
-          <p class="section-description">مقایسه روش میانگین حسابی، تیسن و میانگین مساحتی سطح پیزومتریک IDW</p>
+          <p class="section-description">مقایسه روش‌های خام/مرسوم و هیدروگراف‌های اصلاح‌شده با پشتیبان ثابت</p>
           <div id="aquiferTrendSummary" class="mt-3 flex flex-wrap gap-2"></div>
         </div>
         <div class="flex max-w-full flex-col items-end gap-3">

@@ -57,6 +57,21 @@
     ordinary_kriging: "#0F766E",
     spline: "#DB2777"
   };
+  const correctedSupportLabels = {
+    fixed_thiessen: "تیسن ثابت",
+    fixed_grid: "شبکه ثابت",
+    fixed_arithmetic: "چاه‌های ثابت"
+  };
+  const correctedStatusLabels = {
+    measured: "اندازه‌گیری‌شده",
+    out_of_range_censored: "خارج از دامنه",
+    retired_no_longer_measurable: "بازنشسته/غیرقابل اندازه‌گیری",
+    missing: "فاقد داده",
+    inactive: "غیرفعال",
+    new_well_added: "چاه جدید",
+    imputed: "برآوردشده",
+    replacement_candidate: "گزینه جایگزین"
+  };
   const monthNames = [
     "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
     "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
@@ -798,7 +813,8 @@
             selected_well_ids: filters.selected_well_ids || [],
             storage_coefficient: filters.storage_coefficient,
             surface_interpolation_methods: filters.surface_interpolation_methods || [],
-            surface_interpolation_method: filters.surface_interpolation_method
+            surface_interpolation_method: filters.surface_interpolation_method,
+            corrected_support_method: filters.corrected_support_method || "fixed_thiessen"
           }
         })
       });
@@ -1117,6 +1133,36 @@
           }
         : null
     );
+  }
+
+  function correctedSupportMethod(data) {
+    return data?.filters?.corrected_support_method || data?.corrected?.support_method || "fixed_thiessen";
+  }
+
+  function correctedPrimaryLabel(data, compact = false) {
+    const label = data?.corrected?.support_label
+      || correctedSupportLabels[correctedSupportMethod(data)]
+      || "هیدروگراف اصلاح‌شده";
+    return compact ? label.replace("پشتیبان ثابت ", "") : label;
+  }
+
+  function correctedSeries(data, key) {
+    return data?.corrected?.hydrographs?.[key] || [];
+  }
+
+  function correctedTrend(data, key) {
+    return data?.corrected?.hydrographs?.[`${key}_trend`] || {};
+  }
+
+  function correctedPrimarySeriesKey(data) {
+    const support = correctedSupportMethod(data);
+    if (support === "fixed_arithmetic") return "corrected_arithmetic";
+    if (support === "fixed_grid") return `corrected_${primarySurfaceMethod(data)}`;
+    return "corrected_thiessen";
+  }
+
+  function correctedStatusLabel(status) {
+    return correctedStatusLabels[status] || status || "نامشخص";
   }
 
   function surfaceMethodColor(method) {
@@ -2525,6 +2571,95 @@
     return series;
   }
 
+  function correctedHydrographSeries(data) {
+    const primaryKey = correctedPrimarySeriesKey(data);
+    const primaryLabel = `اصلاح‌شده ${correctedPrimaryLabel(data, true)}`;
+    const series = [];
+    const addLine = (key, name, color, selected = false) => {
+      const values = correctedSeries(data, key);
+      if (!values.length) return;
+      series.push({
+        name,
+        type: "line",
+        data: values.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: {
+          width: key === primaryKey ? 3 : 2,
+          color,
+          type: key === primaryKey ? "solid" : "dashed",
+          opacity: selected || key === primaryKey ? 0.98 : 0.72
+        },
+        itemStyle: { color },
+        z: key === primaryKey ? 7 : 4
+      });
+    };
+    addLine("corrected_arithmetic", "اصلاح‌شده حسابی", "#0F766E");
+    addLine("corrected_thiessen", "اصلاح‌شده تیسن", "#16A34A");
+    surfaceMethodOrder.forEach(method => {
+      addLine(
+        `corrected_${method}`,
+        `اصلاح‌شده ${surfaceMethodLabels[method] || method}`,
+        surfaceMethodTrendColor(method)
+      );
+    });
+    const trend = correctedTrend(data, primaryKey);
+    if (Array.isArray(trend?.series)) {
+      series.push({
+        name: `روند ${primaryLabel}`,
+        type: "line",
+        data: trend.series.map(item => item[1]),
+        showSymbol: false,
+        silent: true,
+        connectNulls: false,
+        lineStyle: { width: 2.2, color: "#059669", type: "dashed", opacity: 0.85 },
+        itemStyle: { color: "#059669" },
+        z: 8
+      });
+    }
+    const difference = correctedSeries(data, "raw_minus_corrected");
+    if (difference.length) {
+      series.push({
+        name: "اختلاف خام-اصلاح‌شده",
+        type: "line",
+        data: difference.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 1.8, color: "#64748B", type: "dotted", opacity: 0.8 },
+        itemStyle: { color: "#64748B" },
+        z: 2
+      });
+    }
+    return series;
+  }
+
+  function correctedStatusAreaSeries(data) {
+    const rows = data?.corrected?.status_counts || [];
+    if (!rows.length) return [];
+    const config = [
+      ["measured_count", "وضعیت: اندازه‌گیری", "rgba(8, 126, 139, 0.12)"],
+      ["retired_count", "وضعیت: بازنشسته", "rgba(231, 111, 81, 0.15)"],
+      ["new_well_count", "وضعیت: چاه جدید", "rgba(124, 58, 237, 0.12)"],
+      ["imputed_count", "وضعیت: برآورد", "rgba(245, 158, 11, 0.13)"]
+    ];
+    return config.map(([key, name, color]) => ({
+      name,
+      type: "line",
+      yAxisIndex: 2,
+      stack: "well-status",
+      data: rows.map(row => row[key] || 0),
+      showSymbol: false,
+      smooth: false,
+      lineStyle: { width: 0 },
+      areaStyle: { color },
+      emphasis: { focus: "series" },
+      tooltip: {
+        valueFormatter: value => `${faNumber.format(value || 0)} ماه-چاه`
+      },
+      z: 0
+    }));
+  }
+
   function surfaceTrendChips(data, method, trend, variant = "") {
     const label = surfaceMethodLabel(data, method, true);
     return trendChip(`${label}${variant ? ` ${variant}` : ""}`, trend, variant === "مقایسه‌ای" ? "comparison" : "");
@@ -2575,6 +2710,10 @@
         }
         input.checked = selectedSurfaceMethodSet.has(method);
       });
+    const correctedSupportSelect = document.getElementById("correctedSupportMethod");
+    if (correctedSupportSelect) {
+      correctedSupportSelect.value = correctedSupportMethod(data);
+    }
     const spatialSurfaceMethod = document.getElementById("spatialSurfaceMethod");
     if (spatialSurfaceMethod) {
       const methods = selectedSurfaceMethods(data);
@@ -2722,6 +2861,10 @@
 
   function renderStats(data) {
     const stats = data.stats;
+    const corrected = data.corrected || {};
+    const correctedCounts = corrected.status_counts || [];
+    const totalRetired = correctedCounts.reduce((sum, row) => sum + (Number(row.retired_count) || 0), 0);
+    const totalImputed = correctedCounts.reduce((sum, row) => sum + (Number(row.imputed_count) || 0), 0);
     const change = stats.change;
     const changeLabel = change === null
       ? "بدون داده"
@@ -2740,6 +2883,18 @@
           ? "مساحت آبخوان نامشخص"
           : `${formatNumber(data.storage.area_km2, " km²")} · ${surfaceHydrographLabel(data, true)}`,
         "bg-violet-600"
+      ],
+      [
+        "پشتیبان اصلاح",
+        formatNumber(corrected.fixed_support_well_count),
+        `${correctedPrimaryLabel(data, true)} · ${formatNumber(corrected.fixed_support_site_count)} سایت`,
+        "bg-emerald-600"
+      ],
+      [
+        "برآورد اصلاحی",
+        formatNumber(totalImputed),
+        `${formatNumber(totalRetired)} ماه-چاه بازنشسته/غیرقابل اندازه‌گیری`,
+        "bg-coral"
       ],
       ["تغییر دوره", changeLabel, "اولین تا آخرین مقدار موجود", change < 0 ? "bg-coral" : "bg-teal"]
     ];
@@ -2862,19 +3017,43 @@
       if (well.latitude === null || well.longitude === null) return;
       const colors = { included: "#087E8B", excluded: "#F59E0B", no_data: "#E76F51" };
       const color = colors[well.status] || "#64748B";
-      const marker = L.circleMarker([well.latitude, well.longitude], {
-        radius: well.included ? 5 : 6,
-        color: "#FFFFFF",
-        weight: 2,
-        fillColor: color,
-        fillOpacity: 1
-      }).addTo(wellLayers[well.status] || wellLayers.excluded);
+      const monitoringStatus = well.monitoring_status || well.status;
+      const markerHtml = {
+        out_of_range_censored: `<span style="display:grid;place-items:center;width:22px;height:22px;border:2px solid ${color};border-radius:999px;background:#fff;color:${color};font-size:16px;line-height:1">↓</span>`,
+        retired_no_longer_measurable: `<span style="display:grid;place-items:center;width:22px;height:22px;color:#E76F51;font-size:24px;font-weight:700;line-height:1">×</span>`,
+        new_well_added: `<span style="display:grid;place-items:center;width:22px;height:22px;color:#087E8B;font-size:22px;font-weight:800;line-height:1">+</span>`,
+        replacement_candidate: `<span style="display:grid;place-items:center;width:24px;height:24px;border:2px solid #7C3AED;border-radius:999px;background:#fff;color:#7C3AED;font-size:17px;font-weight:800;line-height:1">★</span>`,
+        imputed: `<span style="display:block;width:18px;height:18px;border:2px dashed ${color};border-radius:999px;background:rgba(255,255,255,.9)"></span>`
+      }[monitoringStatus];
+      const marker = markerHtml
+        ? L.marker([well.latitude, well.longitude], {
+            icon: L.divIcon({
+              className: "monitoring-status-icon",
+              html: markerHtml,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+              tooltipAnchor: [0, -12]
+            }),
+            keyboard: true,
+            title: well.name
+          }).addTo(wellLayers[well.status] || wellLayers.excluded)
+        : L.circleMarker([well.latitude, well.longitude], {
+            radius: well.included ? 5 : 6,
+            color: "#FFFFFF",
+            weight: 2,
+            fillColor: color,
+            fillOpacity: 1
+          }).addTo(wellLayers[well.status] || wellLayers.excluded);
       const status = well.included ? "داخل محاسبات آبخوان" : well.exclusion_reason;
       marker.bindTooltip(`
         <div dir="rtl" class="min-w-40 text-right">
           <strong>${escapeHtml(well.name)}</strong>
           <div style="margin-top:6px;color:${color};font-size:11px">${escapeHtml(status)}</div>
+          <div style="margin-top:5px;color:#334155;font-size:11px">وضعیت پایش: ${escapeHtml(correctedStatusLabel(monitoringStatus))}</div>
           <div style="margin-top:5px;color:#64748b;font-size:11px">ارتفاع چاه: ${formatNumber(well.elevation, " متر")}</div>
+          <div style="margin-top:5px;color:#64748b;font-size:11px">تراز اصلاحی آخر: ${formatNumber(well.latest_corrected_value, " متر")}</div>
+          ${well.latest_measurement_limit == null ? "" : `<div style="margin-top:5px;color:#E76F51;font-size:11px">حد اندازه‌گیری: ${formatNumber(well.latest_measurement_limit, " متر")}</div>`}
+          ${well.latest_uncertainty == null ? "" : `<div style="margin-top:5px;color:#D97706;font-size:11px">عدم قطعیت: ${formatNumber(well.latest_uncertainty, " متر")}</div>`}
         </div>
       `, { direction: "top", offset: [0, -5] });
       marker.on("click", () => openWellModal(well));
@@ -2961,7 +3140,40 @@
         legendSelected[`روند ${label} (مقایسه‌ای)`] = true;
       }
     });
+    const primaryCorrectedKey = correctedPrimarySeriesKey(data);
+    const correctedLegendSelected = {
+      "اصلاح‌شده حسابی": primaryCorrectedKey === "corrected_arithmetic",
+      "اصلاح‌شده تیسن": primaryCorrectedKey === "corrected_thiessen",
+      "اصلاح‌شده IDW": primaryCorrectedKey === "corrected_idw",
+      "اصلاح‌شده Ordinary Kriging": primaryCorrectedKey === "corrected_ordinary_kriging",
+      "اصلاح‌شده Thin Plate Spline": primaryCorrectedKey === "corrected_spline",
+      [`روند اصلاح‌شده ${correctedPrimaryLabel(data, true)}`]: true,
+      "اختلاف خام-اصلاح‌شده": false,
+      "وضعیت: اندازه‌گیری": false,
+      "وضعیت: بازنشسته": false,
+      "وضعیت: چاه جدید": false,
+      "وضعیت: برآورد": false
+    };
     option.xAxis.data = categories;
+    option.yAxis[2] = {
+      type: "value",
+      name: "وضعیت شبکه",
+      min: 0,
+      position: "left",
+      offset: 48,
+      splitLine: { show: false },
+      axisLabel: {
+        formatter: value => faNumber.format(value),
+        fontSize: 9,
+        color: "#64748B"
+      },
+      nameTextStyle: {
+        fontFamily: "Vazirmatn",
+        fontSize: 9,
+        color: "#64748B",
+        padding: [0, 0, 8, 0]
+      }
+    };
     option.legend = {
       top: 4,
       right: 0,
@@ -2977,12 +3189,14 @@
           "روند تیسن (مقایسه‌ای)": true
         } : {}),
         ...legendSelected,
+        ...correctedLegendSelected,
         "بارش ماهانه": true
       }
     };
-    option.grid.top = 86;
+    option.grid.top = 112;
     option.series = [
       precipitationBarSeries(data.precipitation),
+      ...correctedStatusAreaSeries(data),
       {
         name: "میانگین حسابی",
         type: "line",
@@ -3055,7 +3269,8 @@
         }] : []),
       ...surfacePayloads.flatMap(([method, payload]) => (
         surfaceLineSeries(data, method, payload, categories, comparisonEnabled)
-      ))
+      )),
+      ...correctedHydrographSeries(data)
     ];
     chart.setOption(option);
     state.charts.push(chart);
@@ -3065,6 +3280,10 @@
       ...surfacePayloads.map(([method, payload]) => (
         trendChip(`${surfaceMethodLabel(data, method, true)} اصلی`, payload.trend)
       )),
+      trendChip(
+        `اصلاحی ${correctedPrimaryLabel(data, true)}`,
+        correctedTrend(data, correctedPrimarySeriesKey(data))
+      ),
       ...(comparisonEnabled ? [
         trendChip(
           "حسابی مقایسه‌ای",
@@ -4449,6 +4668,9 @@
       .forEach(method => {
         params.append("surface_interpolation_methods", method);
       });
+    if (filters.corrected_support_method) {
+      params.set("corrected_support_method", filters.corrected_support_method);
+    }
     (filters.selected_well_ids || []).forEach(wellId => {
       params.append("selected_well_ids", wellId);
     });
@@ -4551,6 +4773,8 @@
       selectedSurfaceMethodsFromForm(root).forEach(method => {
         params.append("surface_interpolation_methods", method);
       });
+      const correctedSupport = root.querySelector("#correctedSupportMethod")?.value || "fixed_thiessen";
+      params.set("corrected_support_method", correctedSupport);
       if (filters) {
         params.set("start_year", filters.startYear);
         params.set("start_month", filters.startMonth);

@@ -130,6 +130,54 @@ class GroundwaterDataTests(unittest.TestCase):
                     )
                 )
 
+    def test_corrected_hydrograph_outputs_fixed_support_tables(self) -> None:
+        group_id = next(iter(self.service.groups))
+        payload = self.service.dashboard(
+            group_id,
+            storage_coefficient=0.08,
+            corrected_support_method="fixed_thiessen",
+        )
+
+        self.assertEqual(
+            len(payload["corrected_hydrograph"]),
+            len(payload["hydrographs"]["thiessen"]),
+        )
+        self.assertGreater(len(payload["corrected_well_month"]), 0)
+        self.assertIn("network_transitions", payload)
+        self.assertIn("corrected_thiessen", payload["corrected"]["hydrographs"])
+        self.assertEqual(
+            payload["corrected"]["validation"]["head_limit_violations"],
+            0,
+        )
+        first_row = payload["corrected_hydrograph"][0]
+        for column in (
+            "date",
+            "method",
+            "raw_hydrograph",
+            "corrected_hydrograph",
+            "measured_count",
+            "out_of_range_count",
+            "retired_count",
+            "new_well_count",
+            "imputed_count",
+        ):
+            self.assertIn(column, first_row)
+
+    def test_corrected_support_method_can_select_fixed_grid(self) -> None:
+        group_id = next(iter(self.service.groups))
+        payload = self.service.dashboard(
+            group_id,
+            storage_coefficient=0.08,
+            corrected_support_method="fixed_grid",
+            surface_interpolation_method="idw",
+        )
+
+        self.assertEqual(payload["filters"]["corrected_support_method"], "fixed_grid")
+        self.assertEqual(
+            payload["corrected_hydrograph"][0]["method"],
+            "corrected_idw",
+        )
+
     def test_default_period_uses_latest_group_data(self) -> None:
         group_id = next(iter(self.service.groups))
         frame = self.service.monthly[

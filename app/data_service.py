@@ -38,6 +38,14 @@ SURFACE_INTERPOLATION_LABELS = {
     "ordinary_kriging": "Ordinary Kriging",
     "spline": "Thin Plate Spline",
 }
+CORRECTED_SUPPORT_METHODS = frozenset(
+    {"fixed_thiessen", "fixed_arithmetic", "fixed_grid"}
+)
+CORRECTED_SUPPORT_LABELS = {
+    "fixed_thiessen": "پشتیبان ثابت تیسن",
+    "fixed_arithmetic": "پشتیبان ثابت چاه‌ها",
+    "fixed_grid": "شبکه ثابت آبخوان",
+}
 TREND_STRONG_THRESHOLD = 0.6
 TREND_WEAK_THRESHOLD = 0.3
 DECLINE_ANOMALY_Z_THRESHOLD = 1.5
@@ -1028,21 +1036,27 @@ class GroundwaterData:
         methods: list[str] | None,
         primary_method: str | None = None,
     ) -> list[str]:
-        requested = list(methods or [])
+        requested = []
         if primary_method:
             requested.append(primary_method)
+        requested.extend(methods or [])
         normalized: list[str] = []
         for method in requested:
             if method in SURFACE_INTERPOLATION_METHODS and method not in normalized:
                 normalized.append(method)
         if "idw" not in normalized:
-            normalized.insert(0, "idw")
+            normalized.append("idw")
         if not normalized:
             normalized = ["idw"]
-        return [
+        ordered_remaining = [
             method
             for method in SURFACE_INTERPOLATION_METHOD_ORDER
             if method in normalized
+        ]
+        return [
+            method
+            for method in normalized
+            if method in ordered_remaining
         ]
 
     @staticmethod
@@ -1162,6 +1176,550 @@ class GroundwaterData:
             "area_km2": finite_or_none(boundary_area_m2 / 1_000_000, 3),
             "fallback_method": "idw",
             "fallback_month_count": int(metadata.get("fallback_month_count", "0")),
+        }
+
+    @staticmethod
+    def _regional_prediction(
+        regional_values: dict[int, float],
+        month_index: int,
+    ) -> float | None:
+        if month_index in regional_values and np.isfinite(regional_values[month_index]):
+            return float(regional_values[month_index])
+        valid = sorted(
+            (int(index), float(value))
+            for index, value in regional_values.items()
+            if value is not None and np.isfinite(value)
+        )
+        if not valid:
+            return None
+        if len(valid) == 1:
+            return valid[0][1]
+        x = np.array([item[0] for item in valid], dtype=float)
+        y = np.array([item[1] for item in valid], dtype=float)
+        return float(np.interp(float(month_index), x, y))
+
+    @staticmethod
+    def _status_count_row(
+        month_label: str,
+        frame: pd.DataFrame,
+    ) -> dict[str, Any]:
+        status_counts = frame["status"].value_counts().to_dict()
+        imputed_count = int(frame["is_imputed"].sum()) if "is_imputed" in frame else 0
+        return {
+            "date": month_label,
+            "measured_count": int(status_counts.get("measured", 0)),
+            "missing_count": int(status_counts.get("missing", 0)),
+            "out_of_range_count": int(
+                status_counts.get("out_of_range_censored", 0)
+            ),
+            "retired_count": int(
+                status_counts.get("retired_no_longer_measurable", 0)
+            ),
+            "new_well_count": int(status_counts.get("new_well_added", 0)),
+            "imputed_count": imputed_count,
+        }
+
+    def _corrected_well_month_frame(
+        self,
+        group_id: str,
+        months: list[tuple[int, str]],
+        manual_selection: bool,
+        selected_join_keys: set[str],
+    ) -> tuple[pd.DataFrame, set[str], list[dict[str, Any]]]:
+        group_monthly = self.monthly[self.monthly["_aquifer_id"] == group_id]
+        locations = self.locations[self.locations["_aquifer_id"] == group_id]
+        month_indexes = [index for index, _ in months]
+        month_labels = dict(months)
+        start_index = month_indexes[0]
+        end_index = month_indexes[-1]
+        regional_values = group_monthly.groupby("_month_index")["level"].mean().to_dict()
+        history_by_key = {
+            key: dict(
+                frame.sort_values("_month_index")[
+                    ["_month_index", "level"]
+                ].itertuples(index=False, name=None)
+            )
+            for key, frame in group_monthly.groupby("_join_key", sort=False)
+        }
+
+        support_join_keys: set[str] = set()
+        well_offsets: dict[str, float] = {}
+        well_limits: dict[str, float] = {}
+        well_first_last: dict[str, tuple[int, int]] = {}
+        for join_key, values in history_by_key.items():
+            valid_indexes = sorted(
+                int(index)
+                for index, value in values.items()
+                if value is not None and np.isfinite(value)
+            )
+            if not valid_indexes:
+                continue
+            first_index = valid_indexes[0]
+            last_index = valid_indexes[-1]
+            well_first_last[join_key] = (first_index, last_index)
+            well_limits[join_key] = float(values[last_index])
+            residuals = []
+            for index in valid_indexes:
+                regional = self._regional_prediction(regional_values, index)
+                if regional is not None and np.isfinite(regional):
+                    residuals.append(float(values[index]) - regional)
+            well_offsets[join_key] = float(np.mean(residuals)) if residuals else 0.0
+            if first_index <= start_index:
+                support_join_keys.add(join_key)
+
+        if manual_selection:
+            support_join_keys &= selected_join_keys
+        if not support_join_keys:
+            fallback_keys = {
+                key
+                for key, (first_index, _) in well_first_last.items()
+                if first_index <= end_index
+            }
+            support_join_keys = fallback_keys & selected_join_keys if manual_selection else fallback_keys
+
+        rows: list[dict[str, Any]] = []
+        transitions: list[dict[str, Any]] = []
+        for _, location in locations.iterrows():
+            join_key = location["_join_key"]
+            values = history_by_key.get(join_key, {})
+            first_last = well_first_last.get(join_key)
+            first_index = first_last[0] if first_last else None
+            last_index = first_last[1] if first_last else None
+            measurement_limit = well_limits.get(join_key)
+            offset = well_offsets.get(join_key, 0.0)
+            on_fixed_support = join_key in support_join_keys
+
+            if first_index is not None and start_index <= first_index <= end_index:
+                transitions.append(
+                    {
+                        "date": month_labels[first_index],
+                        "well_id": location["_well_id"],
+                        "event_type": "new_well_added",
+                        "old_status": "inactive",
+                        "new_status": "new_well_added",
+                        "possible_replacement_well": None,
+                        "estimated_offset": finite_or_none(offset, 3),
+                    }
+                )
+            if last_index is not None and last_index < end_index:
+                retired_index = max(last_index + 1, start_index)
+                if retired_index <= end_index:
+                    transitions.append(
+                        {
+                            "date": month_labels[retired_index],
+                            "well_id": location["_well_id"],
+                            "event_type": "retired_no_longer_measurable",
+                            "old_status": "measured",
+                            "new_status": "retired_no_longer_measurable",
+                            "possible_replacement_well": None,
+                            "estimated_offset": finite_or_none(offset, 3),
+                        }
+                    )
+
+            for month_index, month_label in months:
+                observed = values.get(month_index)
+                observed_valid = observed is not None and np.isfinite(observed)
+                status = "inactive"
+                corrected_value: float | None = None
+                is_imputed = False
+                uncertainty: float | None = None
+                row_limit = None
+
+                if observed_valid:
+                    corrected_value = float(observed)
+                    status = (
+                        "new_well_added"
+                        if first_index == month_index and month_index > start_index
+                        else "measured"
+                    )
+                elif first_index is None or month_index < first_index:
+                    status = "inactive"
+                else:
+                    regional = self._regional_prediction(regional_values, month_index)
+                    prediction = (
+                        regional + offset
+                        if regional is not None and np.isfinite(regional)
+                        else None
+                    )
+                    if last_index is not None and month_index > last_index:
+                        status = "retired_no_longer_measurable"
+                        row_limit = measurement_limit
+                        if prediction is not None:
+                            corrected_value = (
+                                min(float(prediction), float(measurement_limit))
+                                if measurement_limit is not None
+                                else float(prediction)
+                            )
+                            is_imputed = True
+                    else:
+                        status = "imputed" if prediction is not None else "missing"
+                        if prediction is not None:
+                            corrected_value = float(prediction)
+                            is_imputed = True
+
+                    if corrected_value is not None and regional is not None:
+                        uncertainty = abs(float(corrected_value) - float(regional))
+
+                rows.append(
+                    {
+                        "_aquifer_id": group_id,
+                        "_join_key": join_key,
+                        "_well_id": location["_well_id"],
+                        "_site_key": location["_site_key"],
+                        "_month_index": month_index,
+                        "_month": month_label,
+                        "observed_value": float(observed) if observed_valid else np.nan,
+                        "corrected_value": corrected_value,
+                        "level": corrected_value,
+                        "status": status,
+                        "measurement_limit": row_limit,
+                        "is_measured": status == "measured",
+                        "is_out_of_range": status == "out_of_range_censored",
+                        "is_retired": status == "retired_no_longer_measurable",
+                        "is_new_well": status == "new_well_added",
+                        "is_imputed": is_imputed,
+                        "on_fixed_support": on_fixed_support,
+                        "uncertainty": uncertainty,
+                    }
+                )
+
+        frame = pd.DataFrame(rows)
+        if frame.empty:
+            return frame, support_join_keys, transitions
+        frame = frame.sort_values(["_month_index", "_join_key"]).reset_index(drop=True)
+        return frame, support_join_keys, sorted(
+            transitions,
+            key=lambda item: (item["date"], item["well_id"], item["event_type"]),
+        )
+
+    @staticmethod
+    def _corrected_well_month_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+        records = []
+        for row in frame.to_dict("records"):
+            records.append(
+                {
+                    "well_id": row["_well_id"],
+                    "date": row["_month"],
+                    "observed_value": finite_or_none(row["observed_value"]),
+                    "corrected_value": finite_or_none(row["corrected_value"]),
+                    "status": row["status"],
+                    "measurement_limit": finite_or_none(row["measurement_limit"]),
+                    "is_measured": bool(row["is_measured"]),
+                    "is_out_of_range": bool(row["is_out_of_range"]),
+                    "is_retired": bool(row["is_retired"]),
+                    "is_new_well": bool(row["is_new_well"]),
+                    "is_imputed": bool(row["is_imputed"]),
+                    "uncertainty": finite_or_none(row["uncertainty"]),
+                }
+            )
+        return records
+
+    def _corrected_validation(
+        self,
+        months: list[tuple[int, str]],
+        raw_values: dict[int, float],
+        corrected_values: dict[int, float],
+        corrected_well_month: pd.DataFrame,
+        network_transitions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        retired_rows = corrected_well_month[
+            corrected_well_month["status"] == "retired_no_longer_measurable"
+        ]
+        retired_limit_violations = int(
+            (
+                retired_rows["corrected_value"].notna()
+                & retired_rows["measurement_limit"].notna()
+                & (retired_rows["corrected_value"] > retired_rows["measurement_limit"] + 1e-9)
+            ).sum()
+        )
+        transition_dates = {item["date"] for item in network_transitions}
+        differences = []
+        previous_raw = None
+        previous_corrected = None
+        raw_deltas: list[float] = []
+        corrected_deltas: list[float] = []
+        for _, label in months:
+            raw = raw_values.get(_)
+            corrected = corrected_values.get(_)
+            raw_delta = (
+                float(raw) - previous_raw
+                if raw is not None
+                and np.isfinite(raw)
+                and previous_raw is not None
+                else None
+            )
+            corrected_delta = (
+                float(corrected) - previous_corrected
+                if corrected is not None
+                and np.isfinite(corrected)
+                and previous_corrected is not None
+                else None
+            )
+            if raw_delta is not None:
+                raw_deltas.append(abs(raw_delta))
+            if corrected_delta is not None:
+                corrected_deltas.append(abs(corrected_delta))
+            differences.append((label, raw_delta, corrected_delta))
+            if raw is not None and np.isfinite(raw):
+                previous_raw = float(raw)
+            if corrected is not None and np.isfinite(corrected):
+                previous_corrected = float(corrected)
+
+        all_deltas = raw_deltas + corrected_deltas
+        spike_threshold = (
+            float(np.nanmedian(all_deltas) + 3 * np.nanstd(all_deltas))
+            if all_deltas
+            else None
+        )
+        network_event_spikes = []
+        if spike_threshold is not None and np.isfinite(spike_threshold):
+            for label, raw_delta, corrected_delta in differences:
+                if label not in transition_dates:
+                    continue
+                raw_abs = abs(raw_delta) if raw_delta is not None else 0.0
+                corrected_abs = (
+                    abs(corrected_delta) if corrected_delta is not None else 0.0
+                )
+                if max(raw_abs, corrected_abs) > spike_threshold:
+                    network_event_spikes.append(
+                        {
+                            "date": label,
+                            "raw_first_difference": finite_or_none(raw_delta, 3),
+                            "corrected_first_difference": finite_or_none(
+                                corrected_delta,
+                                3,
+                            ),
+                            "threshold": finite_or_none(spike_threshold, 3),
+                        }
+                    )
+
+        return {
+            "head_limit_violations": retired_limit_violations,
+            "depth_limit_violations": 0,
+            "network_event_spikes": network_event_spikes,
+            "raw_vs_corrected_first_differences": [
+                {
+                    "date": label,
+                    "raw": finite_or_none(raw_delta, 3),
+                    "corrected": finite_or_none(corrected_delta, 3),
+                }
+                for label, raw_delta, corrected_delta in differences
+            ],
+            "cross_validation": None,
+        }
+
+    def _corrected_analysis_payload(
+        self,
+        group_id: str,
+        months: list[tuple[int, str]],
+        raw_frame: pd.DataFrame,
+        selected_join_keys: set[str],
+        manual_selection: bool,
+        raw_weights: dict[str, float],
+        raw_arithmetic_values: dict[int, float],
+        raw_thiessen_values: dict[int, float],
+        surface_methods: dict[str, dict[str, Any]],
+        primary_surface_method: str,
+        corrected_support_method: str,
+    ) -> dict[str, Any]:
+        corrected_frame, support_join_keys, network_transitions = (
+            self._corrected_well_month_frame(
+                group_id,
+                months,
+                manual_selection,
+                selected_join_keys,
+            )
+        )
+        month_labels = dict(months)
+        if corrected_frame.empty:
+            return {
+                "support_method": corrected_support_method,
+                "support_label": CORRECTED_SUPPORT_LABELS[corrected_support_method],
+                "support_options": CORRECTED_SUPPORT_LABELS,
+                "fixed_support_well_count": 0,
+                "fixed_support_site_count": 0,
+                "status_counts": [],
+                "corrected_hydrograph": [],
+                "corrected_well_month": [],
+                "network_transitions": [],
+                "hydrographs": {},
+                "validation": {},
+                "note": "داده‌ای برای ساخت هیدروگراف اصلاح‌شده وجود ندارد.",
+            }
+
+        support_frame = corrected_frame[
+            corrected_frame["on_fixed_support"]
+            & corrected_frame["corrected_value"].notna()
+        ].copy()
+        fixed_sites = self._selected_sites(group_id, support_join_keys)
+        fixed_weights, _ = self._calculate_thiessen(group_id, fixed_sites)
+        corrected_arithmetic_values, corrected_thiessen_values = (
+            self._hydrograph_value_maps(support_frame, fixed_weights)
+        )
+        corrected_surface_methods: dict[str, dict[str, Any]] = {}
+        for method in SURFACE_INTERPOLATION_METHOD_ORDER:
+            method_values, method_metadata = self._piezometric_surface_value_map(
+                group_id,
+                support_frame,
+                fixed_sites,
+                method,
+            )
+            corrected_surface_methods[method] = {
+                "metadata": {
+                    **method_metadata,
+                    "method": f"corrected_{method}",
+                    "method_label": (
+                        f"میانگین مساحتی اصلاح‌شده سطح پیزومتریک ماهانه "
+                        f"({SURFACE_INTERPOLATION_LABELS[method]})"
+                    ),
+                    "short_label": (
+                        f"اصلاح‌شده {SURFACE_INTERPOLATION_LABELS[method]}"
+                    ),
+                },
+                "values": method_values,
+                "series": self._series_from_values(months, method_values),
+                "trend": self._trend(method_values, months),
+            }
+
+        primary_corrected_surface = corrected_surface_methods[
+            primary_surface_method
+        ]["values"]
+        if corrected_support_method == "fixed_arithmetic":
+            primary_corrected_values = corrected_arithmetic_values
+            primary_raw_values = raw_arithmetic_values
+            primary_method = "corrected_arithmetic"
+        elif corrected_support_method == "fixed_grid":
+            primary_corrected_values = primary_corrected_surface
+            primary_raw_values = surface_methods[primary_surface_method]["values"]
+            primary_method = f"corrected_{primary_surface_method}"
+        else:
+            primary_corrected_values = corrected_thiessen_values
+            primary_raw_values = raw_thiessen_values
+            primary_method = "corrected_thiessen"
+
+        status_counts = [
+            self._status_count_row(
+                month_label,
+                corrected_frame[corrected_frame["_month_index"] == month_index],
+            )
+            for month_index, month_label in months
+        ]
+        count_by_label = {row["date"]: row for row in status_counts}
+        corrected_hydrograph = []
+        for month_index, month_label in months:
+            raw_value = primary_raw_values.get(month_index)
+            corrected_value = primary_corrected_values.get(month_index)
+            counts = count_by_label[month_label]
+            corrected_hydrograph.append(
+                {
+                    "date": month_label,
+                    "method": primary_method,
+                    "raw_hydrograph": finite_or_none(raw_value),
+                    "corrected_hydrograph": finite_or_none(corrected_value),
+                    "corrected_lower_band": None,
+                    "corrected_upper_band": None,
+                    **{
+                        key: counts[key]
+                        for key in (
+                            "measured_count",
+                            "out_of_range_count",
+                            "retired_count",
+                            "new_well_count",
+                            "imputed_count",
+                        )
+                    },
+                }
+            )
+
+        validation = self._corrected_validation(
+            months,
+            primary_raw_values,
+            primary_corrected_values,
+            corrected_frame,
+            network_transitions,
+        )
+        hydrographs = {
+            "raw_arithmetic": self._series_from_values(months, raw_arithmetic_values),
+            "raw_thiessen": self._series_from_values(months, raw_thiessen_values),
+            "corrected_arithmetic": self._series_from_values(
+                months,
+                corrected_arithmetic_values,
+            ),
+            "corrected_thiessen": self._series_from_values(
+                months,
+                corrected_thiessen_values,
+            ),
+            "corrected_arithmetic_trend": self._trend(
+                corrected_arithmetic_values,
+                months,
+            ),
+            "corrected_thiessen_trend": self._trend(
+                corrected_thiessen_values,
+                months,
+            ),
+            "primary_corrected": self._series_from_values(
+                months,
+                primary_corrected_values,
+            ),
+            "primary_corrected_trend": self._trend(primary_corrected_values, months),
+            "raw_minus_corrected": [
+                [
+                    month_label,
+                    finite_or_none(
+                        (
+                            primary_raw_values.get(month_index)
+                            - primary_corrected_values.get(month_index)
+                        )
+                        if primary_raw_values.get(month_index) is not None
+                        and primary_corrected_values.get(month_index) is not None
+                        else None,
+                    ),
+                ]
+                for month_index, month_label in months
+            ],
+        }
+        for method, payload in corrected_surface_methods.items():
+            hydrographs[f"corrected_{method}"] = payload["series"]
+            hydrographs[f"corrected_{method}_trend"] = payload["trend"]
+
+        raw_status_counts = []
+        for month_index, month_label in months:
+            month_frame = raw_frame[raw_frame["_month_index"] == month_index]
+            raw_status_counts.append(
+                {
+                    "date": month_label,
+                    "measured_count": int(month_frame["_join_key"].nunique()),
+                    "missing_count": max(
+                        len(support_join_keys) - int(month_frame["_join_key"].nunique()),
+                        0,
+                    ),
+                    "out_of_range_count": 0,
+                    "retired_count": count_by_label[month_label]["retired_count"],
+                    "new_well_count": count_by_label[month_label]["new_well_count"],
+                }
+            )
+
+        return {
+            "support_method": corrected_support_method,
+            "support_label": CORRECTED_SUPPORT_LABELS[corrected_support_method],
+            "support_options": CORRECTED_SUPPORT_LABELS,
+            "fixed_support_well_count": len(support_join_keys),
+            "fixed_support_site_count": len(fixed_weights),
+            "status_counts": status_counts,
+            "raw_status_counts": raw_status_counts,
+            "corrected_hydrograph": corrected_hydrograph,
+            "corrected_well_month": self._corrected_well_month_records(
+                corrected_frame
+            ),
+            "network_transitions": network_transitions,
+            "surface_methods": corrected_surface_methods,
+            "hydrographs": hydrographs,
+            "validation": validation,
+            "note": (
+                "روش‌های اصلاحی از پشتیبان مکانی ثابت استفاده می‌کنند. "
+                "ماه‌های پس از آخرین برداشت هر پیزومتر بازنشسته/دیگر قابل اندازه‌گیری "
+                "در نظر گرفته شده‌اند و مقدار تراز اصلاحی از حد آخرین برداشت بالاتر نمی‌رود."
+            ),
         }
 
     def _prepare_monthly_measurements(self) -> pd.DataFrame:
@@ -2980,6 +3538,7 @@ class GroundwaterData:
         storage_coefficient: float | None = None,
         surface_interpolation_methods: list[str] | None = None,
         surface_interpolation_method: str = "idw",
+        corrected_support_method: str = "fixed_thiessen",
     ) -> dict[str, Any]:
         if group_id not in self.groups:
             raise KeyError(group_id)
@@ -2989,6 +3548,8 @@ class GroundwaterData:
             raise ValueError("ضریب ذخیره/آبدهی ویژه باید عددی مثبت باشد")
         if surface_interpolation_method not in SURFACE_INTERPOLATION_METHODS:
             raise ValueError("روش درون‌یابی سطح پیزومتریک معتبر نیست")
+        if corrected_support_method not in CORRECTED_SUPPORT_METHODS:
+            raise ValueError("روش پشتیبان ثابت اصلاح هیدروگراف معتبر نیست")
         selected_surface_methods = self._normalize_surface_methods(
             surface_interpolation_methods,
             surface_interpolation_method,
@@ -3149,6 +3710,19 @@ class GroundwaterData:
             weights,
             piezometric_surface_values,
         )
+        corrected_analysis = self._corrected_analysis_payload(
+            group_id,
+            months,
+            display_calculation_frame,
+            selected_join_keys,
+            manual_selection,
+            weights,
+            arithmetic_values,
+            thiessen_values,
+            surface_methods,
+            primary_surface_method,
+            corrected_support_method,
+        )
         (
             comparison_arithmetic_values,
             comparison_thiessen_values,
@@ -3178,6 +3752,15 @@ class GroundwaterData:
             start_water_year,
             annual_end_water_year,
         )
+        latest_corrected_status: dict[str, dict[str, Any]] = {}
+        for row in corrected_analysis["corrected_well_month"]:
+            latest_corrected_status[row["well_id"]] = row
+        for well in wells:
+            latest = latest_corrected_status.get(well["id"], {})
+            well["monitoring_status"] = latest.get("status", well["status"])
+            well["latest_corrected_value"] = latest.get("corrected_value")
+            well["latest_measurement_limit"] = latest.get("measurement_limit")
+            well["latest_uncertainty"] = latest.get("uncertainty")
         precipitation = self._precipitation_payload(group_id, months)
         ndvi = self._ndvi_payload(group_id, months)
         aet = self._aet_payload(group_id, months)
@@ -3296,6 +3879,7 @@ class GroundwaterData:
                 "storage_coefficient": storage_coefficient,
                 "surface_interpolation_method": primary_surface_method,
                 "surface_interpolation_methods": selected_surface_methods,
+                "corrected_support_method": corrected_support_method,
             },
             "calendar": {
                 "months_per_year": MONTHS_PER_YEAR,
@@ -3321,6 +3905,10 @@ class GroundwaterData:
                     piezometric_surface_comparison_trend
                 ),
             },
+            "corrected": corrected_analysis,
+            "corrected_hydrograph": corrected_analysis["corrected_hydrograph"],
+            "corrected_well_month": corrected_analysis["corrected_well_month"],
+            "network_transitions": corrected_analysis["network_transitions"],
             "piezometric_surface": primary_surface_payload["metadata"],
             "surface_methods": {
                 method: {

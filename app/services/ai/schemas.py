@@ -90,6 +90,11 @@ class AIChatFilters(BaseModel):
         "ordinary_kriging",
         "spline",
     ] = "idw"
+    corrected_support_method: Literal[
+        "fixed_thiessen",
+        "fixed_arithmetic",
+        "fixed_grid",
+    ] = "fixed_thiessen"
 
 
 class AIChatRequest(BaseModel):

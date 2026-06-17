@@ -148,6 +148,7 @@ def _dashboard_payload(
     storage_coefficient: float | None = None,
     surface_interpolation_methods: list[str] | None = None,
     surface_interpolation_method: str = "idw",
+    corrected_support_method: str = "fixed_thiessen",
 ) -> dict:
     return get_data_service().dashboard(
         aquifer_id,
@@ -166,6 +167,7 @@ def _dashboard_payload(
         storage_coefficient=storage_coefficient,
         surface_interpolation_methods=surface_interpolation_methods,
         surface_interpolation_method=surface_interpolation_method,
+        corrected_support_method=corrected_support_method,
     )
 
 
@@ -187,6 +189,7 @@ def aquifer_data(
     storage_coefficient: float = Query(..., gt=0),
     surface_interpolation_methods: list[str] | None = Query(default=None),
     surface_interpolation_method: str = Query(default="idw"),
+    corrected_support_method: str = Query(default="fixed_thiessen"),
 ) -> dict:
     try:
         return _dashboard_payload(
@@ -206,6 +209,7 @@ def aquifer_data(
             storage_coefficient=storage_coefficient,
             surface_interpolation_methods=surface_interpolation_methods,
             surface_interpolation_method=surface_interpolation_method,
+            corrected_support_method=corrected_support_method,
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
@@ -232,6 +236,7 @@ def aquifer_report(
     storage_coefficient: float = Query(..., gt=0),
     surface_interpolation_methods: list[str] | None = Query(default=None),
     surface_interpolation_method: str = Query(default="idw"),
+    corrected_support_method: str = Query(default="fixed_thiessen"),
 ) -> HTMLResponse:
     try:
         payload = _dashboard_payload(
@@ -251,6 +256,7 @@ def aquifer_report(
             storage_coefficient=storage_coefficient,
             surface_interpolation_methods=surface_interpolation_methods,
             surface_interpolation_method=surface_interpolation_method,
+            corrected_support_method=corrected_support_method,
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
@@ -352,6 +358,7 @@ async def ai_chat(request: Request) -> JSONResponse:
             storage_coefficient=filters.storage_coefficient,
             surface_interpolation_methods=filters.surface_interpolation_methods,
             surface_interpolation_method=filters.surface_interpolation_method,
+            corrected_support_method=filters.corrected_support_method,
         )
     except KeyError:
         return _ai_error_response(
