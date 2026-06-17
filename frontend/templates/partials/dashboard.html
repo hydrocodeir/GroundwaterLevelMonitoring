@@ -69,16 +69,21 @@
       </label>
       <label class="block">
         <span class="compact-date-label">درون‌یابی سطح</span>
-        <select
-          id="surfaceInterpolationMethod"
-          class="field compact-field"
-          name="surface_interpolation_method"
-          aria-label="روش درون‌یابی سطح پیزومتریک"
-        >
-          <option value="idw">IDW</option>
-          <option value="ordinary_kriging">Ordinary Kriging</option>
-          <option value="spline">Thin Plate Spline</option>
-        </select>
+        <div id="surfaceInterpolationMethods" class="flex flex-wrap gap-2">
+          <label class="inline-flex items-center gap-2 rounded-xl border border-teal/15 bg-teal/5 px-3 py-2 text-[10px] font-medium text-navy">
+            <input type="checkbox" value="idw" checked disabled class="h-3.5 w-3.5 accent-teal">
+            <span>IDW</span>
+          </label>
+          <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600">
+            <input type="checkbox" value="ordinary_kriging" class="h-3.5 w-3.5 accent-teal">
+            <span>Ordinary Kriging</span>
+          </label>
+          <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-medium text-slate-600">
+            <input type="checkbox" value="spline" class="h-3.5 w-3.5 accent-teal">
+            <span>Thin Plate Spline</span>
+          </label>
+        </div>
+        <small class="mt-1 block text-[9px] leading-5 text-slate-400">IDW همیشه فعال است و می‌توانید یک یا چند روش دیگر را هم اضافه کنید.</small>
       </label>
       <button id="applyAnalysisFilters" type="submit" class="primary-button">
         <span>به‌روزرسانی تحلیل</span>
@@ -226,12 +231,8 @@
       <div class="hidden" data-tab-panel="aquifer-annual">
         <div class="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
           <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
-            روش محاسبه افت
-            <select id="annualDeclineMethod" class="field h-9 w-40 text-xs">
-              <option value="piezometric_surface">سطح درون‌یابی</option>
-              <option value="thiessen">تیسن</option>
-              <option value="arithmetic">حسابی</option>
-            </select>
+            روش افت
+            <select id="annualSurfaceMethod" class="field h-9 w-40 text-xs"></select>
           </label>
           <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
             شاخص NDVI
@@ -292,7 +293,7 @@
         <h3 class="section-title">خطوط تراز و پهنه تغییرات افت</h3>
         <p class="section-description">مقایسه تراز ماه منتخب با همان ماه در سال قبل؛ ماه پیش‌فرض مهر است.</p>
       </div>
-      <div class="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[17rem_7rem_7rem_8rem]">
+      <div class="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[17rem_7rem_7rem_12rem_8rem]">
         <label class="block">
           <span class="field-label">مبنای انتخاب پیزومترها</span>
           <select id="spatialWellMode" class="field h-11">
@@ -308,6 +309,10 @@
         <label class="block">
           <span class="field-label">ماه نمایش</span>
           <select id="spatialMonth" class="field h-11"></select>
+        </label>
+        <label class="block">
+          <span class="field-label">روش درون‌یابی</span>
+          <select id="spatialSurfaceMethod" class="field h-11"></select>
         </label>
         <label class="block">
           <span class="field-label">فاصله خطوط (متر)</span>

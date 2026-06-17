@@ -10,6 +10,8 @@
     spatialTimer: null,
     spatialCharts: null,
     spatialContourSeriesIds: [],
+    spatialSurfaceMethod: "idw",
+    annualSurfaceMethod: "idw",
     contourIntervalInitialized: false,
     spatialViewInitialized: false,
     modalChart: null,
@@ -39,6 +41,22 @@
   const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
   const BASEMAP_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  const surfaceMethodOrder = ["idw", "ordinary_kriging", "spline"];
+  const surfaceMethodLabels = {
+    idw: "IDW",
+    ordinary_kriging: "Ordinary Kriging",
+    spline: "Thin Plate Spline"
+  };
+  const surfaceMethodColors = {
+    idw: "#087E8B",
+    ordinary_kriging: "#7C3AED",
+    spline: "#F59E0B"
+  };
+  const surfaceMethodTrendColors = {
+    idw: "#7C3AED",
+    ordinary_kriging: "#0F766E",
+    spline: "#DB2777"
+  };
   const monthNames = [
     "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
     "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
@@ -672,6 +690,7 @@
       Boolean(filters.manual_selection),
       filters.selected_well_ids || [],
       filters.storage_coefficient,
+      filters.surface_interpolation_methods || [],
       filters.surface_interpolation_method
     ]);
     const changedContext = state.chatContextKey !== contextKey;
@@ -778,6 +797,7 @@
             manual_selection: Boolean(filters.manual_selection),
             selected_well_ids: filters.selected_well_ids || [],
             storage_coefficient: filters.storage_coefficient,
+            surface_interpolation_methods: filters.surface_interpolation_methods || [],
             surface_interpolation_method: filters.surface_interpolation_method
           }
         })
@@ -1031,12 +1051,80 @@
   }
 
   function surfaceHydrographLabel(data, compact = false) {
-    const label = data?.piezometric_surface?.short_label || "سطح پیزومتریک";
+    const method = primarySurfaceMethod(data);
+    const label = surfaceMethodLabel(data, method) || data?.piezometric_surface?.short_label || "سطح پیزومتریک";
     if (!compact) return label;
     return label
       .replace("سطح پیزومتریک ", "سطح ")
       .replace("Ordinary Kriging", "Kriging")
       .replace("Thin Plate Spline", "Spline");
+  }
+
+  function surfaceMethodLabel(data, method, compact = false) {
+    const label = data?.surface_methods?.[method]?.metadata?.short_label
+      || data?.piezometric_surface?.short_label
+      || surfaceMethodLabels[method]
+      || method;
+    if (!compact) return label;
+    return label
+      .replace("سطح پیزومتریک ", "سطح ")
+      .replace("Ordinary Kriging", "Kriging")
+      .replace("Thin Plate Spline", "Spline");
+  }
+
+  function primarySurfaceMethod(data) {
+    const methods = selectedSurfaceMethods(data);
+    return methods[0] || "idw";
+  }
+
+  function currentAnnualSurfaceMethod(data) {
+    const methods = selectedSurfaceMethods(data);
+    if (methods.includes(state.annualSurfaceMethod)) {
+      return state.annualSurfaceMethod;
+    }
+    return primarySurfaceMethod(data);
+  }
+
+  function selectedSurfaceMethods(data) {
+    const filters = data?.filters || {};
+    const methods = Array.isArray(filters.surface_interpolation_methods)
+      ? filters.surface_interpolation_methods.filter(Boolean)
+      : [];
+    const fallback = filters.surface_interpolation_method || "idw";
+    const requested = methods.length ? methods : [fallback];
+    const normalized = [];
+    requested.forEach(method => {
+      if (surfaceMethodOrder.includes(method) && !normalized.includes(method)) {
+        normalized.push(method);
+      }
+    });
+    if (!normalized.includes("idw")) {
+      normalized.unshift("idw");
+    }
+    return surfaceMethodOrder.filter(method => normalized.includes(method));
+  }
+
+  function surfaceMethodPayload(data, method) {
+    return data?.surface_methods?.[method] || (
+      method === primarySurfaceMethod(data)
+        ? {
+            metadata: data?.piezometric_surface || {},
+            series: data?.hydrographs?.piezometric_surface || [],
+            trend: data?.hydrographs?.piezometric_surface_trend || {},
+            comparison_trend: data?.hydrographs?.piezometric_surface_comparison_trend || null,
+            annual_decline: data?.annual_decline || [],
+            five_year_scenario: data?.five_year_scenario?.piezometric_surface || {}
+          }
+        : null
+    );
+  }
+
+  function surfaceMethodColor(method) {
+    return surfaceMethodColors[method] || "#087E8B";
+  }
+
+  function surfaceMethodTrendColor(method) {
+    return surfaceMethodTrendColors[method] || "#7C3AED";
   }
 
   function trendChip(label, trend, variant = "") {
@@ -1175,7 +1263,215 @@
     return totalWeight ? weighted / totalWeight : null;
   }
 
-  function interpolationGrid(points, geometry, size = 44) {
+  function thinPlateSplineBasis(distance) {
+    if (distance <= 1e-12) return 0;
+    const distanceSquared = distance * distance;
+    return distanceSquared * Math.log(distance);
+  }
+
+  function invertMatrix(matrix) {
+    const size = matrix.length;
+    const augmented = matrix.map((row, rowIndex) => [
+      ...row.map(value => Number(value)),
+      ...Array.from({ length: size }, (_, index) => (index === rowIndex ? 1 : 0))
+    ]);
+    for (let pivotIndex = 0; pivotIndex < size; pivotIndex += 1) {
+      let pivotRow = pivotIndex;
+      for (let row = pivotIndex + 1; row < size; row += 1) {
+        if (Math.abs(augmented[row][pivotIndex]) > Math.abs(augmented[pivotRow][pivotIndex])) {
+          pivotRow = row;
+        }
+      }
+      if (Math.abs(augmented[pivotRow][pivotIndex]) < 1e-12) {
+        return null;
+      }
+      if (pivotRow !== pivotIndex) {
+        [augmented[pivotIndex], augmented[pivotRow]] = [augmented[pivotRow], augmented[pivotIndex]];
+      }
+      const pivot = augmented[pivotIndex][pivotIndex];
+      for (let column = 0; column < size * 2; column += 1) {
+        augmented[pivotIndex][column] /= pivot;
+      }
+      for (let row = 0; row < size; row += 1) {
+        if (row === pivotIndex) continue;
+        const factor = augmented[row][pivotIndex];
+        if (Math.abs(factor) < 1e-12) continue;
+        for (let column = 0; column < size * 2; column += 1) {
+          augmented[row][column] -= factor * augmented[pivotIndex][column];
+        }
+      }
+    }
+    return augmented.map(row => row.slice(size));
+  }
+
+  function multiplyMatrixVector(matrix, vector) {
+    return matrix.map(row => row.reduce((sum, value, index) => (
+      sum + value * vector[index]
+    ), 0));
+  }
+
+  function sphericalVariogram(distance, nugget, sill, variogramRange) {
+    const safeRange = Math.max(variogramRange, 1e-9);
+    const ratio = Math.min(1, Math.max(0, distance / safeRange));
+    const structure = distance < safeRange
+      ? 1.5 * ratio - 0.5 * (ratio ** 3)
+      : 1;
+    return nugget + sill * structure;
+  }
+
+  function buildThinPlateSplineModel(points) {
+    if (points.length < 3) return null;
+    const size = points.length;
+    const matrix = Array.from({ length: size + 3 }, () => (
+      Array(size + 3).fill(0)
+    ));
+    const rhs = Array(size + 3).fill(0);
+    for (let row = 0; row < size; row += 1) {
+      const [x1, y1, value] = points[row];
+      rhs[row] = value;
+      for (let column = 0; column < size; column += 1) {
+        const [x2, y2] = points[column];
+        const distance = Math.hypot(x1 - x2, y1 - y2);
+        matrix[row][column] = thinPlateSplineBasis(distance);
+      }
+      matrix[row][row] += 1e-9;
+      matrix[row][size] = 1;
+      matrix[row][size + 1] = x1;
+      matrix[row][size + 2] = y1;
+      matrix[size][row] = 1;
+      matrix[size + 1][row] = x1;
+      matrix[size + 2][row] = y1;
+    }
+    const inverse = invertMatrix(matrix);
+    if (!inverse) return null;
+    return {
+      points,
+      coefficients: multiplyMatrixVector(inverse, rhs),
+      size
+    };
+  }
+
+  function thinPlateSplineValue(model, longitude, latitude) {
+    if (!model) return null;
+    const { points, coefficients, size } = model;
+    let value = coefficients[size] + coefficients[size + 1] * longitude + coefficients[size + 2] * latitude;
+    for (let index = 0; index < size; index += 1) {
+      const [x, y] = points[index];
+      const distance = Math.hypot(longitude - x, latitude - y);
+      value += coefficients[index] * thinPlateSplineBasis(distance);
+    }
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function buildOrdinaryKrigingModel(points) {
+    if (points.length < 3) return null;
+    const values = points.map(point => point[2]);
+    const variance = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const meanCentered = values.map(value => (value - variance) ** 2);
+    const sill = Math.max(
+      meanCentered.reduce((sum, value) => sum + value, 0) / meanCentered.length,
+      1e-9
+    );
+    let maxDistance = 0;
+    let maxSemivariance = sill;
+    const size = points.length;
+    for (let row = 0; row < size; row += 1) {
+      for (let column = row + 1; column < size; column += 1) {
+        const dx = points[row][0] - points[column][0];
+        const dy = points[row][1] - points[column][1];
+        const distance = Math.hypot(dx, dy);
+        maxDistance = Math.max(maxDistance, distance);
+        const semivariance = 0.5 * ((points[row][2] - points[column][2]) ** 2);
+        maxSemivariance = Math.max(maxSemivariance, semivariance);
+      }
+    }
+    if (maxDistance <= 1e-12) return null;
+    const variogramRange = maxDistance / 2;
+    const nugget = 0;
+    const system = Array.from({ length: size + 1 }, () => (
+      Array(size + 1).fill(0)
+    ));
+    for (let row = 0; row < size; row += 1) {
+      for (let column = 0; column < size; column += 1) {
+        const dx = points[row][0] - points[column][0];
+        const dy = points[row][1] - points[column][1];
+        const distance = Math.hypot(dx, dy);
+        system[row][column] = row === column
+          ? 0
+          : sphericalVariogram(distance, nugget, maxSemivariance, variogramRange);
+      }
+      system[row][size] = 1;
+      system[size][row] = 1;
+    }
+    const inverse = invertMatrix(system);
+    if (!inverse) return null;
+    return {
+      points,
+      values,
+      inverse,
+      nugget,
+      sill: maxSemivariance,
+      variogramRange
+    };
+  }
+
+  function ordinaryKrigingValue(model, longitude, latitude) {
+    if (!model) return null;
+    const { points, values, inverse, nugget, sill, variogramRange } = model;
+    for (let index = 0; index < points.length; index += 1) {
+      const [x, y, value] = points[index];
+      if (Math.hypot(longitude - x, latitude - y) <= 1e-12) {
+        return value;
+      }
+    }
+    const rhs = [
+      ...points.map(point => sphericalVariogram(
+        Math.hypot(point[0] - longitude, point[1] - latitude),
+        nugget,
+        sill,
+        variogramRange
+      )),
+      1
+    ];
+    const weights = multiplyMatrixVector(inverse, rhs);
+    const estimate = values.reduce((sum, value, index) => (
+      sum + value * weights[index]
+    ), 0);
+    return Number.isFinite(estimate) ? estimate : null;
+  }
+
+  function buildSpatialInterpolator(points, method, idwPower = 2) {
+    const uniquePoints = aggregateSpatialPoints(points);
+    if (!uniquePoints.length) return null;
+    if (method === "ordinary_kriging") {
+      const model = buildOrdinaryKrigingModel(uniquePoints);
+      if (model) {
+        return {
+          points: uniquePoints,
+          valueAt: (longitude, latitude) => ordinaryKrigingValue(model, longitude, latitude)
+        };
+      }
+    }
+    if (method === "spline") {
+      const model = buildThinPlateSplineModel(uniquePoints);
+      if (model) {
+        return {
+          points: uniquePoints,
+          valueAt: (longitude, latitude) => thinPlateSplineValue(model, longitude, latitude)
+        };
+      }
+    }
+    return {
+      points: uniquePoints,
+      valueAt: (longitude, latitude) => idwValue(uniquePoints, longitude, latitude, idwPower)
+    };
+  }
+
+  function interpolationGrid(points, geometry, method = "idw", size = 44) {
+    const interpolator = buildSpatialInterpolator(points, method, 2);
+    if (!interpolator) {
+      return { xCoordinates: [], yCoordinates: [], values: [] };
+    }
     const [minX, minY, maxX, maxY] = geometryBounds(geometry);
     const xCoordinates = Array.from(
       { length: size },
@@ -1188,7 +1484,7 @@
     const values = yCoordinates.map(latitude => (
       xCoordinates.map(longitude => (
         pointInGeometry([longitude, latitude], geometry)
-          ? idwValue(points, longitude, latitude)
+          ? interpolator.valueAt(longitude, latitude)
           : null
       ))
     ));
@@ -1323,9 +1619,9 @@
     return `${formatSignedNumber(piece.gt)} تا ${formatSignedNumber(piece.lte)}`;
   }
 
-  function declineIdwSurface(points, geometry, size = 96) {
-    const uniquePoints = aggregateSpatialPoints(points);
-    if (!uniquePoints.length) return [];
+  function declineSurface(points, geometry, method = "idw", size = 96) {
+    const interpolator = buildSpatialInterpolator(points, method, 3);
+    if (!interpolator?.points?.length) return [];
     const [minX, minY, maxX, maxY] = geometryBounds(geometry);
     const data = [];
     for (let row = 0; row < size; row += 1) {
@@ -1333,17 +1629,17 @@
       for (let column = 0; column < size; column += 1) {
         const longitude = minX + (maxX - minX) * column / (size - 1);
         if (!pointInGeometry([longitude, latitude], geometry)) continue;
-        const interpolated = idwValue(uniquePoints, longitude, latitude, 3);
+        const interpolated = interpolator.valueAt(longitude, latitude);
         if (!Number.isFinite(interpolated)) continue;
         data.push([
           longitude,
           latitude,
           interpolated,
-          "پهنه IDW افت سال‌به‌سال"
+          `پهنه ${surfaceMethodLabels[method] || method} افت سال‌به‌سال`
         ]);
       }
     }
-    uniquePoints.forEach(point => {
+    interpolator.points.forEach(point => {
       data.push([point[0], point[1], point[2], "مقدار مشاهده‌شده چاه"]);
     });
     return data;
@@ -1687,6 +1983,10 @@
     if (!data || !charts) return;
     const monthIndex = state.spatialMonthIndex;
     const mode = document.getElementById("spatialWellMode")?.value || "calculation";
+    const method = document.getElementById("spatialSurfaceMethod")?.value
+      || state.spatialSurfaceMethod
+      || primarySurfaceMethod(data);
+    state.spatialSurfaceMethod = method;
     const month = data.hydrographs.thiessen[monthIndex]?.[0];
     const comparisonIndex = spatialComparisonIndex(data, monthIndex);
     const previousYearMonth = comparisonIndex >= 0
@@ -1710,8 +2010,8 @@
       intervalInput.value = String(interval);
     }
     const levels = currentPoints.length >= 3 ? contourLevels(currentPoints, interval) : [];
-    const grid = levels.length ? interpolationGrid(currentPoints, geometry) : null;
-    const contourSeries = levels.map((level, index) => ({
+    const grid = levels.length ? interpolationGrid(currentPoints, geometry, method) : null;
+    const contourSeries = levels.map(level => ({
       id: `contour-${level}`,
       name: `تراز ${faNumber.format(level)}`,
       type: "lines",
@@ -1732,7 +2032,7 @@
       .filter(id => !activeContourIds.includes(id))
       .map(id => ({ id, data: [] }));
     state.spatialContourSeriesIds = activeContourIds;
-    const contourLabels = levels.flatMap((level, index) => {
+    const contourLabels = levels.flatMap(level => {
       const segments = contourSegments(grid, level);
       if (!segments.length) return [];
       const segment = segments[Math.floor(segments.length / 2)];
@@ -1789,7 +2089,7 @@
     const declineValues = declinePoints.map(point => point[2]).filter(Number.isFinite);
     const minimumDecline = declineValues.length ? Math.min(...declineValues) : 0;
     const maximumDecline = declineValues.length ? Math.max(...declineValues) : 0;
-    const declineSurface = declineIdwSurface(declinePoints, geometry);
+    const declineSurfaceData = declineSurface(declinePoints, geometry, method);
     const targetMonth = Number(month.slice(5, 7));
     const rangeDeclinePoints = spatialRangeDeclinePoints(data, targetMonth, mode);
     const declinePieces = declineClassPieces(rangeDeclinePoints);
@@ -1802,7 +2102,7 @@
           coordinateSystem: "lmap",
           symbol: "rect",
           symbolSize: 9,
-          data: declineSurface.map(point => ({
+          data: declineSurfaceData.map(point => ({
             value: point,
             itemStyle: {
               color: declinePieceForValue(declinePieces, point[2])?.color || "#CBD5E1",
@@ -1827,12 +2127,13 @@
     charts.decline.dispatchAction({ type: "lmapRoam" });
     window.requestAnimationFrame(applyHeatmapClip);
 
+    const methodLabel = surfaceMethodLabel(data, method, true);
     document.getElementById("spatialMonthLabel").textContent = persianDate(month);
     document.getElementById("contourMapSummary").textContent = currentPoints.length >= 3
-      ? `${faNumber.format(currentPoints.length)} چاه · ${faNumber.format(levels.length)} خط · فاصله ${formatNumber(interval, " متر")}`
-      : `${faNumber.format(currentPoints.length)} چاه · حداقل ۳ چاه برای درون‌یابی لازم است`;
+      ? `${methodLabel} · ${faNumber.format(currentPoints.length)} چاه · ${faNumber.format(levels.length)} خط · فاصله ${formatNumber(interval, " متر")}`
+      : `${methodLabel} · ${faNumber.format(currentPoints.length)} چاه · حداقل ۳ چاه برای درون‌یابی لازم است`;
     document.getElementById("declineMapSummary").textContent = previousYearMonth
-      ? `${faNumber.format(declinePoints.length)} چاه · مرز کلاس‌ها ثابت بر اساس ${faNumber.format(rangeDeclinePoints.length)} مشاهده در کل بازه · دامنه این سال ${formatSignedNumber(minimumDecline)} تا ${formatSignedNumber(maximumDecline)} متر · نسبت به ${persianDate(previousYearMonth)}`
+      ? `${methodLabel} · ${faNumber.format(declinePoints.length)} چاه · مرز کلاس‌ها ثابت بر اساس ${faNumber.format(rangeDeclinePoints.length)} مشاهده در کل بازه · دامنه این سال ${formatSignedNumber(minimumDecline)} تا ${formatSignedNumber(maximumDecline)} متر · نسبت به ${persianDate(previousYearMonth)}`
       : "برای این ماه، مقدار ماه مشابه در سال قبل داخل بازه موجود نیست";
     document.getElementById("declineClassLegend").innerHTML = declinePieces.map(piece => `
       <span class="inline-flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-slate-600 shadow-sm ring-1 ring-slate-100">
@@ -1865,6 +2166,7 @@
     contourElement.style.visibility = "hidden";
     declineElement.style.visibility = "hidden";
     state.spatialData = data;
+    state.spatialSurfaceMethod = primarySurfaceMethod(data);
     state.spatialMonthIndex = defaultSpatialMonthIndex(
       data,
       data.calendar?.water_year_start_month
@@ -1918,6 +2220,18 @@
     state.spatialCharts.decline.on("lmapRoam", () => {
       window.requestAnimationFrame(applyHeatmapClip);
     });
+    const spatialSurfaceMethod = document.getElementById("spatialSurfaceMethod");
+    if (spatialSurfaceMethod) {
+      spatialSurfaceMethod.innerHTML = selectedSurfaceMethods(data)
+        .map(method => `<option value="${method}">${escapeHtml(surfaceMethodLabel(data, method))}</option>`)
+        .join("");
+      spatialSurfaceMethod.value = state.spatialSurfaceMethod;
+      spatialSurfaceMethod.onchange = event => {
+        stopSpatialPlayback();
+        state.spatialSurfaceMethod = event.target.value;
+        renderSpatialFrame();
+      };
+    }
     document.getElementById("spatialWellMode").onchange = renderSpatialFrame;
     document.getElementById("contourInterval").onchange = renderSpatialFrame;
     document.getElementById("spatialYear").onchange = () => {
@@ -1995,6 +2309,8 @@
     state.spatialCharts = null;
     state.spatialData = null;
     state.spatialContourSeriesIds = [];
+    state.spatialSurfaceMethod = "idw";
+    state.annualSurfaceMethod = "idw";
     state.contourIntervalInitialized = false;
     state.spatialViewInitialized = false;
     if (state.modalChart) {
@@ -2163,6 +2479,57 @@
     };
   }
 
+  function surfaceLineSeries(data, method, values, categories, comparisonEnabled = false) {
+    const label = surfaceMethodLabel(data, method, true);
+    const color = surfaceMethodColor(method);
+    const trendColor = surfaceMethodTrendColor(method);
+    const series = [];
+    if (Array.isArray(values?.series)) {
+      series.push({
+        name: label,
+        type: "line",
+        data: values.series.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color },
+        itemStyle: { color },
+        z: 3
+      });
+    }
+    if (Array.isArray(values?.trend?.series)) {
+      series.push({
+        name: `روند ${label} (بازه اصلی)`,
+        type: "line",
+        data: values.trend.series.map(item => item[1]),
+        showSymbol: false,
+        silent: true,
+        connectNulls: false,
+        lineStyle: { width: 2, color: trendColor, type: "dashed", opacity: 0.82 },
+        itemStyle: { color: trendColor },
+        z: 4
+      });
+    }
+    if (comparisonEnabled && Array.isArray(values?.comparison_trend?.series)) {
+      series.push({
+        name: `روند ${label} (مقایسه‌ای)`,
+        type: "line",
+        data: alignedTrendSeries(values.comparison_trend, categories),
+        showSymbol: false,
+        silent: true,
+        connectNulls: false,
+        lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+        itemStyle: { color: "#111827" },
+        z: 5
+      });
+    }
+    return series;
+  }
+
+  function surfaceTrendChips(data, method, trend, variant = "") {
+    const label = surfaceMethodLabel(data, method, true);
+    return trendChip(`${label}${variant ? ` ${variant}` : ""}`, trend, variant === "مقایسه‌ای" ? "comparison" : "");
+  }
+
   function renderFilterControls(data) {
     state.currentData = data;
     const years = Array.from(
@@ -2192,9 +2559,39 @@
     if (storageInput && data.filters.storage_coefficient != null) {
       storageInput.value = String(data.filters.storage_coefficient);
     }
-    const surfaceMethodSelect = document.getElementById("surfaceInterpolationMethod");
-    if (surfaceMethodSelect && data.filters.surface_interpolation_method) {
-      surfaceMethodSelect.value = data.filters.surface_interpolation_method;
+    const selectedSurfaceMethodSet = new Set(
+      Array.isArray(data.filters.surface_interpolation_methods)
+        ? data.filters.surface_interpolation_methods
+        : [data.filters.surface_interpolation_method || "idw"]
+    );
+    document
+      .querySelectorAll("#surfaceInterpolationMethods input[type='checkbox']")
+      .forEach(input => {
+        const method = input.value;
+        if (method === "idw") {
+          input.checked = true;
+          input.disabled = true;
+          return;
+        }
+        input.checked = selectedSurfaceMethodSet.has(method);
+      });
+    const spatialSurfaceMethod = document.getElementById("spatialSurfaceMethod");
+    if (spatialSurfaceMethod) {
+      const methods = selectedSurfaceMethods(data);
+      spatialSurfaceMethod.innerHTML = methods
+        .map(method => `<option value="${method}">${escapeHtml(surfaceMethodLabel(data, method))}</option>`)
+        .join("");
+      spatialSurfaceMethod.value = primarySurfaceMethod(data);
+    }
+    const annualSurfaceMethod = document.getElementById("annualSurfaceMethod");
+    if (annualSurfaceMethod) {
+      const methods = selectedSurfaceMethods(data);
+      const method = currentAnnualSurfaceMethod(data);
+      annualSurfaceMethod.innerHTML = methods
+        .map(item => `<option value="${item}">${escapeHtml(surfaceMethodLabel(data, item, true))}</option>`)
+        .join("");
+      annualSurfaceMethod.value = method;
+      state.annualSurfaceMethod = method;
     }
     document.getElementById("comparisonTrendEnabled").checked =
       Boolean(data.filters.comparison_enabled);
@@ -2207,6 +2604,19 @@
     const panel = document.getElementById("comparisonTrendPanel");
     if (!toggle || !panel) return;
     panel.classList.toggle("hidden", !toggle.checked);
+  }
+
+  function selectedSurfaceMethodsFromForm(root) {
+    const methods = Array.from(
+      root.querySelectorAll("#surfaceInterpolationMethods input[type='checkbox']")
+    )
+      .filter(input => input.checked || input.disabled)
+      .map(input => input.value)
+      .filter(Boolean);
+    if (!methods.includes("idw")) {
+      methods.unshift("idw");
+    }
+    return surfaceMethodOrder.filter(method => methods.includes(method));
   }
 
   function selectedManualWellIds() {
@@ -2538,9 +2948,19 @@
     const option = baseChartOption();
     const categories = data.hydrographs.arithmetic.map(item => item[0]);
     const comparisonEnabled = data.filters.comparison_enabled;
-    const surfaceLabel = surfaceHydrographLabel(data);
-    const surfaceTrendLabel = `روند ${surfaceHydrographLabel(data, true)} (بازه اصلی)`;
-    const surfaceComparisonTrendLabel = `روند ${surfaceHydrographLabel(data, true)} (مقایسه‌ای)`;
+    const surfaceMethods = selectedSurfaceMethods(data);
+    const surfacePayloads = surfaceMethods
+      .map(method => [method, surfaceMethodPayload(data, method)])
+      .filter(([, payload]) => Boolean(payload));
+    const legendSelected = {};
+    surfacePayloads.forEach(([method, payload]) => {
+      const label = surfaceMethodLabel(data, method, true);
+      legendSelected[label] = true;
+      legendSelected[`روند ${label} (بازه اصلی)`] = true;
+      if (comparisonEnabled && payload?.comparison_trend) {
+        legendSelected[`روند ${label} (مقایسه‌ای)`] = true;
+      }
+    });
     option.xAxis.data = categories;
     option.legend = {
       top: 4,
@@ -2552,13 +2972,11 @@
         "روند حسابی (بازه اصلی)": false,
         "میانگین تیسن": true,
         "روند تیسن (بازه اصلی)": true,
-        [surfaceLabel]: true,
-        [surfaceTrendLabel]: true,
         ...(comparisonEnabled ? {
           "روند حسابی (مقایسه‌ای)": false,
-          "روند تیسن (مقایسه‌ای)": true,
-          [surfaceComparisonTrendLabel]: true
+          "روند تیسن (مقایسه‌ای)": true
         } : {}),
+        ...legendSelected,
         "بارش ماهانه": true
       }
     };
@@ -2635,48 +3053,18 @@
           itemStyle: { color: "#111827" },
           z: 5
         }] : []),
-      {
-        name: surfaceLabel,
-        type: "line",
-        data: data.hydrographs.piezometric_surface.map(item => item[1]),
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 2.5, color: "#087E8B" },
-        itemStyle: { color: "#087E8B" },
-        z: 3
-      },
-      {
-        name: surfaceTrendLabel,
-        type: "line",
-        data: data.hydrographs.piezometric_surface_trend.series.map(item => item[1]),
-        showSymbol: false,
-        silent: true,
-        connectNulls: false,
-        lineStyle: { width: 2, color: "#7C3AED", type: "dashed", opacity: 0.8 },
-        itemStyle: { color: "#7C3AED" },
-        z: 4
-      },
-      ...(comparisonEnabled ? [{
-          name: surfaceComparisonTrendLabel,
-          type: "line",
-          data: alignedTrendSeries(
-            data.hydrographs.piezometric_surface_comparison_trend,
-            categories
-          ),
-          showSymbol: false,
-          silent: true,
-          connectNulls: false,
-          lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
-          itemStyle: { color: "#111827" },
-          z: 5
-        }] : [])
+      ...surfacePayloads.flatMap(([method, payload]) => (
+        surfaceLineSeries(data, method, payload, categories, comparisonEnabled)
+      ))
     ];
     chart.setOption(option);
     state.charts.push(chart);
     document.getElementById("aquiferTrendSummary").innerHTML = [
       trendChip("حسابی اصلی", data.hydrographs.arithmetic_trend),
       trendChip("تیسن اصلی", data.hydrographs.thiessen_trend),
-      trendChip(`${surfaceHydrographLabel(data, true)} اصلی`, data.hydrographs.piezometric_surface_trend),
+      ...surfacePayloads.map(([method, payload]) => (
+        trendChip(`${surfaceMethodLabel(data, method, true)} اصلی`, payload.trend)
+      )),
       ...(comparisonEnabled ? [
         trendChip(
           "حسابی مقایسه‌ای",
@@ -2688,11 +3076,13 @@
           data.hydrographs.thiessen_comparison_trend,
           "comparison"
         ),
-        trendChip(
-          `${surfaceHydrographLabel(data, true)} مقایسه‌ای`,
-          data.hydrographs.piezometric_surface_comparison_trend,
-          "comparison"
-        )
+        ...surfacePayloads.map(([method, payload]) => (
+          trendChip(
+            `${surfaceMethodLabel(data, method, true)} مقایسه‌ای`,
+            payload.comparison_trend,
+            "comparison"
+          )
+        ))
       ] : [])
     ].join("");
     const stationNames = data.precipitation.stations
@@ -2717,6 +3107,10 @@
 
     const option = baseChartOption();
     option.xAxis.data = data.hydrographs.arithmetic.map(item => item[0]);
+    const surfaceMethods = selectedSurfaceMethods(data);
+    const surfacePayloads = surfaceMethods
+      .map(method => [method, surfaceMethodPayload(data, method)])
+      .filter(([, payload]) => Boolean(payload));
     option.yAxis[1] = {
       type: "value",
       name: "NDVI",
@@ -2744,7 +3138,10 @@
       selected: {
         "میانگین حسابی": false,
         "میانگین تیسن": true,
-        [surfaceHydrographLabel(data)]: true,
+        ...Object.fromEntries(surfacePayloads.map(([method]) => [
+          surfaceMethodLabel(data, method, true),
+          true
+        ])),
         [`NDVI ${ndviMetricLabel(metric)}`]: true
       }
     };
@@ -2781,21 +3178,21 @@
         },
         z: 3
       },
-      {
-        name: surfaceHydrographLabel(data),
+      ...surfacePayloads.map(([method, payload]) => ({
+        name: surfaceMethodLabel(data, method),
         type: "line",
-        data: data.hydrographs.piezometric_surface.map(item => item[1]),
+        data: payload.series.map(item => item[1]),
         showSymbol: false,
         connectNulls: false,
-        lineStyle: { width: 2.5, color: "#087E8B" },
-        itemStyle: { color: "#087E8B" },
+        lineStyle: { width: 2.5, color: surfaceMethodColor(method) },
+        itemStyle: { color: surfaceMethodColor(method) },
         tooltip: {
           valueFormatter: value => (
             value == null ? "بدون داده" : `${faNumber.format(value)} متر`
           )
         },
         z: 3
-      }
+      }))
     ];
     state.aquiferNdviChart.setOption(option, true);
     state.aquiferNdviChart.resize();
@@ -2811,6 +3208,10 @@
 
     const option = baseChartOption();
     option.xAxis.data = data.hydrographs.arithmetic.map(item => item[0]);
+    const surfaceMethods = selectedSurfaceMethods(data);
+    const surfacePayloads = surfaceMethods
+      .map(method => [method, surfaceMethodPayload(data, method)])
+      .filter(([, payload]) => Boolean(payload));
     option.yAxis[1] = {
       type: "value",
       name: "AET (mm/month)",
@@ -2838,7 +3239,10 @@
       selected: {
         "میانگین حسابی": false,
         "میانگین تیسن": true,
-        [surfaceHydrographLabel(data)]: true,
+        ...Object.fromEntries(surfacePayloads.map(([method]) => [
+          surfaceMethodLabel(data, method, true),
+          true
+        ])),
         "AET ماهانه": true
       }
     };
@@ -2875,21 +3279,21 @@
         },
         z: 3
       },
-      {
-        name: surfaceHydrographLabel(data),
+      ...surfacePayloads.map(([method, payload]) => ({
+        name: surfaceMethodLabel(data, method),
         type: "line",
-        data: data.hydrographs.piezometric_surface.map(item => item[1]),
+        data: payload.series.map(item => item[1]),
         showSymbol: false,
         connectNulls: false,
-        lineStyle: { width: 2.5, color: "#087E8B" },
-        itemStyle: { color: "#087E8B" },
+        lineStyle: { width: 2.5, color: surfaceMethodColor(method) },
+        itemStyle: { color: surfaceMethodColor(method) },
         tooltip: {
           valueFormatter: value => (
             value == null ? "بدون داده" : `${faNumber.format(value)} متر`
           )
         },
         z: 3
-      }
+      }))
     ];
     state.aquiferAetChart.setOption(option, true);
     state.aquiferAetChart.resize();
@@ -2897,7 +3301,7 @@
 
   function renderAquiferAnnualChanges(data) {
     const element = document.getElementById("aquiferAnnualChangesChart");
-    const methodSelect = document.getElementById("annualDeclineMethod");
+    const methodSelect = document.getElementById("annualSurfaceMethod");
     const ndviSelect = document.getElementById("annualNdviMetric");
     const ndviPeriodSelect = document.getElementById("annualNdviPeriod");
     if (
@@ -2907,11 +3311,21 @@
       || !ndviPeriodSelect
       || element.closest(".hidden")
     ) return;
-    const method = methodSelect.value || "thiessen";
+    const selectedMethod = (
+      selectedSurfaceMethods(data).includes(methodSelect.value)
+        ? methodSelect.value
+        : currentAnnualSurfaceMethod(data)
+    );
+    methodSelect.value = selectedMethod;
+    state.annualSurfaceMethod = selectedMethod;
     const ndviMetric = ndviSelect.value || "median";
     const ndviPeriod = ndviPeriodSelect.value || "warm_months";
     const rows = data.annual_changes || [];
-    const methodLabel = groundwaterMethodLabel(method, true);
+    const annualRowsByWaterYear = new Map(
+      (surfaceMethodPayload(data, selectedMethod)?.annual_decline || [])
+        .filter(row => row?.water_year)
+        .map(row => [row.water_year, row])
+    );
     const ndviLabel = ndviMetric === "median" ? "میانه" : "میانگین";
     const ndviPeriodLabel = ndviPeriod === "warm_months"
       ? "ماه‌های ۳ تا ۶"
@@ -2927,6 +3341,24 @@
       state.aquiferAnnualChangesChart = echarts.init(element);
       state.charts.push(state.aquiferAnnualChangesChart);
     }
+    const surfaceSeries = [{
+      name: `افت ${surfaceMethodLabel(data, selectedMethod, true)}`,
+      type: "bar",
+      yAxisIndex: 0,
+      data: rows.map(row => (
+        annualRowsByWaterYear.get(row.water_year)?.decline ?? null
+      )),
+      barMaxWidth: 18,
+      itemStyle: {
+        color: surfaceMethodColor(selectedMethod),
+        borderRadius: [4, 4, 0, 0]
+      },
+      tooltip: {
+        valueFormatter: value => value == null
+          ? "بدون داده"
+          : `${faNumber.format(value)} متر`
+      }
+    }];
 
     state.aquiferAnnualChangesChart.setOption({
       animationDuration: 450,
@@ -2939,9 +3371,21 @@
         top: 8,
         right: 12,
         textStyle: { fontFamily: "Vazirmatn", fontSize: 10 },
-        itemWidth: 16
+        itemWidth: 16,
+        selected: Object.fromEntries([
+          [`افت ${surfaceMethodLabel(data, selectedMethod, true)}`, true],
+          ["مجموع بارش", true],
+          ["مجموع AET", true],
+          [`NDVI ${ndviLabel} (${ndviPeriodLabel})`, true],
+          ["سطح کشت آبی احتمالی", true]
+        ])
       },
-      grid: { top: 68, right: 196, bottom: 62, left: 64 },
+      grid: {
+        top: 68,
+        right: 196,
+        bottom: 62,
+        left: 64
+      },
       xAxis: {
         type: "category",
         data: rows.map(row => row.water_year),
@@ -3006,19 +3450,7 @@
         }
       ],
       series: [
-        {
-          name: `افت ${methodLabel}`,
-          type: "bar",
-          yAxisIndex: 0,
-          data: rows.map(row => row.decline?.[method] ?? null),
-          barMaxWidth: 18,
-          itemStyle: { color: "#E76F51", borderRadius: [4, 4, 0, 0] },
-          tooltip: {
-            valueFormatter: value => value == null
-              ? "بدون داده"
-              : `${faNumber.format(value)} متر`
-          }
-        },
+        ...surfaceSeries,
         {
           name: "مجموع بارش",
           type: "bar",
@@ -3089,21 +3521,19 @@
         <thead>
           <tr>
             <th>سال آبی</th>
-            <th>افت ${methodLabel} (متر)</th>
-            <th>تغییر ذخیره (میلیون مترمکعب)</th>
             <th>بارش (میلی‌متر)</th>
             <th>AET (میلی‌متر)</th>
             <th>NDVI ${ndviLabel} (${ndviPeriodLabel})</th>
             <th>سطح کشت آبی احتمالی (هکتار)</th>
             <th>پوشش زمانی</th>
+            <th>افت ${escapeHtml(surfaceMethodLabel(data, selectedMethod, true))}</th>
+            <th>ذخیره ${escapeHtml(surfaceMethodLabel(data, selectedMethod, true))}</th>
           </tr>
         </thead>
         <tbody>
           ${rows.map(row => `
             <tr>
               <td dir="ltr" class="font-bold text-navy">${row.water_year}</td>
-              <td>${numberCell(row.decline?.[method])}</td>
-              <td>${numberCell(row.storage_change_mcm?.[method])}</td>
               <td>${numberCell(row.precipitation_total)}</td>
               <td>${numberCell(row.aet_total)}</td>
               <td>${numberCell(ndviPeriodData(row)[ndviMetric])}</td>
@@ -3141,6 +3571,8 @@
                     )}٪`}
                 </div>
               </td>
+              <td>${numberCell(annualRowsByWaterYear.get(row.water_year)?.decline)}</td>
+              <td>${numberCell(annualRowsByWaterYear.get(row.water_year)?.storage_change_mcm)}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -3156,24 +3588,23 @@
       state.charts = state.charts.filter(chart => chart !== state.aquiferScenarioChart);
       state.aquiferScenarioChart = null;
     }
-
-    const previousMethod = document.getElementById("scenarioMethod")?.value || "thiessen";
-    const method = data.five_year_scenario?.[previousMethod]
-      ? previousMethod
-      : data.five_year_scenario?.piezometric_surface
-        ? "piezometric_surface"
-        : "thiessen";
-    const scenario = data.five_year_scenario?.[method] || {};
-    const methodLabel = groundwaterMethodLabel(method);
-    const declineRate = toNumber(scenario.decline_per_year_m);
-    const finalRow = scenario.series?.at(-1);
+    const methods = selectedSurfaceMethods(data);
+    const scenarios = methods.map(method => ({
+      method,
+      label: surfaceMethodLabel(data, method, true),
+      payload: surfaceMethodPayload(data, method)?.five_year_scenario || {}
+    }));
+    const primary = scenarios[0] || { method: "idw", label: "IDW", payload: {} };
+    const primaryScenario = primary.payload || {};
+    const declineRate = toNumber(primaryScenario.decline_per_year_m);
+    const finalRow = primaryScenario.series?.at(-1);
     const finalDecline = finalRow?.cumulative_decline_m;
     const finalLevel = finalRow?.projected_level_m;
-    const directionText = scenario.direction === "decline"
+    const directionText = primaryScenario.direction === "decline"
       ? "ادامه روند افت"
-      : scenario.direction === "rise"
+      : primaryScenario.direction === "rise"
         ? "ادامه روند افزایش تراز"
-        : scenario.direction === "stable"
+        : primaryScenario.direction === "stable"
           ? "تراز تقریباً پایدار"
           : "روند نامشخص";
 
@@ -3186,28 +3617,23 @@
               <p class="mt-1 text-[10px] leading-5 text-slate-500">ادامه خطی روند فعلی در بازه منتخب؛ سال‌ها با سال آبی فارسی گزارش می‌شوند.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
-                روش
-                <select id="scenarioMethod" class="field h-9 w-40 text-xs">
-                  <option value="piezometric_surface" ${method === "piezometric_surface" ? "selected" : ""}>${surfaceHydrographLabel(data, true)}</option>
-                  <option value="thiessen" ${method === "thiessen" ? "selected" : ""}>تیسن</option>
-                  <option value="arithmetic" ${method === "arithmetic" ? "selected" : ""}>حسابی</option>
-                </select>
-              </label>
+              <span class="rounded-xl border border-teal/15 bg-teal/5 px-3 py-2 text-[10px] font-medium text-navy">
+                نمایش هم‌زمان ${faNumber.format(scenarios.length)} روش
+              </span>
               <button id="scenarioReportButton" type="button" class="secondary-button h-9">گزارش PDF</button>
             </div>
           </div>
 
           <div class="mt-4 grid gap-3 sm:grid-cols-4">
             <div class="rounded-xl border border-slate-200 bg-white p-3">
-              <div class="text-[10px] text-slate-500">روش مبنا</div>
-              <div class="mt-2 text-sm font-bold text-navy">${methodLabel}</div>
+              <div class="text-[10px] text-slate-500">روش مرجع کارت</div>
+              <div class="mt-2 text-sm font-bold text-navy">${primary.label}</div>
               <div class="mt-1 text-[9px] text-slate-400">${directionText}</div>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-3">
               <div class="text-[10px] text-slate-500">تراز مبنا</div>
-              <div dir="ltr" class="mt-2 text-sm font-bold text-navy">${formatNumber(scenario.baseline_level_m, " m")}</div>
-              <div dir="ltr" class="mt-1 text-[9px] text-slate-400">${scenario.baseline_month || "—"}</div>
+              <div dir="ltr" class="mt-2 text-sm font-bold text-navy">${formatNumber(primaryScenario.baseline_level_m, " m")}</div>
+              <div dir="ltr" class="mt-1 text-[9px] text-slate-400">${primaryScenario.baseline_month || "—"}</div>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-3">
               <div class="text-[10px] text-slate-500">نرخ روندی</div>
@@ -3226,28 +3652,37 @@
 
         <section class="rounded-2xl border border-slate-200 bg-white p-4">
           <h4 class="text-sm font-bold text-navy">جدول سناریو</h4>
-          <p class="mt-1 text-[10px] leading-5 text-slate-500">مقادیر نسبت به آخرین تراز موجود در بازه انتخابی محاسبه می‌شوند.</p>
+          <p class="mt-1 text-[10px] leading-5 text-slate-500">مقادیر هر روش نسبت به آخرین تراز همان روش در بازه انتخابی محاسبه می‌شوند.</p>
           <div class="table-scroll mt-3 max-h-[430px]">
             <table class="data-table">
               <thead>
                 <tr>
                   <th>افق</th>
                   <th>سال آبی</th>
-                  <th>تراز برآوردی</th>
-                  <th>افت تجمعی</th>
+                  ${scenarios.map(item => `
+                    <th>تراز ${escapeHtml(item.label)}</th>
+                    <th>افت ${escapeHtml(item.label)}</th>
+                  `).join("")}
                 </tr>
               </thead>
               <tbody>
-                ${(scenario.series || []).map(row => `
+                ${((primaryScenario.series || []).map(row => `
                   <tr>
                     <td>${faNumber.format(row.horizon_year)} سال</td>
                     <td dir="ltr" class="font-bold text-navy">${row.water_year}</td>
-                    <td>${numberCell(row.projected_level_m)}</td>
-                    <td>${metricCell(row.cumulative_decline_m)}</td>
+                    ${scenarios.map(item => {
+                      const matched = (item.payload.series || []).find(candidate => (
+                        candidate.horizon_year === row.horizon_year
+                      ));
+                      return `
+                        <td>${numberCell(matched?.projected_level_m)}</td>
+                        <td>${metricCell(matched?.cumulative_decline_m)}</td>
+                      `;
+                    }).join("")}
                   </tr>
-                `).join("") || `
+                `).join("")) || `
                   <tr>
-                    <td colspan="4" class="text-center text-slate-400">داده کافی برای ساخت سناریو وجود ندارد.</td>
+                    <td colspan="${2 + scenarios.length * 2}" class="text-center text-slate-400">داده کافی برای ساخت سناریو وجود ندارد.</td>
                   </tr>
                 `}
               </tbody>
@@ -3260,15 +3695,12 @@
       </div>
     `;
 
-    document.getElementById("scenarioMethod").onchange = () => renderAquiferScenarioPanel(data);
     document.getElementById("scenarioReportButton").onclick = openPdfReport;
 
     const chartElement = document.getElementById("aquiferScenarioChart");
     if (!chartElement) return;
-    const rows = scenario.series || [];
+    const rows = primaryScenario.series || [];
     const categories = ["مبنا", ...rows.map(row => row.water_year)];
-    const levelData = [scenario.baseline_level_m ?? null, ...rows.map(row => row.projected_level_m)];
-    const declineData = [0, ...rows.map(row => row.cumulative_decline_m)];
     state.aquiferScenarioChart = echarts.init(chartElement);
     state.charts.push(state.aquiferScenarioChart);
     state.aquiferScenarioChart.setOption({
@@ -3282,7 +3714,11 @@
         top: 8,
         right: 12,
         textStyle: { fontFamily: "Vazirmatn", fontSize: 10 },
-        itemWidth: 16
+        itemWidth: 16,
+        selected: Object.fromEntries(scenarios.flatMap(item => ([
+          [`تراز ${item.label}`, true],
+          [`افت ${item.label}`, true]
+        ])))
       },
       grid: { top: 64, right: 76, bottom: 48, left: 64 },
       xAxis: {
@@ -3310,30 +3746,41 @@
         }
       ],
       series: [
-        {
-          name: "تراز برآوردی",
+        ...scenarios.map(item => ({
+          name: `تراز ${item.label}`,
           type: "line",
           yAxisIndex: 0,
-          data: levelData,
+          data: [
+            item.payload.baseline_level_m ?? null,
+            ...(item.payload.series || []).map(row => row.projected_level_m)
+          ],
           symbolSize: 8,
-          lineStyle: { width: 3, color: "#11395B" },
-          itemStyle: { color: "#11395B", borderColor: "#FFFFFF", borderWidth: 1.5 },
+          lineStyle: { width: 3, color: surfaceMethodColor(item.method) },
+          itemStyle: {
+            color: surfaceMethodColor(item.method),
+            borderColor: "#FFFFFF",
+            borderWidth: 1.5
+          },
           tooltip: {
             valueFormatter: value => value == null ? "بدون داده" : `${faNumber.format(value)} متر`
           },
           z: 5
-        },
-        {
-          name: "افت تجمعی",
+        })),
+        ...scenarios.map(item => ({
+          name: `افت ${item.label}`,
           type: "bar",
           yAxisIndex: 1,
-          data: declineData,
-          barMaxWidth: 24,
-          itemStyle: { color: "#E76F51", borderRadius: [5, 5, 0, 0] },
+          data: [0, ...(item.payload.series || []).map(row => row.cumulative_decline_m)],
+          barMaxWidth: 18,
+          itemStyle: {
+            color: surfaceMethodColor(item.method),
+            borderRadius: [5, 5, 0, 0],
+            opacity: 0.55
+          },
           tooltip: {
             valueFormatter: value => value == null ? "بدون داده" : `${faNumber.format(value)} متر`
           }
-        }
+        }))
       ]
     }, true);
     state.aquiferScenarioChart.resize();
@@ -3997,9 +4444,11 @@
     if (filters.storage_coefficient !== null && filters.storage_coefficient !== undefined) {
       params.set("storage_coefficient", filters.storage_coefficient);
     }
-    if (filters.surface_interpolation_method) {
-      params.set("surface_interpolation_method", filters.surface_interpolation_method);
-    }
+    (filters.surface_interpolation_methods || [filters.surface_interpolation_method])
+      .filter(Boolean)
+      .forEach(method => {
+        params.append("surface_interpolation_methods", method);
+      });
     (filters.selected_well_ids || []).forEach(wellId => {
       params.append("selected_well_ids", wellId);
     });
@@ -4026,10 +4475,10 @@
     const ndviMetric = document.getElementById("ndviMetric");
     ndviMetric.value = data.ndvi.default_metric;
     ndviMetric.onchange = () => renderAquiferNdviChart(data);
-    const annualDeclineMethod = document.getElementById("annualDeclineMethod");
+    const annualSurfaceMethod = document.getElementById("annualSurfaceMethod");
     const annualNdviMetric = document.getElementById("annualNdviMetric");
     const annualNdviPeriod = document.getElementById("annualNdviPeriod");
-    annualDeclineMethod.onchange = () => renderAquiferAnnualChanges(data);
+    annualSurfaceMethod.onchange = () => renderAquiferAnnualChanges(data);
     annualNdviMetric.onchange = () => renderAquiferAnnualChanges(data);
     annualNdviPeriod.onchange = () => renderAquiferAnnualChanges(data);
     renderAquiferAnnualTable(data);
@@ -4099,8 +4548,9 @@
         return;
       }
       params.set("storage_coefficient", String(storageCoefficient));
-      const surfaceMethod = root.querySelector("#surfaceInterpolationMethod")?.value || "idw";
-      params.set("surface_interpolation_method", surfaceMethod);
+      selectedSurfaceMethodsFromForm(root).forEach(method => {
+        params.append("surface_interpolation_methods", method);
+      });
       if (filters) {
         params.set("start_year", filters.startYear);
         params.set("start_month", filters.startMonth);

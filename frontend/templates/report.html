@@ -230,7 +230,13 @@
     {% set analysis = data.time_series_analysis %}
     {% set risk = analysis.risk_assessment %}
     {% set driver = analysis.driver_classification %}
-    {% set scenario = data.five_year_scenario.thiessen %}
+    {% set primary_method = data.filters.surface_interpolation_method or "idw" %}
+    {% set selected_methods = data.filters.surface_interpolation_methods or [primary_method] %}
+    {% set surface_payload = data.surface_methods[primary_method] if data.surface_methods and primary_method in data.surface_methods else none %}
+    {% set surface_label = surface_payload.metadata.short_label if surface_payload and surface_payload.metadata else primary_method|upper %}
+    {% set scenario = surface_payload.five_year_scenario if surface_payload else none %}
+    {% set scenario_series = scenario.series if scenario else [] %}
+    {% set surface_trend = surface_payload.trend if surface_payload else none %}
     {% set latest = data.annual_changes|last %}
 
     <main class="page">
@@ -258,12 +264,18 @@
         </div>
         <div class="card soft">
           <div class="label">روش مبنا</div>
-          <div class="value">تیسن</div>
-          <div class="note">{{ data.stats.selected_sites }} ایستگاه مکانی</div>
+          <div class="value">{{ surface_label }}</div>
+          <div class="note">
+            {{ data.stats.selected_sites }} ایستگاه مکانی ·
+            {% for method in selected_methods %}
+              {% set method_payload = data.surface_methods[method] if data.surface_methods and method in data.surface_methods else none %}
+              {{ method_payload.metadata.short_label if method_payload and method_payload.metadata else method|upper }}{% if not loop.last %}، {% endif %}
+            {% endfor %}
+          </div>
         </div>
         <div class="card soft">
           <div class="label">شیب تراز</div>
-          <div class="value">{{ data.hydrographs.thiessen_trend.decline_per_year or "—" }}</div>
+          <div class="value">{{ surface_trend.decline_per_year if surface_trend else "—" }}</div>
           <div class="note">متر افت در سال</div>
         </div>
         <div class="card soft">
@@ -304,7 +316,7 @@
           <table>
             <tbody>
               <tr><th>سال آبی</th><td dir="ltr">{{ latest.water_year if latest else "—" }}</td></tr>
-              <tr><th>افت تیسن</th><td>{{ latest.decline.thiessen if latest else "—" }} متر</td></tr>
+              <tr><th>افت {{ surface_label }}</th><td>{{ latest.decline[primary_method] if latest and primary_method in latest.decline else "—" }} متر</td></tr>
               <tr><th>بارش</th><td>{{ latest.precipitation_total if latest else "—" }} میلی‌متر</td></tr>
               <tr><th>AET</th><td>{{ latest.aet_total if latest else "—" }} میلی‌متر</td></tr>
               <tr><th>سطح کشت آبی احتمالی</th><td>{{ latest.warm_season_irrigated_area.probable_area_ha if latest else "—" }} هکتار</td></tr>
@@ -314,11 +326,12 @@
       </section>
 
       <section class="section card">
-        <h2>سناریوی ۵ سال آینده با ادامه روند فعلی</h2>
+        <h2>سناریوی ۵ سال آینده با ادامه روند فعلی · {{ surface_label }}</h2>
         <div class="note">
-          مبنا: {{ scenario.baseline_month or "—" }} ·
-          تراز مبنا: {{ scenario.baseline_level_m or "—" }} متر ·
-          نرخ افت روندی: {{ scenario.decline_per_year_m or "—" }} متر/سال
+          روش نمایشی: {{ surface_label }} ·
+          مبنا: {{ scenario.baseline_month if scenario else "—" }} ·
+          تراز مبنا: {{ scenario.baseline_level_m if scenario else "—" }} متر ·
+          نرخ افت روندی: {{ scenario.decline_per_year_m if scenario else "—" }} متر/سال
         </div>
         <table>
           <thead>
@@ -330,7 +343,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for row in scenario.series %}
+            {% for row in scenario_series %}
               <tr>
                 <td>{{ row.horizon_year }} سال</td>
                 <td dir="ltr">{{ row.water_year }}</td>

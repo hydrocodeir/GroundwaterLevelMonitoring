@@ -59,3 +59,17 @@ When processing Iranian hydrological datasets:
 5. If the dataset spans multiple years, automatically assign each record to its corresponding Persian Water Year before performing annual analyses.
 
 This standard overrides Gregorian-year aggregation for all Iranian hydrological and groundwater studies unless the user explicitly specifies another convention.
+
+
+## Client-Side Computation Requirements
+
+* All calculations and data processing must run on the client side.
+* Use **Pyodide** to execute Python code directly in the browser.
+* Do not send user data, files, or calculation inputs to a backend server unless explicitly required.
+* The backend, if used, should only serve static files, configuration, or optional API endpoints.
+* Keep the application functional offline where possible after initial loading.
+* Use local browser storage, such as `localStorage` or `IndexedDB`, for temporary or persistent client-side data.
+* Avoid server-side computation for analysis, preprocessing, validation, or report generation.
+* Make the UI responsive and prevent long-running Pyodide tasks from freezing the page.
+* Clearly separate frontend logic, Pyodide execution code, and UI components.
+* Prioritize privacy, portability, and minimal backend dependency.
