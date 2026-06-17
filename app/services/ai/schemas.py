@@ -81,6 +81,7 @@ class AIChatFilters(BaseModel):
     continuous_only: bool = True
     manual_selection: bool = False
     selected_well_ids: list[str] = Field(default_factory=list, max_length=250)
+    storage_coefficient: float | None = Field(default=None, gt=0)
 
 
 class AIChatRequest(BaseModel):

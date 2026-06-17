@@ -14,7 +14,7 @@ import pandas as pd
 from scipy.stats import kendalltau, pearsonr, spearmanr, theilslopes
 from pyproj import Transformer
 from shapely import voronoi_polygons
-from shapely.geometry import MultiPoint, Point, mapping, shape
+from shapely.geometry import MultiPoint, Point, box, mapping, shape
 from shapely.ops import transform
 
 
@@ -27,6 +27,8 @@ NDVI_WARM_MONTHS = frozenset(range(3, 7))
 DEFAULT_ANALYSIS_YEARS = 4
 NEAREST_PRECIPITATION_STATION_COUNT = 3
 COMPARISON_GEOMETRY_TOLERANCE = 0.001
+PIEZOMETRIC_SURFACE_GRID_SIZE = 48
+IDW_POWER = 2.0
 TREND_STRONG_THRESHOLD = 0.6
 TREND_WEAK_THRESHOLD = 0.3
 DECLINE_ANOMALY_Z_THRESHOLD = 1.5
@@ -785,6 +787,124 @@ class GroundwaterData:
                 }
             )
         return weight_map, {"type": "FeatureCollection", "features": features}
+
+    def _projected_boundary(
+        self,
+        group_id: str,
+        sites: pd.DataFrame,
+    ) -> tuple[Any, Transformer]:
+        boundary = self.boundary_matches[group_id]["aquifer"].geometry
+        if sites.empty:
+            centroid = boundary.centroid
+            longitude = float(centroid.x)
+            latitude = float(centroid.y)
+        else:
+            longitude = float(sites["X"].mean())
+            latitude = float(sites["Y"].mean())
+        projected_crs = f"EPSG:{self._utm_epsg(longitude, latitude)}"
+        forward = Transformer.from_crs(
+            "EPSG:4326", projected_crs, always_xy=True
+        )
+        return transform(forward.transform, boundary), forward
+
+    @staticmethod
+    def _surface_sample_cells(projected_boundary: Any) -> tuple[np.ndarray, np.ndarray]:
+        minx, miny, maxx, maxy = projected_boundary.bounds
+        width = max(maxx - minx, 1.0)
+        height = max(maxy - miny, 1.0)
+        aspect = width / height
+        columns = max(8, int(round(PIEZOMETRIC_SURFACE_GRID_SIZE * np.sqrt(aspect))))
+        rows = max(8, int(round(PIEZOMETRIC_SURFACE_GRID_SIZE / np.sqrt(aspect))))
+        dx = width / columns
+        dy = height / rows
+        points: list[tuple[float, float]] = []
+        weights: list[float] = []
+        for row in range(rows):
+            y0 = miny + row * dy
+            for column in range(columns):
+                x0 = minx + column * dx
+                cell = box(x0, y0, x0 + dx, y0 + dy)
+                intersection_area = cell.intersection(projected_boundary).area
+                if intersection_area <= 0:
+                    continue
+                points.append((x0 + dx / 2, y0 + dy / 2))
+                weights.append(float(intersection_area))
+        if not points:
+            representative = projected_boundary.representative_point()
+            points = [(float(representative.x), float(representative.y))]
+            weights = [float(projected_boundary.area)]
+        return np.array(points, dtype=float), np.array(weights, dtype=float)
+
+    @staticmethod
+    def _idw_values(
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> np.ndarray:
+        if len(point_values) == 1:
+            return np.full(len(samples_xy), float(point_values[0]), dtype=float)
+        dx = samples_xy[:, None, 0] - point_xy[None, :, 0]
+        dy = samples_xy[:, None, 1] - point_xy[None, :, 1]
+        distance_squared = dx * dx + dy * dy
+        exact = distance_squared <= 1e-12
+        weights = 1.0 / np.maximum(distance_squared, 1e-12) ** (IDW_POWER / 2)
+        interpolated = (weights @ point_values) / weights.sum(axis=1)
+        exact_rows = exact.any(axis=1)
+        if exact_rows.any():
+            exact_columns = exact[exact_rows].argmax(axis=1)
+            interpolated[exact_rows] = point_values[exact_columns]
+        return interpolated
+
+    def _piezometric_surface_value_map(
+        self,
+        group_id: str,
+        frame: pd.DataFrame,
+        selected_sites: pd.DataFrame,
+    ) -> tuple[dict[int, float], dict[str, Any]]:
+        values: dict[int, float] = {}
+        boundary_area_m2 = None
+        if frame.empty or selected_sites.empty:
+            return values, {
+                "method": "idw",
+                "method_label": "میانگین مساحتی سطح پیزومتریک ماهانه (IDW)",
+                "grid_size": PIEZOMETRIC_SURFACE_GRID_SIZE,
+                "area_m2": None,
+                "area_km2": None,
+            }
+
+        projected_boundary, forward = self._projected_boundary(group_id, selected_sites)
+        boundary_area_m2 = float(projected_boundary.area)
+        samples_xy, sample_weights = self._surface_sample_cells(projected_boundary)
+        projected_sites = selected_sites.copy()
+        projected_coordinates = [
+            forward.transform(float(row.X), float(row.Y))
+            for row in projected_sites.itertuples()
+        ]
+        projected_sites["_px"] = [coordinate[0] for coordinate in projected_coordinates]
+        projected_sites["_py"] = [coordinate[1] for coordinate in projected_coordinates]
+        site_coordinates = projected_sites.set_index("_site_key")[["_px", "_py"]]
+        site_month = (
+            frame.groupby(["_month_index", "_site_key"], as_index=False)
+            .agg(level=("level", "mean"))
+            .join(site_coordinates, on="_site_key", how="inner")
+            .dropna(subset=["level", "_px", "_py"])
+        )
+        for month_index, month_frame in site_month.groupby("_month_index", sort=True):
+            point_xy = month_frame[["_px", "_py"]].to_numpy(dtype=float)
+            point_values = month_frame["level"].to_numpy(dtype=float)
+            if not len(point_values):
+                continue
+            interpolated = self._idw_values(samples_xy, point_xy, point_values)
+            values[int(month_index)] = float(
+                np.average(interpolated, weights=sample_weights)
+            )
+        return values, {
+            "method": "idw",
+            "method_label": "میانگین مساحتی سطح پیزومتریک ماهانه (IDW)",
+            "grid_size": PIEZOMETRIC_SURFACE_GRID_SIZE,
+            "area_m2": finite_or_none(boundary_area_m2, 2),
+            "area_km2": finite_or_none(boundary_area_m2 / 1_000_000, 3),
+        }
 
     def _prepare_monthly_measurements(self) -> pd.DataFrame:
         location_lookup = (
@@ -1687,7 +1807,11 @@ class GroundwaterData:
                         .get("warm_months", {})
                         .get("mean")
                     ),
-                    "groundwater_decline_m": row.get("decline", {}).get("thiessen"),
+                    "groundwater_decline_m": (
+                        row.get("decline", {}).get("piezometric_surface")
+                        if row.get("decline", {}).get("piezometric_surface") is not None
+                        else row.get("decline", {}).get("thiessen")
+                    ),
                 }
                 for row in annual_changes
             ]
@@ -1698,7 +1822,7 @@ class GroundwaterData:
                     "water_year_count": 0,
                     "complete_year_count": 0,
                     "partial_year_count": 0,
-                    "groundwater_method": "thiessen",
+                    "groundwater_method": "piezometric_surface_idw",
                     "ndvi_window": "khordad-shahrivar",
                 },
                 "trend_statistics": {},
@@ -2096,7 +2220,7 @@ class GroundwaterData:
                 "water_year_count": len(years),
                 "complete_year_count": complete_years,
                 "partial_year_count": partial_years,
-                "groundwater_method": "thiessen",
+                "groundwater_method": "piezometric_surface_idw",
                 "ndvi_window": "khordad-shahrivar",
                 "water_year_labels": water_year_labels,
             },
@@ -2143,8 +2267,11 @@ class GroundwaterData:
         self,
         arithmetic_values: dict[int, float],
         thiessen_values: dict[int, float],
+        piezometric_surface_values: dict[int, float],
         start_year: int,
         end_year: int,
+        storage_coefficient: float | None = None,
+        aquifer_area_m2: float | None = None,
     ) -> list[dict[str, Any]]:
         arithmetic_rows = self._annual_decline_rows(
             arithmetic_values,
@@ -2156,24 +2283,68 @@ class GroundwaterData:
             start_year,
             end_year,
         )
+        piezometric_surface_rows = self._annual_decline_rows(
+            piezometric_surface_values,
+            start_year,
+            end_year,
+        )
+
+        def with_storage(row: dict[str, Any]) -> dict[str, Any]:
+            result = {
+                key: value
+                for key, value in row.items()
+                if key not in {"water_year", "start_month", "end_month"}
+            }
+            decline = result.get("decline")
+            cumulative_decline = result.get("cumulative_decline")
+            can_calculate_storage = (
+                storage_coefficient is not None
+                and aquifer_area_m2 is not None
+                and np.isfinite(storage_coefficient)
+                and np.isfinite(aquifer_area_m2)
+            )
+            result["storage_change_mcm"] = (
+                finite_or_none(
+                    float(decline) * float(storage_coefficient) * float(aquifer_area_m2)
+                    / 1_000_000,
+                    3,
+                )
+                if can_calculate_storage
+                and decline is not None
+                and np.isfinite(decline)
+                else None
+            )
+            result["cumulative_storage_change_mcm"] = (
+                finite_or_none(
+                    float(cumulative_decline)
+                    * float(storage_coefficient)
+                    * float(aquifer_area_m2)
+                    / 1_000_000,
+                    3,
+                )
+                if can_calculate_storage
+                and cumulative_decline is not None
+                and np.isfinite(cumulative_decline)
+                else None
+            )
+            return result
+
         rows = []
-        for arithmetic, thiessen in zip(arithmetic_rows, thiessen_rows):
+        for arithmetic, thiessen, piezometric_surface in zip(
+            arithmetic_rows,
+            thiessen_rows,
+            piezometric_surface_rows,
+        ):
             rows.append(
                 {
                     "water_year": arithmetic["water_year"],
-                    "arithmetic": {
-                        key: value
-                        for key, value in arithmetic.items()
-                        if key not in {"water_year", "start_month", "end_month"}
-                    },
-                    "thiessen": {
-                        key: value
-                        for key, value in thiessen.items()
-                        if key not in {"water_year", "start_month", "end_month"}
-                    },
+                    "arithmetic": with_storage(arithmetic),
+                    "thiessen": with_storage(thiessen),
+                    "piezometric_surface": with_storage(piezometric_surface),
                     "start_month": arithmetic["start_month"],
                     "arithmetic_end_month": arithmetic["end_month"],
                     "thiessen_end_month": thiessen["end_month"],
+                    "piezometric_surface_end_month": piezometric_surface["end_month"],
                 }
             )
         return rows
@@ -2266,6 +2437,22 @@ class GroundwaterData:
                 "decline": {
                     "arithmetic": decline.get("arithmetic", {}).get("decline"),
                     "thiessen": decline.get("thiessen", {}).get("decline"),
+                    "piezometric_surface": decline.get(
+                        "piezometric_surface",
+                        {},
+                    ).get("decline"),
+                },
+                "storage_change_mcm": {
+                    "arithmetic": decline.get("arithmetic", {}).get(
+                        "storage_change_mcm"
+                    ),
+                    "thiessen": decline.get("thiessen", {}).get(
+                        "storage_change_mcm"
+                    ),
+                    "piezometric_surface": decline.get(
+                        "piezometric_surface",
+                        {},
+                    ).get("storage_change_mcm"),
                 },
                 "precipitation_total": finite_or_none(
                     sum(precipitation_items)
@@ -2353,7 +2540,15 @@ class GroundwaterData:
         frame: pd.DataFrame,
         months: list[tuple[int, str]],
         weights: dict[str, float],
-    ) -> tuple[list[list[Any]], list[list[Any]], dict[int, float], dict[int, float]]:
+        piezometric_surface_values: dict[int, float],
+    ) -> tuple[
+        list[list[Any]],
+        list[list[Any]],
+        list[list[Any]],
+        dict[int, float],
+        dict[int, float],
+        dict[int, float],
+    ]:
         month_labels = dict(months)
         arithmetic_values, thiessen_values = self._hydrograph_value_maps(
             frame,
@@ -2368,11 +2563,20 @@ class GroundwaterData:
             [month_labels[index], finite_or_none(thiessen_values.get(index))]
             for index, _ in months
         ]
+        piezometric_surface_series = [
+            [
+                month_labels[index],
+                finite_or_none(piezometric_surface_values.get(index)),
+            ]
+            for index, _ in months
+        ]
         return (
             arithmetic_series,
             thiessen_series,
+            piezometric_surface_series,
             arithmetic_values,
             thiessen_values,
+            piezometric_surface_values,
         )
 
     def _well_payload(
@@ -2497,9 +2701,14 @@ class GroundwaterData:
         continuous_only: bool = True,
         manual_selection: bool = False,
         selected_well_ids: list[str] | None = None,
+        storage_coefficient: float | None = None,
     ) -> dict[str, Any]:
         if group_id not in self.groups:
             raise KeyError(group_id)
+        if storage_coefficient is not None and (
+            not np.isfinite(storage_coefficient) or storage_coefficient <= 0
+        ):
+            raise ValueError("ضریب ذخیره/آبدهی ویژه باید عددی مثبت باشد")
         (
             start_year_value,
             start_month_value,
@@ -2591,11 +2800,37 @@ class GroundwaterData:
             selected_sites,
         )
         (
+            piezometric_surface_values,
+            piezometric_surface_metadata,
+        ) = self._piezometric_surface_value_map(
+            group_id,
+            display_calculation_frame,
+            selected_sites,
+        )
+        (
             arithmetic,
             thiessen,
+            piezometric_surface,
             arithmetic_values,
             thiessen_values,
-        ) = self._hydrographs(display_calculation_frame, months, weights)
+            piezometric_surface_values,
+        ) = self._hydrographs(
+            display_calculation_frame,
+            months,
+            weights,
+            piezometric_surface_values,
+        )
+        if comparison_enabled:
+            (
+                comparison_piezometric_surface_values,
+                _,
+            ) = self._piezometric_surface_value_map(
+                group_id,
+                comparison_calculation_frame,
+                selected_sites,
+            )
+        else:
+            comparison_piezometric_surface_values = {}
         (
             comparison_arithmetic_values,
             comparison_thiessen_values,
@@ -2606,8 +2841,11 @@ class GroundwaterData:
         aquifer_annual_decline = self._aquifer_annual_rows(
             arithmetic_values,
             thiessen_values,
+            piezometric_surface_values,
             start_water_year,
             annual_end_water_year,
+            storage_coefficient=storage_coefficient,
+            aquifer_area_m2=piezometric_surface_metadata["area_m2"],
         )
         wells = self._well_payload(
             group_id,
@@ -2639,6 +2877,10 @@ class GroundwaterData:
         time_series_analysis = self._time_series_analysis(annual_changes)
         arithmetic_trend = self._trend(arithmetic_values, months)
         thiessen_trend = self._trend(thiessen_values, months)
+        piezometric_surface_trend = self._trend(
+            piezometric_surface_values,
+            months,
+        )
         arithmetic_comparison_trend = (
             self._trend(comparison_arithmetic_values, comparison_months)
             if comparison_enabled
@@ -2646,6 +2888,11 @@ class GroundwaterData:
         )
         thiessen_comparison_trend = (
             self._trend(comparison_thiessen_values, comparison_months)
+            if comparison_enabled
+            else None
+        )
+        piezometric_surface_comparison_trend = (
+            self._trend(comparison_piezometric_surface_values, comparison_months)
             if comparison_enabled
             else None
         )
@@ -2661,6 +2908,12 @@ class GroundwaterData:
                 months,
                 thiessen_trend,
                 "thiessen",
+            ),
+            "piezometric_surface": self._five_year_scenario(
+                piezometric_surface_values,
+                months,
+                piezometric_surface_trend,
+                "piezometric_surface",
             ),
         }
         group_minimum = int(group_monthly["_month_index"].min())
@@ -2717,6 +2970,7 @@ class GroundwaterData:
                 "selected_well_ids": [
                     well["id"] for well in wells if well["included"]
                 ],
+                "storage_coefficient": storage_coefficient,
             },
             "calendar": {
                 "months_per_year": MONTHS_PER_YEAR,
@@ -2732,10 +2986,23 @@ class GroundwaterData:
             "hydrographs": {
                 "arithmetic": arithmetic,
                 "thiessen": thiessen,
+                "piezometric_surface": piezometric_surface,
                 "arithmetic_trend": arithmetic_trend,
                 "thiessen_trend": thiessen_trend,
+                "piezometric_surface_trend": piezometric_surface_trend,
                 "arithmetic_comparison_trend": arithmetic_comparison_trend,
                 "thiessen_comparison_trend": thiessen_comparison_trend,
+                "piezometric_surface_comparison_trend": (
+                    piezometric_surface_comparison_trend
+                ),
+            },
+            "piezometric_surface": piezometric_surface_metadata,
+            "storage": {
+                "coefficient": storage_coefficient,
+                "area_m2": piezometric_surface_metadata["area_m2"],
+                "area_km2": piezometric_surface_metadata["area_km2"],
+                "unit": "میلیون مترمکعب",
+                "formula": "ΔS = Sy × Area × ΔH",
             },
             "five_year_scenario": five_year_scenario,
             "annual_decline": aquifer_annual_decline,

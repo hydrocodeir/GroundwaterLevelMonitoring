@@ -298,7 +298,7 @@
     const aetTrend = trends.aet || {};
     const ndviTrend = trends.ndvi || {};
     const irrigatedAreaTrend = trends.irrigated_area || {};
-    const groundwaterValues = data.hydrographs.thiessen
+    const groundwaterValues = (data.hydrographs.piezometric_surface || data.hydrographs.thiessen)
       .map(item => toNumber(item[1]))
       .filter(value => value !== null);
     const criticalWellsCount = data.wells.filter(well => (
@@ -670,7 +670,8 @@
       filters.end_month,
       Boolean(filters.continuous_only),
       Boolean(filters.manual_selection),
-      filters.selected_well_ids || []
+      filters.selected_well_ids || [],
+      filters.storage_coefficient
     ]);
     const changedContext = state.chatContextKey !== contextKey;
     state.chatAquiferId = data.id;
@@ -774,7 +775,8 @@
             end_month: filters.end_month,
             continuous_only: Boolean(filters.continuous_only),
             manual_selection: Boolean(filters.manual_selection),
-            selected_well_ids: filters.selected_well_ids || []
+            selected_well_ids: filters.selected_well_ids || [],
+            storage_coefficient: filters.storage_coefficient
           }
         })
       });
@@ -1016,6 +1018,14 @@
     return trend.direction === "decline"
       ? `${compact ? "افت" : "شیب افت"} ${value} متر/سال`
       : `${compact ? "افزایش" : "شیب افزایش"} ${value} متر/سال`;
+  }
+
+  function groundwaterMethodLabel(method, compact = false) {
+    if (method === "piezometric_surface") {
+      return compact ? "سطح IDW" : "میانگین مساحتی سطح پیزومتریک IDW";
+    }
+    if (method === "arithmetic") return compact ? "حسابی" : "میانگین حسابی";
+    return compact ? "تیسن" : "میانگین وزنی تیسن";
   }
 
   function trendChip(label, trend, variant = "") {
@@ -2167,6 +2177,10 @@
     renderMonthOptions("comparisonStart", data.filters.comparison_start_month);
     renderMonthOptions("comparisonEnd", data.filters.comparison_end_month);
     document.getElementById("continuousOnly").checked = data.filters.continuous_only;
+    const storageInput = document.getElementById("storageCoefficient");
+    if (storageInput && data.filters.storage_coefficient != null) {
+      storageInput.value = String(data.filters.storage_coefficient);
+    }
     document.getElementById("comparisonTrendEnabled").checked =
       Boolean(data.filters.comparison_enabled);
     syncComparisonTrendUI();
@@ -2294,6 +2308,14 @@
       ["داخل محاسبات", formatNumber(stats.selected_wells), `${formatNumber(stats.selected_sites)} ایستگاه مکانی تیسن`, "bg-teal"],
       ["خارج از محاسبات", formatNumber(stats.excluded_wells), "با برچسب مجزا در نمودارها", "bg-amber-400"],
       ["تعداد ماه‌ها", formatNumber(data.hydrographs.arithmetic.length), "در بازه ماهانه منتخب", "bg-aqua"],
+      [
+        "ضریب ذخیره",
+        data.storage?.coefficient == null ? "—" : faNumber.format(data.storage.coefficient),
+        data.storage?.area_km2 == null
+          ? "مساحت آبخوان نامشخص"
+          : `${formatNumber(data.storage.area_km2, " km²")} مساحت آبخوان`,
+        "bg-violet-600"
+      ],
       ["تغییر دوره", changeLabel, "اولین تا آخرین مقدار موجود", change < 0 ? "bg-coral" : "bg-teal"]
     ];
     document.getElementById("statsGrid").innerHTML = cards.map(([label, value, note, color]) => `
@@ -2512,9 +2534,12 @@
         "روند حسابی (بازه اصلی)": false,
         "میانگین تیسن": true,
         "روند تیسن (بازه اصلی)": true,
+        "سطح پیزومتریک IDW": true,
+        "روند سطح IDW (بازه اصلی)": true,
         ...(comparisonEnabled ? {
           "روند حسابی (مقایسه‌ای)": false,
-          "روند تیسن (مقایسه‌ای)": true
+          "روند تیسن (مقایسه‌ای)": true,
+          "روند سطح IDW (مقایسه‌ای)": true
         } : {}),
         "بارش ماهانه": true
       }
@@ -2591,6 +2616,41 @@
           lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
           itemStyle: { color: "#111827" },
           z: 5
+        }] : []),
+      {
+        name: "سطح پیزومتریک IDW",
+        type: "line",
+        data: data.hydrographs.piezometric_surface.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#087E8B" },
+        itemStyle: { color: "#087E8B" },
+        z: 3
+      },
+      {
+        name: "روند سطح IDW (بازه اصلی)",
+        type: "line",
+        data: data.hydrographs.piezometric_surface_trend.series.map(item => item[1]),
+        showSymbol: false,
+        silent: true,
+        connectNulls: false,
+        lineStyle: { width: 2, color: "#7C3AED", type: "dashed", opacity: 0.8 },
+        itemStyle: { color: "#7C3AED" },
+        z: 4
+      },
+      ...(comparisonEnabled ? [{
+          name: "روند سطح IDW (مقایسه‌ای)",
+          type: "line",
+          data: alignedTrendSeries(
+            data.hydrographs.piezometric_surface_comparison_trend,
+            categories
+          ),
+          showSymbol: false,
+          silent: true,
+          connectNulls: false,
+          lineStyle: { width: 2, color: "#111827", type: "dashed", opacity: 0.9 },
+          itemStyle: { color: "#111827" },
+          z: 5
         }] : [])
     ];
     chart.setOption(option);
@@ -2598,6 +2658,7 @@
     document.getElementById("aquiferTrendSummary").innerHTML = [
       trendChip("حسابی اصلی", data.hydrographs.arithmetic_trend),
       trendChip("تیسن اصلی", data.hydrographs.thiessen_trend),
+      trendChip("سطح IDW اصلی", data.hydrographs.piezometric_surface_trend),
       ...(comparisonEnabled ? [
         trendChip(
           "حسابی مقایسه‌ای",
@@ -2607,6 +2668,11 @@
         trendChip(
           "تیسن مقایسه‌ای",
           data.hydrographs.thiessen_comparison_trend,
+          "comparison"
+        ),
+        trendChip(
+          "سطح IDW مقایسه‌ای",
+          data.hydrographs.piezometric_surface_comparison_trend,
           "comparison"
         )
       ] : [])
@@ -2660,6 +2726,7 @@
       selected: {
         "میانگین حسابی": false,
         "میانگین تیسن": true,
+        "سطح پیزومتریک IDW": true,
         [`NDVI ${ndviMetricLabel(metric)}`]: true
       }
     };
@@ -2689,6 +2756,21 @@
         connectNulls: false,
         lineStyle: { width: 2.5, color: "#E76F51" },
         itemStyle: { color: "#E76F51" },
+        tooltip: {
+          valueFormatter: value => (
+            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          )
+        },
+        z: 3
+      },
+      {
+        name: "سطح پیزومتریک IDW",
+        type: "line",
+        data: data.hydrographs.piezometric_surface.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#087E8B" },
+        itemStyle: { color: "#087E8B" },
         tooltip: {
           valueFormatter: value => (
             value == null ? "بدون داده" : `${faNumber.format(value)} متر`
@@ -2738,6 +2820,7 @@
       selected: {
         "میانگین حسابی": false,
         "میانگین تیسن": true,
+        "سطح پیزومتریک IDW": true,
         "AET ماهانه": true
       }
     };
@@ -2773,6 +2856,21 @@
           )
         },
         z: 3
+      },
+      {
+        name: "سطح پیزومتریک IDW",
+        type: "line",
+        data: data.hydrographs.piezometric_surface.map(item => item[1]),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#087E8B" },
+        itemStyle: { color: "#087E8B" },
+        tooltip: {
+          valueFormatter: value => (
+            value == null ? "بدون داده" : `${faNumber.format(value)} متر`
+          )
+        },
+        z: 3
       }
     ];
     state.aquiferAetChart.setOption(option, true);
@@ -2795,7 +2893,7 @@
     const ndviMetric = ndviSelect.value || "median";
     const ndviPeriod = ndviPeriodSelect.value || "warm_months";
     const rows = data.annual_changes || [];
-    const methodLabel = method === "thiessen" ? "تیسن" : "حسابی";
+    const methodLabel = groundwaterMethodLabel(method, true);
     const ndviLabel = ndviMetric === "median" ? "میانه" : "میانگین";
     const ndviPeriodLabel = ndviPeriod === "warm_months"
       ? "ماه‌های ۳ تا ۶"
@@ -2974,6 +3072,7 @@
           <tr>
             <th>سال آبی</th>
             <th>افت ${methodLabel} (متر)</th>
+            <th>تغییر ذخیره (میلیون مترمکعب)</th>
             <th>بارش (میلی‌متر)</th>
             <th>AET (میلی‌متر)</th>
             <th>NDVI ${ndviLabel} (${ndviPeriodLabel})</th>
@@ -2986,6 +3085,7 @@
             <tr>
               <td dir="ltr" class="font-bold text-navy">${row.water_year}</td>
               <td>${numberCell(row.decline?.[method])}</td>
+              <td>${numberCell(row.storage_change_mcm?.[method])}</td>
               <td>${numberCell(row.precipitation_total)}</td>
               <td>${numberCell(row.aet_total)}</td>
               <td>${numberCell(ndviPeriodData(row)[ndviMetric])}</td>
@@ -3042,9 +3142,11 @@
     const previousMethod = document.getElementById("scenarioMethod")?.value || "thiessen";
     const method = data.five_year_scenario?.[previousMethod]
       ? previousMethod
-      : "thiessen";
+      : data.five_year_scenario?.piezometric_surface
+        ? "piezometric_surface"
+        : "thiessen";
     const scenario = data.five_year_scenario?.[method] || {};
-    const methodLabel = method === "thiessen" ? "میانگین وزنی تیسن" : "میانگین حسابی";
+    const methodLabel = groundwaterMethodLabel(method);
     const declineRate = toNumber(scenario.decline_per_year_m);
     const finalRow = scenario.series?.at(-1);
     const finalDecline = finalRow?.cumulative_decline_m;
@@ -3069,6 +3171,7 @@
               <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
                 روش
                 <select id="scenarioMethod" class="field h-9 w-40 text-xs">
+                  <option value="piezometric_surface" ${method === "piezometric_surface" ? "selected" : ""}>سطح IDW</option>
                   <option value="thiessen" ${method === "thiessen" ? "selected" : ""}>تیسن</option>
                   <option value="arithmetic" ${method === "arithmetic" ? "selected" : ""}>حسابی</option>
                 </select>
@@ -3480,14 +3583,21 @@
     const rows = data.annual_decline.map(row => `
       <tr>
         <td dir="ltr" class="font-bold text-navy">${row.water_year}</td>
+        <td>${numberCell(row.piezometric_surface.start_level)}</td>
+        <td>${endpointCell(row.piezometric_surface.end_level, row.piezometric_surface_end_month)}</td>
+        <td>${metricCell(row.piezometric_surface.decline)}</td>
+        <td>${metricCell(row.piezometric_surface.cumulative_decline)}</td>
+        <td>${metricCell(row.piezometric_surface.storage_change_mcm)}</td>
         <td>${numberCell(row.thiessen.start_level)}</td>
         <td>${endpointCell(row.thiessen.end_level, row.thiessen_end_month)}</td>
         <td>${metricCell(row.thiessen.decline)}</td>
         <td>${metricCell(row.thiessen.cumulative_decline)}</td>
+        <td>${metricCell(row.thiessen.storage_change_mcm)}</td>
         <td>${numberCell(row.arithmetic.start_level)}</td>
         <td>${endpointCell(row.arithmetic.end_level, row.arithmetic_end_month)}</td>
         <td>${metricCell(row.arithmetic.decline)}</td>
         <td>${metricCell(row.arithmetic.cumulative_decline)}</td>
+        <td>${metricCell(row.arithmetic.storage_change_mcm)}</td>
       </tr>
     `).join("");
     container.innerHTML = `
@@ -3495,24 +3605,32 @@
         <thead>
           <tr>
             <th rowspan="2">سال آبی</th>
-            <th colspan="4" class="group-heading">میانگین وزنی تیسن</th>
-            <th colspan="4" class="group-heading">میانگین حسابی</th>
+            <th colspan="5" class="group-heading">سطح پیزومتریک IDW</th>
+            <th colspan="5" class="group-heading">میانگین وزنی تیسن</th>
+            <th colspan="5" class="group-heading">میانگین حسابی</th>
           </tr>
           <tr>
             <th>تراز مهر شروع</th>
             <th>تراز پایان</th>
             <th>افت سالانه</th>
             <th>افت تجمعی</th>
+            <th>تغییر ذخیره</th>
             <th>تراز مهر شروع</th>
             <th>تراز پایان</th>
             <th>افت سالانه</th>
             <th>افت تجمعی</th>
+            <th>تغییر ذخیره</th>
+            <th>تراز مهر شروع</th>
+            <th>تراز پایان</th>
+            <th>افت سالانه</th>
+            <th>افت تجمعی</th>
+            <th>تغییر ذخیره</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="border-t border-slate-100 bg-slate-50 px-5 py-3 text-[10px] leading-5 text-slate-500">
-        پایان سال مهر بعد است؛ برای آخرین سال ناقص، آخرین مقدار موجود تا شهریور به‌عنوان پایان استفاده می‌شود.
+        پایان سال مهر بعد است؛ برای آخرین سال ناقص، آخرین مقدار موجود تا شهریور به‌عنوان پایان استفاده می‌شود. تغییر ذخیره بر حسب میلیون مترمکعب و با ضریب ذخیره/آبدهی ویژه واردشده محاسبه شده است.
       </div>
     `;
   }
@@ -3858,6 +3976,9 @@
     params.set("comparison_enabled", String(Boolean(filters.comparison_enabled)));
     params.set("continuous_only", String(Boolean(filters.continuous_only)));
     params.set("manual_selection", String(Boolean(filters.manual_selection)));
+    if (filters.storage_coefficient !== null && filters.storage_coefficient !== undefined) {
+      params.set("storage_coefficient", filters.storage_coefficient);
+    }
     (filters.selected_well_ids || []).forEach(wellId => {
       params.append("selected_well_ids", wellId);
     });
@@ -3949,6 +4070,14 @@
     }
     try {
       const params = new URLSearchParams();
+      const storageInput = root.querySelector("#storageCoefficient");
+      const storageCoefficient = Number(storageInput?.value);
+      if (!Number.isFinite(storageCoefficient) || storageCoefficient <= 0) {
+        window.alert("ضریب ذخیره/آبدهی ویژه باید عددی مثبت باشد.");
+        storageInput?.focus();
+        return;
+      }
+      params.set("storage_coefficient", String(storageCoefficient));
       if (filters) {
         params.set("start_year", filters.startYear);
         params.set("start_month", filters.startMonth);

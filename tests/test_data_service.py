@@ -58,11 +58,51 @@ class GroundwaterDataTests(unittest.TestCase):
                 expected_months,
             )
             self.assertEqual(
+                len(payload["hydrographs"]["piezometric_surface"]),
+                expected_months,
+            )
+            self.assertEqual(
                 payload["stats"]["selected_wells"] + payload["stats"]["excluded_wells"],
                 group["well_count"],
             )
             total_wells += len(payload["wells"])
         self.assertEqual(total_wells, len(self.service.locations))
+
+    def test_piezometric_surface_and_storage_are_reported(self) -> None:
+        group_id = next(iter(self.service.groups))
+        storage_coefficient = 0.08
+        payload = self.service.dashboard(
+            group_id,
+            storage_coefficient=storage_coefficient,
+        )
+
+        self.assertEqual(
+            [item[0] for item in payload["hydrographs"]["piezometric_surface"]],
+            [item[0] for item in payload["hydrographs"]["thiessen"]],
+        )
+        self.assertEqual(payload["storage"]["coefficient"], storage_coefficient)
+        self.assertGreater(payload["storage"]["area_m2"], 0)
+        self.assertEqual(
+            payload["piezometric_surface"]["method"],
+            "idw",
+        )
+
+        annual_row = next(
+            row
+            for row in payload["annual_decline"]
+            if row["piezometric_surface"]["decline"] is not None
+        )
+        expected_storage = (
+            annual_row["piezometric_surface"]["decline"]
+            * storage_coefficient
+            * payload["storage"]["area_m2"]
+            / 1_000_000
+        )
+        self.assertAlmostEqual(
+            annual_row["piezometric_surface"]["storage_change_mcm"],
+            expected_storage,
+            places=3,
+        )
 
     def test_default_period_uses_latest_group_data(self) -> None:
         group_id = next(iter(self.service.groups))

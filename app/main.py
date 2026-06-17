@@ -145,6 +145,7 @@ def _dashboard_payload(
     continuous_only: bool = True,
     manual_selection: bool = False,
     selected_well_ids: list[str] | None = None,
+    storage_coefficient: float | None = None,
 ) -> dict:
     return get_data_service().dashboard(
         aquifer_id,
@@ -160,6 +161,7 @@ def _dashboard_payload(
         continuous_only=continuous_only,
         manual_selection=manual_selection,
         selected_well_ids=selected_well_ids,
+        storage_coefficient=storage_coefficient,
     )
 
 
@@ -178,6 +180,7 @@ def aquifer_data(
     continuous_only: bool = Query(default=True),
     manual_selection: bool = Query(default=False),
     selected_well_ids: list[str] | None = Query(default=None),
+    storage_coefficient: float = Query(..., gt=0),
 ) -> dict:
     try:
         return _dashboard_payload(
@@ -194,6 +197,7 @@ def aquifer_data(
             continuous_only=continuous_only,
             manual_selection=manual_selection,
             selected_well_ids=selected_well_ids,
+            storage_coefficient=storage_coefficient,
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
@@ -217,6 +221,7 @@ def aquifer_report(
     continuous_only: bool = Query(default=True),
     manual_selection: bool = Query(default=False),
     selected_well_ids: list[str] | None = Query(default=None),
+    storage_coefficient: float = Query(..., gt=0),
 ) -> HTMLResponse:
     try:
         payload = _dashboard_payload(
@@ -233,6 +238,7 @@ def aquifer_report(
             continuous_only=continuous_only,
             manual_selection=manual_selection,
             selected_well_ids=selected_well_ids,
+            storage_coefficient=storage_coefficient,
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail="آبخوان پیدا نشد") from error
@@ -331,6 +337,7 @@ async def ai_chat(request: Request) -> JSONResponse:
             continuous_only=filters.continuous_only,
             manual_selection=filters.manual_selection,
             selected_well_ids=filters.selected_well_ids or None,
+            storage_coefficient=filters.storage_coefficient,
         )
     except KeyError:
         return _ai_error_response(
