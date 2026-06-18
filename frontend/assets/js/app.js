@@ -69,6 +69,52 @@
     fixed_grid: "یک شبکه ثابت روی مرز آبخوان ساخته می‌شود و مقدار اصلاح‌شده چاه‌ها هر ماه روی همان سلول‌ها درون‌یابی و میانگین مساحتی می‌شود.",
     fixed_arithmetic: "مجموعه چاه‌های مبنا ثابت می‌ماند و میانگین حسابی از مقدار اصلاح‌شده همان چاه‌ها محاسبه می‌شود."
   };
+  const methodGuideSections = [
+    {
+      title: "روش‌های خام هیدروگراف آبخوان",
+      items: [
+        {
+          label: "میانگین حسابی",
+          description: "در هر ماه، میانگین ساده تراز چاه‌های منتخب گرفته می‌شود و همه چاه‌ها وزن یکسان دارند."
+        },
+        {
+          label: "میانگین تیسن",
+          description: "به هر چاه بر اساس سهم مساحت پهنه تیسن آن وزن داده می‌شود و هیدروگراف آبخوان با میانگین وزنی ساخته می‌شود."
+        }
+      ]
+    },
+    {
+      title: "روش‌های درون‌یابی سطح",
+      items: surfaceMethodOrder.map(method => ({
+        label: surfaceMethodLabels[method] || method,
+        description: ({
+          idw: "مقدار هر نقطه از میانگین وزنی چاه‌های اطراف به دست می‌آید و چاه‌های نزدیک‌تر اثر بیشتری دارند.",
+          ordinary_kriging: "یک مدل زمین‌آماری بر پایه همبستگی مکانی داده‌ها ساخته می‌شود و سطح با برآورد کم‌خطاتر بازسازی می‌شود.",
+          spline: "یک سطح نرم و پیوسته از میان نقاط عبور داده می‌شود تا تغییرات مکانی با انحنای حداقلی نمایش داده شود."
+        })[method] || ""
+      }))
+    },
+    {
+      title: "روش‌های اصلاحی با پشتیبان ثابت",
+      items: Object.entries(correctedSupportLabels).map(([key, label]) => ({
+        label,
+        description: correctedSupportHints[key]
+      }))
+    },
+    {
+      title: "محاسبه مخزن",
+      items: [
+        {
+          label: "تغییر ذخیره آبخوان",
+          description: "برای هر سال آبی، افت سالانه در ضریب ذخیره یا آبدهی ویژه و مساحت آبخوان ضرب می‌شود تا تغییر ذخیره بر حسب میلیون مترمکعب برآورد شود."
+        },
+        {
+          label: "ذخیره تجمعی",
+          description: "جمع انباشته تغییرات ذخیره سال‌های آبی متوالی است و جهت کلی فشار یا بازیابی آبخوان را نشان می‌دهد."
+        }
+      ]
+    }
+  ];
   const correctedStatusLabels = {
     measured: "اندازه‌گیری‌شده",
     out_of_range_censored: "خارج از دامنه",
@@ -906,6 +952,44 @@
     if (!modal) return;
     modal.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
+  }
+
+  function closeMethodGuideModal() {
+    const modal = document.getElementById("methodGuideModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.body.classList.remove("overflow-hidden");
+  }
+
+  function renderMethodGuide() {
+    const container = document.getElementById("methodGuideContent");
+    if (!container) return;
+    container.innerHTML = methodGuideSections.map(section => `
+      <section class="method-guide-section">
+        <header class="method-guide-section-header">
+          <h4>${escapeHtml(section.title)}</h4>
+        </header>
+        <div class="method-guide-list">
+          ${section.items.map(item => `
+            <article class="method-guide-item">
+              <div class="method-guide-item-title">${escapeHtml(item.label)}</div>
+              <p class="method-guide-item-text">${escapeHtml(item.description)}</p>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    `).join("");
+  }
+
+  function openMethodGuideModal() {
+    const modal = document.getElementById("methodGuideModal");
+    if (!modal) return;
+    closeAiModal();
+    closeWellModal();
+    closePrecipitationModal();
+    renderMethodGuide();
+    modal.classList.remove("hidden");
+    document.body.classList.add("overflow-hidden");
   }
 
   function openAiModal() {
@@ -4725,6 +4809,9 @@
     document.querySelectorAll("[data-close-ai-modal]").forEach(button => {
       button.onclick = closeAiModal;
     });
+    document.querySelectorAll("[data-close-method-guide]").forEach(button => {
+      button.onclick = closeMethodGuideModal;
+    });
   }
 
   function wellCard(well, index) {
@@ -5051,6 +5138,7 @@
 
   function initializeDashboard(root) {
     const form = root.querySelector("#analysisFilters");
+    root.querySelector("#methodGuideButton")?.addEventListener("click", openMethodGuideModal);
     root.querySelector("#reportPdfButton")?.addEventListener("click", openPdfReport);
     root.querySelector("#aiOpenModalButton")?.addEventListener("click", openAiModal);
     root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => {
@@ -5200,6 +5288,7 @@
 
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") {
+      closeMethodGuideModal();
       closeAiModal();
       closeWellModal();
       closePrecipitationModal();

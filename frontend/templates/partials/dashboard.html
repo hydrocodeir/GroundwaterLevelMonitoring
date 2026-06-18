@@ -25,9 +25,15 @@
 
   <form id="analysisFilters" class="panel scroll-mt-5 overflow-hidden">
     <div class="flex flex-col justify-between gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center">
-      <div>
-        <h3 class="text-sm font-bold text-navy">تنظیم بازه تحلیل</h3>
-        <p class="mt-1 text-[10px] text-slate-500">بازه اصلی و چاه‌های مورد استفاده در محاسبات</p>
+      <div class="flex items-start gap-3">
+        <div>
+          <h3 class="text-sm font-bold text-navy">تنظیم بازه تحلیل</h3>
+          <p class="mt-1 text-[10px] text-slate-500">بازه اصلی و چاه‌های مورد استفاده در محاسبات</p>
+        </div>
+        <button id="methodGuideButton" type="button" class="analysis-help-button">
+          <span aria-hidden="true">?</span>
+          <span>راهنمای روش‌ها</span>
+        </button>
       </div>
       <span class="text-[10px] text-slate-400">سال آبی: مهر تا شهریور</span>
     </div>
@@ -91,7 +97,6 @@
               <span>Thin Plate Spline</span>
             </label>
           </div>
-          <small class="mt-1 block text-[9px] leading-5 text-slate-400">روش‌های خام/مرسوم حفظ شده‌اند؛ اصلاح‌شده‌ها با پشتیبان ثابت از همین روش‌ها ساخته می‌شوند.</small>
         </label>
         <label class="analysis-filter-field">
           <span class="compact-date-label">پشتیبان ثابت اصلاح</span>
@@ -410,6 +415,23 @@
     </div>
     <div id="wellCharts" class="grid grid-cols-1 gap-5 xl:grid-cols-2"></div>
   </section>
+
+  <div id="methodGuideModal" class="well-modal hidden" role="dialog" aria-modal="true" aria-labelledby="methodGuideTitle">
+    <button type="button" class="well-modal-backdrop" data-close-method-guide aria-label="بستن راهنمای روش‌ها"></button>
+    <article class="well-modal-card panel">
+      <header class="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div>
+          <div class="section-kicker">راهنمای روش‌های محاسباتی</div>
+          <h3 id="methodGuideTitle" class="mt-1 text-lg font-bold text-navy">توضیح روش‌های خام، اصلاحی و محاسبه مخزن</h3>
+          <p class="mt-1 text-[10px] leading-5 text-slate-500">همه نام‌ها با برچسب‌های همین داشبورد هماهنگ هستند تا بتوانید سری‌ها و جدول‌ها را سریع‌تر بخوانید.</p>
+        </div>
+        <button type="button" class="modal-close-button" data-close-method-guide aria-label="بستن">×</button>
+      </header>
+      <div class="method-guide-shell">
+        <div id="methodGuideContent" class="method-guide-grid"></div>
+      </div>
+    </article>
+  </div>
 
   <div id="aiAnalysisModal" class="well-modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
     <button type="button" class="well-modal-backdrop" data-close-ai-modal aria-label="بستن پنجره تحلیل هوشمند"></button>
