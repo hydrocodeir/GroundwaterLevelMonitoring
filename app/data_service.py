@@ -11,7 +11,11 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.interpolate import RBFInterpolator
+from scipy.interpolate import (
+    LinearNDInterpolator,
+    NearestNDInterpolator,
+    RBFInterpolator,
+)
 from scipy.optimize import curve_fit
 from scipy.stats import kendalltau, pearsonr, spearmanr, theilslopes
 from pyproj import Transformer
@@ -31,20 +35,41 @@ NEAREST_PRECIPITATION_STATION_COUNT = 3
 COMPARISON_GEOMETRY_TOLERANCE = 0.001
 PIEZOMETRIC_SURFACE_GRID_SIZE = 48
 IDW_POWER = 2.0
-SURFACE_INTERPOLATION_METHODS = frozenset({"idw", "ordinary_kriging", "spline"})
-SURFACE_INTERPOLATION_METHOD_ORDER = ("idw", "ordinary_kriging", "spline")
+SURFACE_INTERPOLATION_METHODS = frozenset(
+    {
+        "idw",
+        "natural_neighbor",
+        "ordinary_kriging",
+        "universal_kriging",
+        "regression_kriging",
+        "spline",
+    }
+)
+SURFACE_INTERPOLATION_METHOD_ORDER = (
+    "idw",
+    "natural_neighbor",
+    "ordinary_kriging",
+    "universal_kriging",
+    "regression_kriging",
+    "spline",
+)
 SURFACE_INTERPOLATION_LABELS = {
     "idw": "IDW",
+    "natural_neighbor": "Natural Neighbor / TIN",
     "ordinary_kriging": "Ordinary Kriging",
+    "universal_kriging": "Universal Kriging",
+    "regression_kriging": "Regression Kriging",
     "spline": "Thin Plate Spline",
 }
 CORRECTED_SUPPORT_METHODS = frozenset(
-    {"fixed_thiessen", "fixed_arithmetic", "fixed_grid"}
+    {"fixed_thiessen", "fixed_arithmetic", "fixed_median", "fixed_grid", "none"}
 )
 CORRECTED_SUPPORT_LABELS = {
     "fixed_thiessen": "پشتیبان ثابت تیسن",
     "fixed_arithmetic": "پشتیبان ثابت چاه‌ها",
+    "fixed_median": "میانه ثابت چاه‌ها",
     "fixed_grid": "شبکه ثابت آبخوان",
+    "none": "بدون اصلاح",
 }
 TREND_STRONG_THRESHOLD = 0.6
 TREND_WEAK_THRESHOLD = 0.3
@@ -974,6 +999,84 @@ class GroundwaterData:
         return interpolated.astype(float)
 
     @staticmethod
+    def _natural_neighbor_values(
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> np.ndarray | None:
+        if len(point_values) < 3:
+            return None
+        try:
+            linear = LinearNDInterpolator(point_xy, point_values, fill_value=np.nan)
+            nearest = NearestNDInterpolator(point_xy, point_values)
+            interpolated = np.asarray(linear(samples_xy), dtype=float)
+            missing = ~np.isfinite(interpolated)
+            if missing.any():
+                interpolated[missing] = np.asarray(nearest(samples_xy[missing]), dtype=float)
+        except (ValueError, np.linalg.LinAlgError):
+            return None
+        return interpolated
+
+    @staticmethod
+    def _trend_feature_matrix(point_xy: np.ndarray, degree: str) -> np.ndarray:
+        x = point_xy[:, 0].astype(float)
+        y = point_xy[:, 1].astype(float)
+        if degree == "quadratic":
+            return np.column_stack([np.ones(len(point_xy)), x, y, x * y, x * x, y * y])
+        return np.column_stack([np.ones(len(point_xy)), x, y])
+
+    @classmethod
+    def _trend_kriging_values(
+        cls,
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+        degree: str,
+    ) -> np.ndarray | None:
+        if len(point_values) < 4:
+            return None
+        point_features = cls._trend_feature_matrix(point_xy, degree)
+        try:
+            coefficients, *_ = np.linalg.lstsq(point_features, point_values, rcond=None)
+        except np.linalg.LinAlgError:
+            return None
+        residuals = point_values - point_features @ coefficients
+        residual_surface = cls._ordinary_kriging_values(samples_xy, point_xy, residuals)
+        if residual_surface is None:
+            return None
+        sample_features = cls._trend_feature_matrix(samples_xy, degree)
+        trend_surface = sample_features @ coefficients
+        return np.asarray(trend_surface + residual_surface, dtype=float)
+
+    @classmethod
+    def _universal_kriging_values(
+        cls,
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> np.ndarray | None:
+        return cls._trend_kriging_values(
+            samples_xy,
+            point_xy,
+            point_values,
+            "linear",
+        )
+
+    @classmethod
+    def _regression_kriging_values(
+        cls,
+        samples_xy: np.ndarray,
+        point_xy: np.ndarray,
+        point_values: np.ndarray,
+    ) -> np.ndarray | None:
+        return cls._trend_kriging_values(
+            samples_xy,
+            point_xy,
+            point_values,
+            "quadratic",
+        )
+
+    @staticmethod
     def _spline_values(
         samples_xy: np.ndarray,
         point_xy: np.ndarray,
@@ -1004,6 +1107,15 @@ class GroundwaterData:
     ) -> tuple[np.ndarray, str]:
         if len(point_values) <= 1 or method == "idw":
             return cls._idw_values(samples_xy, point_xy, point_values), "idw"
+        if method == "natural_neighbor":
+            natural_neighbor_values = cls._natural_neighbor_values(
+                samples_xy,
+                point_xy,
+                point_values,
+            )
+            if natural_neighbor_values is not None and np.isfinite(natural_neighbor_values).all():
+                return natural_neighbor_values, "natural_neighbor"
+            return cls._idw_values(samples_xy, point_xy, point_values), "idw"
         if method == "ordinary_kriging":
             kriging_values = cls._ordinary_kriging_values(
                 samples_xy,
@@ -1012,6 +1124,24 @@ class GroundwaterData:
             )
             if kriging_values is not None and np.isfinite(kriging_values).all():
                 return kriging_values, "ordinary_kriging"
+            return cls._idw_values(samples_xy, point_xy, point_values), "idw"
+        if method == "universal_kriging":
+            kriging_values = cls._universal_kriging_values(
+                samples_xy,
+                point_xy,
+                point_values,
+            )
+            if kriging_values is not None and np.isfinite(kriging_values).all():
+                return kriging_values, "universal_kriging"
+            return cls._idw_values(samples_xy, point_xy, point_values), "idw"
+        if method == "regression_kriging":
+            kriging_values = cls._regression_kriging_values(
+                samples_xy,
+                point_xy,
+                point_values,
+            )
+            if kriging_values is not None and np.isfinite(kriging_values).all():
+                return kriging_values, "regression_kriging"
             return cls._idw_values(samples_xy, point_xy, point_values), "idw"
         if method == "spline":
             spline_values = cls._spline_values(samples_xy, point_xy, point_values)
@@ -1533,6 +1663,122 @@ class GroundwaterData:
         storage_coefficient: float | None,
         aquifer_area_m2: float | None,
     ) -> dict[str, Any]:
+        if corrected_support_method == "none":
+            status_counts = []
+            for month_index, month_label in months:
+                month_frame = raw_frame[raw_frame["_month_index"] == month_index]
+                measured_count = int(month_frame["_join_key"].nunique())
+                missing_count = max(len(selected_join_keys) - measured_count, 0)
+                status_counts.append(
+                    {
+                        "date": month_label,
+                        "measured_count": measured_count,
+                        "missing_count": missing_count,
+                        "out_of_range_count": 0,
+                        "retired_count": 0,
+                        "new_well_count": 0,
+                        "imputed_count": 0,
+                    }
+                )
+            corrected_hydrograph = [
+                {
+                    "date": month_label,
+                    "method": "raw_passthrough",
+                    "raw_hydrograph": finite_or_none(raw_thiessen_values.get(month_index)),
+                    "corrected_hydrograph": finite_or_none(raw_thiessen_values.get(month_index)),
+                    "corrected_lower_band": None,
+                    "corrected_upper_band": None,
+                    **{
+                        key: count_row[key]
+                        for key in (
+                            "measured_count",
+                            "out_of_range_count",
+                            "retired_count",
+                            "new_well_count",
+                            "imputed_count",
+                        )
+                    },
+                }
+                for (month_index, month_label), count_row in zip(months, status_counts)
+            ]
+            raw_arithmetic_series = self._series_from_values(months, raw_arithmetic_values)
+            raw_thiessen_series = self._series_from_values(months, raw_thiessen_values)
+            raw_median_values = self._median_hydrograph_value_map(raw_frame)
+            raw_median_series = self._series_from_values(months, raw_median_values)
+            corrected_annual_decline = {
+                "corrected_arithmetic": self._apply_storage_to_annual_rows(
+                    self._annual_decline_rows(
+                        raw_arithmetic_values,
+                        start_water_year,
+                        annual_end_water_year,
+                    ),
+                    storage_coefficient,
+                    aquifer_area_m2,
+                ),
+                "corrected_thiessen": self._apply_storage_to_annual_rows(
+                    self._annual_decline_rows(
+                        raw_thiessen_values,
+                        start_water_year,
+                        annual_end_water_year,
+                    ),
+                    storage_coefficient,
+                    aquifer_area_m2,
+                ),
+                "corrected_median": self._apply_storage_to_annual_rows(
+                    self._annual_decline_rows(
+                        raw_median_values,
+                        start_water_year,
+                        annual_end_water_year,
+                    ),
+                    storage_coefficient,
+                    aquifer_area_m2,
+                ),
+            }
+            return {
+                "support_method": corrected_support_method,
+                "support_label": CORRECTED_SUPPORT_LABELS[corrected_support_method],
+                "support_options": CORRECTED_SUPPORT_LABELS,
+                "fixed_support_well_count": len(selected_join_keys),
+                "fixed_support_site_count": len(raw_weights),
+                "status_counts": status_counts,
+                "raw_status_counts": status_counts,
+                "corrected_hydrograph": corrected_hydrograph,
+                "corrected_well_month": [],
+                "network_transitions": [],
+                "surface_methods": {},
+                "annual_decline": corrected_annual_decline,
+                "hydrographs": {
+                    "raw_arithmetic": raw_arithmetic_series,
+                    "raw_thiessen": raw_thiessen_series,
+                    "raw_median": raw_median_series,
+                    "corrected_arithmetic": raw_arithmetic_series,
+                    "corrected_thiessen": raw_thiessen_series,
+                    "corrected_median": raw_median_series,
+                    "corrected_arithmetic_trend": self._trend(raw_arithmetic_values, months),
+                    "corrected_thiessen_trend": self._trend(raw_thiessen_values, months),
+                    "corrected_median_trend": self._trend(raw_median_values, months),
+                    "primary_corrected": raw_thiessen_series,
+                    "primary_corrected_trend": self._trend(raw_thiessen_values, months),
+                    "raw_minus_corrected": [
+                        [month_label, 0.0]
+                        for _, month_label in months
+                    ],
+                },
+                "value_maps": {
+                    "corrected_arithmetic": raw_arithmetic_values,
+                    "corrected_thiessen": raw_thiessen_values,
+                    "corrected_median": raw_median_values,
+                },
+                "validation": {
+                    "head_limit_violations": [],
+                    "depth_limit_violations": 0,
+                    "network_event_spikes": [],
+                    "raw_vs_corrected_first_differences": [],
+                    "cross_validation": None,
+                },
+                "note": "در این حالت هیچ اصلاحی اعمال نشده و خروجی اصلاحی برابر سری خام است.",
+            }
+
         corrected_frame, support_join_keys, network_transitions = (
             self._corrected_well_month_frame(
                 group_id,
@@ -1568,6 +1814,8 @@ class GroundwaterData:
         corrected_arithmetic_values, corrected_thiessen_values = (
             self._hydrograph_value_maps(support_frame, fixed_weights)
         )
+        corrected_median_values = self._median_hydrograph_value_map(support_frame)
+        raw_median_values = self._median_hydrograph_value_map(raw_frame)
         corrected_surface_methods: dict[str, dict[str, Any]] = {}
         for method in SURFACE_INTERPOLATION_METHOD_ORDER:
             method_values, method_metadata = self._piezometric_surface_value_map(
@@ -1600,6 +1848,10 @@ class GroundwaterData:
             primary_corrected_values = corrected_arithmetic_values
             primary_raw_values = raw_arithmetic_values
             primary_method = "corrected_arithmetic"
+        elif corrected_support_method == "fixed_median":
+            primary_corrected_values = corrected_median_values
+            primary_raw_values = raw_median_values
+            primary_method = "corrected_median"
         elif corrected_support_method == "fixed_grid":
             primary_corrected_values = primary_corrected_surface
             primary_raw_values = surface_methods[primary_surface_method]["values"]
@@ -1653,6 +1905,7 @@ class GroundwaterData:
         hydrographs = {
             "raw_arithmetic": self._series_from_values(months, raw_arithmetic_values),
             "raw_thiessen": self._series_from_values(months, raw_thiessen_values),
+            "raw_median": self._series_from_values(months, raw_median_values),
             "corrected_arithmetic": self._series_from_values(
                 months,
                 corrected_arithmetic_values,
@@ -1661,12 +1914,20 @@ class GroundwaterData:
                 months,
                 corrected_thiessen_values,
             ),
+            "corrected_median": self._series_from_values(
+                months,
+                corrected_median_values,
+            ),
             "corrected_arithmetic_trend": self._trend(
                 corrected_arithmetic_values,
                 months,
             ),
             "corrected_thiessen_trend": self._trend(
                 corrected_thiessen_values,
+                months,
+            ),
+            "corrected_median_trend": self._trend(
+                corrected_median_values,
                 months,
             ),
             "primary_corrected": self._series_from_values(
@@ -1707,6 +1968,15 @@ class GroundwaterData:
             "corrected_thiessen": self._apply_storage_to_annual_rows(
                 self._annual_decline_rows(
                     corrected_thiessen_values,
+                    start_water_year,
+                    annual_end_water_year,
+                ),
+                storage_coefficient,
+                aquifer_area_m2,
+            ),
+            "corrected_median": self._apply_storage_to_annual_rows(
+                self._annual_decline_rows(
+                    corrected_median_values,
                     start_water_year,
                     annual_end_water_year,
                 ),
@@ -1763,6 +2033,7 @@ class GroundwaterData:
             "value_maps": {
                 "corrected_arithmetic": corrected_arithmetic_values,
                 "corrected_thiessen": corrected_thiessen_values,
+                "corrected_median": corrected_median_values,
                 **{
                     f"corrected_{method}": payload["values"]
                     for method, payload in corrected_surface_methods.items()
@@ -2116,6 +2387,16 @@ class GroundwaterData:
             raise ValueError("چاه‌های انتخاب‌شده در بازه زمانی مورد نظر داده‌ای ندارند")
         return selected_join_keys
 
+    @staticmethod
+    def _timeline_months(minimum: int, maximum: int) -> list[dict[str, Any]]:
+        return [
+            {
+                "index": index,
+                "label": f"{(index - 1) // MONTHS_PER_YEAR}-{((index - 1) % MONTHS_PER_YEAR) + 1:02d}",
+            }
+            for index in range(minimum, maximum + 1)
+        ]
+
     def _selected_sites(
         self,
         group_id: str,
@@ -2166,6 +2447,12 @@ class GroundwaterData:
         )
         thiessen_values = thiessen["value"].to_dict()
         return arithmetic_values, thiessen_values
+
+    @staticmethod
+    def _median_hydrograph_value_map(frame: pd.DataFrame) -> dict[int, float]:
+        if frame.empty:
+            return {}
+        return frame.groupby("_month_index")["level"].median().to_dict()
 
     @staticmethod
     def _annual_decline_rows(
@@ -3470,11 +3757,13 @@ class GroundwaterData:
     def _well_payload(
         self,
         group_id: str,
+        group_monthly: pd.DataFrame,
         range_frame: pd.DataFrame,
         months: list[tuple[int, str]],
         comparison_frame: pd.DataFrame,
         comparison_months: list[tuple[int, str]],
         selected_join_keys: set[str],
+        requested_well_ids: set[str],
         continuous_only: bool,
         manual_selection: bool,
         comparison_enabled: bool,
@@ -3490,9 +3779,11 @@ class GroundwaterData:
             key: group.sort_values("_month_index")
             for key, group in comparison_frame.groupby("_join_key", sort=False)
         }
-        all_data_keys = set(
-            self.monthly[self.monthly["_aquifer_id"] == group_id]["_join_key"].unique()
-        )
+        all_group_monthly = {
+            key: group.sort_values("_month_index")
+            for key, group in group_monthly.groupby("_join_key", sort=False)
+        }
+        all_data_keys = set(all_group_monthly)
         month_indexes = [index for index, _ in months]
         month_labels = dict(months)
         wells: list[dict[str, Any]] = []
@@ -3500,6 +3791,16 @@ class GroundwaterData:
         for _, row in locations.iterrows():
             join_key = row["_join_key"]
             duplicate_counter[join_key] = duplicate_counter.get(join_key, 0) + 1
+            full_series_frame = all_group_monthly.get(join_key)
+            all_values = (
+                dict(
+                    full_series_frame[["_month_index", "level"]].itertuples(
+                        index=False, name=None
+                    )
+                )
+                if full_series_frame is not None
+                else {}
+            )
             series_frame = by_join_key.get(join_key)
             values = (
                 dict(
@@ -3513,6 +3814,16 @@ class GroundwaterData:
             display_values = {
                 index: value for index, value in values.items() if index in month_indexes
             }
+            observed_month_count = sum(
+                1
+                for value in display_values.values()
+                if value is not None and np.isfinite(value)
+            )
+            expected_month_count = len(month_indexes)
+            has_complete_range_data = (
+                expected_month_count > 0
+                and observed_month_count == expected_month_count
+            )
             comparison_series_frame = comparison_by_join_key.get(join_key)
             comparison_values = (
                 dict(
@@ -3529,6 +3840,7 @@ class GroundwaterData:
             ]
             has_any_data = join_key in all_data_keys
             has_range_data = bool(display_values)
+            selected = row["_well_id"] in requested_well_ids if manual_selection else False
             included = join_key in selected_join_keys
             if not has_any_data:
                 status = "no_data"
@@ -3536,6 +3848,9 @@ class GroundwaterData:
             elif included:
                 status = "included"
                 exclusion_reason = None
+            elif manual_selection and selected and not has_range_data:
+                status = "excluded"
+                exclusion_reason = "انتخاب شده، اما در بازه انتخابی داده‌ای ندارد"
             elif manual_selection and has_range_data:
                 status = "excluded"
                 exclusion_reason = "در انتخاب دستی محاسبات آبخوان قرار نگرفته است"
@@ -3555,9 +3870,18 @@ class GroundwaterData:
                     "elevation": finite_or_none(row["LEVEL_MSL"]),
                     "has_data": has_any_data,
                     "has_range_data": has_range_data,
+                    "has_complete_range_data": has_complete_range_data,
+                    "observed_month_count": observed_month_count,
+                    "expected_month_count": expected_month_count,
+                    "selected": selected or included,
                     "included": included,
                     "status": status,
                     "exclusion_reason": exclusion_reason,
+                    "available_month_indexes": sorted(
+                        int(index)
+                        for index, value in all_values.items()
+                        if value is not None and np.isfinite(value)
+                    ),
                     "series": series,
                     "trend": self._trend(display_values, months),
                     "comparison_trend": (
@@ -3666,6 +3990,7 @@ class GroundwaterData:
         )
         group = self.groups[group_id]
         group_monthly = self.monthly[self.monthly["_aquifer_id"] == group_id]
+        requested_well_ids = set(selected_well_ids or [])
         display_frame = group_monthly[
             (group_monthly["_month_index"] >= start_index)
             & (group_monthly["_month_index"] <= end_index)
@@ -3799,11 +4124,13 @@ class GroundwaterData:
         )
         wells = self._well_payload(
             group_id,
+            group_monthly,
             display_frame,
             months,
             comparison_frame,
             comparison_months,
             selected_join_keys,
+            requested_well_ids,
             continuous_only,
             manual_selection,
             comparison_enabled,
@@ -3931,9 +4258,11 @@ class GroundwaterData:
                 "end_water_year": end_water_year,
                 "continuous_only": continuous_only,
                 "manual_selection": manual_selection,
-                "selected_well_ids": [
-                    well["id"] for well in wells if well["included"]
-                ],
+                "selected_well_ids": (
+                    sorted(requested_well_ids)
+                    if manual_selection
+                    else [well["id"] for well in wells if well["included"]]
+                ),
                 "storage_coefficient": storage_coefficient,
                 "surface_interpolation_method": primary_surface_method,
                 "surface_interpolation_methods": selected_surface_methods,
@@ -3944,6 +4273,7 @@ class GroundwaterData:
                 "water_year_start_month": WATER_YEAR_START_MONTH,
                 "water_year_end_month": WATER_YEAR_END_MONTH,
                 "default_analysis_years": DEFAULT_ANALYSIS_YEARS,
+                "timeline_months": self._timeline_months(group_minimum, group_maximum),
             },
             "boundaries": {
                 "mahdoude": self._feature_json(self.boundary_matches[group_id]["mahdoude"]),

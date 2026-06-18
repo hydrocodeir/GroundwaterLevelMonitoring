@@ -23,112 +23,302 @@
     </div>
   </section>
 
-  <form id="analysisFilters" class="panel scroll-mt-5 overflow-hidden">
-    <div class="flex flex-col justify-between gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center">
+  <form id="analysisFilters" class="panel wizard-shell scroll-mt-5 overflow-hidden">
+    <div class="wizard-header">
       <div class="flex items-start gap-3">
         <div>
-          <h3 class="text-sm font-bold text-navy">تنظیم بازه تحلیل</h3>
-          <p class="mt-1 text-[10px] text-slate-500">بازه اصلی و چاه‌های مورد استفاده در محاسبات</p>
+          <h3 class="text-sm font-bold text-navy">ویزارد تنظیم محاسبات آبخوان</h3>
+          <p class="mt-1 text-[10px] text-slate-500">تصمیم‌های شبکه، هیدروگراف، مخزن و نقشه را مرحله‌به‌مرحله مشخص کنید.</p>
         </div>
         <button id="methodGuideButton" type="button" class="analysis-help-button">
           <span aria-hidden="true">?</span>
           <span>راهنمای روش‌ها</span>
         </button>
       </div>
-      <span class="text-[10px] text-slate-400">سال آبی: مهر تا شهریور</span>
+      <div class="flex items-center gap-2">
+        <span id="wizardCollapsedSummary" class="wizard-collapsed-summary hidden"></span>
+        <div id="wizardQuickEditActions" class="wizard-quick-edit-actions hidden"></div>
+        <span class="text-[10px] text-slate-400">سال آبی: مهر تا شهریور</span>
+        <button id="wizardCollapseToggle" type="button" class="secondary-button wizard-collapse-button">جمع کردن ویزارد</button>
+      </div>
     </div>
-    <div class="analysis-filter-grid">
-      <section class="analysis-filter-section analysis-filter-section--primary">
-        <div class="analysis-filter-field">
-          <span class="compact-date-label">از</span>
-          <div class="compact-date-group">
-            <select id="startYear" class="field compact-field year-field" name="start_year" aria-label="سال شروع"></select>
-            <select id="startMonth" class="field compact-field" name="start_month" aria-label="ماه شروع"></select>
+
+    <div class="wizard-hero-strip">
+      <div class="wizard-hero-card">
+        <span>وضعیت اجرا</span>
+        <b id="wizardStageLabel">در حال تنظیم سناریو</b>
+        <small id="wizardHeroNote">تا وقتی تصمیم‌ها نهایی نشوند، خروجی تحلیلی نمایش داده نمی‌شود.</small>
+      </div>
+      <div class="wizard-hero-card">
+        <span>پوشش انتخاب</span>
+        <b id="wizardHeroSelection">۰ پیزومتر</b>
+        <small>انتخاب صریح کاربر مبنای محاسبات است.</small>
+      </div>
+      <div class="wizard-hero-card">
+        <span>دوره تحلیل</span>
+        <b id="wizardHeroPeriod">—</b>
+        <small>سال آبی مهر تا شهریور</small>
+      </div>
+      <div class="wizard-progress-track">
+        <div id="wizardProgressBar" class="wizard-progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="wizard-stepper" role="tablist" aria-label="مراحل تنظیم محاسبات">
+      <button type="button" class="wizard-step-button is-active" data-wizard-step="0">
+        <span class="wizard-step-index" data-step-number="1">1</span>
+        <span class="wizard-step-copy">
+          <b>مدیریت پیزومترها</b>
+          <small id="wizardSummary0">در حال آماده‌سازی...</small>
+        </span>
+        <span class="wizard-step-badge">مرحله جاری</span>
+      </button>
+      <button type="button" class="wizard-step-button" data-wizard-step="1">
+        <span class="wizard-step-index" data-step-number="2">2</span>
+        <span class="wizard-step-copy">
+          <b>وضعیت و بازسازی</b>
+          <small id="wizardSummary1">در حال آماده‌سازی...</small>
+        </span>
+        <span class="wizard-step-badge">در انتظار</span>
+      </button>
+      <button type="button" class="wizard-step-button" data-wizard-step="2">
+        <span class="wizard-step-index" data-step-number="3">3</span>
+        <span class="wizard-step-copy">
+          <b>هیدروگراف آبخوان</b>
+          <small id="wizardSummary2">در حال آماده‌سازی...</small>
+        </span>
+        <span class="wizard-step-badge">در انتظار</span>
+      </button>
+      <button type="button" class="wizard-step-button" data-wizard-step="3">
+        <span class="wizard-step-index" data-step-number="4">4</span>
+        <span class="wizard-step-copy">
+          <b>کسری مخزن</b>
+          <small id="wizardSummary3">در حال آماده‌سازی...</small>
+        </span>
+        <span class="wizard-step-badge">در انتظار</span>
+      </button>
+    </div>
+
+    <div class="wizard-panels">
+      <section class="wizard-panel" data-wizard-panel="0">
+        <div class="wizard-panel-header">
+          <div>
+            <span class="section-kicker">مرحله ۱</span>
+            <h4 class="wizard-panel-title">انتخاب پیزومترهای محاسباتی</h4>
+            <p class="wizard-panel-description">اول بازه تحلیل را مشخص کنید، سپس پیزومترهای ورودی محاسبات را از روی نوار پوشش داده انتخاب کنید.</p>
           </div>
+          <div class="wizard-info-chip">محاسبات با انتخاب صریح پیزومترها اجرا می‌شود.</div>
         </div>
-        <div class="analysis-filter-arrow hidden xl:flex" aria-hidden="true">←</div>
-        <div class="analysis-filter-field">
-          <span class="compact-date-label">تا</span>
-          <div class="compact-date-group">
-            <select id="endYear" class="field compact-field year-field" name="end_year" aria-label="سال پایان"></select>
-            <select id="endMonth" class="field compact-field" name="end_month" aria-label="ماه پایان"></select>
+        <div class="wizard-card-grid wizard-card-grid--primary">
+          <section class="wizard-card">
+            <div class="wizard-card-title">بازه آماری</div>
+            <p class="wizard-card-note">کامل بودن داده برای هر پیزومتر نسبت به همین بازه ماهانه سنجیده می‌شود.</p>
+            <div class="wizard-range-grid">
+              <div class="analysis-filter-field">
+                <span class="compact-date-label">از</span>
+                <div class="compact-date-group">
+                  <select id="startYear" class="field compact-field year-field" name="start_year" aria-label="سال شروع"></select>
+                  <select id="startMonth" class="field compact-field" name="start_month" aria-label="ماه شروع"></select>
+                </div>
+              </div>
+              <div class="analysis-filter-field">
+                <span class="compact-date-label">تا</span>
+                <div class="compact-date-group">
+                  <select id="endYear" class="field compact-field year-field" name="end_year" aria-label="سال پایان"></select>
+                  <select id="endMonth" class="field compact-field" name="end_month" aria-label="ماه پایان"></select>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="wizard-card">
+            <input id="continuousOnly" type="checkbox" class="sr-only" aria-hidden="true" tabindex="-1">
+            <input id="manualWellSelection" type="checkbox" class="sr-only" checked aria-hidden="true" tabindex="-1">
+            <div class="wizard-card-title">وضعیت انتخاب</div>
+            <p class="wizard-card-note">هیچ پیزومتری به‌صورت پیش‌فرض در این فهرست انتخاب نمی‌شود. برای اجرای تحلیل، از دکمه‌های سریع یا انتخاب تکی استفاده کنید.</p>
+            <div class="mt-3 grid gap-2 sm:grid-cols-3">
+              <div class="selection-metric">
+                <span>انتخاب‌شده</span>
+                <b id="manualSelectedMetric">۰</b>
+              </div>
+              <div class="selection-metric">
+                <span>دارای داده</span>
+                <b id="manualEligibleMetric">۰</b>
+              </div>
+              <div class="selection-metric">
+                <span>کامل در بازه</span>
+                <b id="manualCompleteMetric">۰</b>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div id="manualWellPanel" class="manual-well-panel">
+          <div class="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div class="text-xs font-bold text-navy">پیزومترهای مورد استفاده در محاسبات</div>
+              <div id="manualWellCount" class="mt-1 text-[10px] text-slate-500"></div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="manualWellSearch" type="search" class="manual-well-search" placeholder="جست‌وجوی نام پیزومتر...">
+              <button id="selectAllEligibleWells" type="button" class="secondary-button">انتخاب همه پیزومترها</button>
+              <button id="selectCompleteRangeWells" type="button" class="secondary-button">انتخاب کامل‌های بازه</button>
+              <button id="clearSelectedWells" type="button" class="secondary-button">پاک کردن همه</button>
+            </div>
           </div>
+          <div class="border-b border-slate-100 bg-white/80 px-4 py-3">
+            <div id="manualWellTimelineAxis" class="manual-well-timeline-axis"></div>
+          </div>
+          <div id="manualWellList" class="manual-well-list"></div>
         </div>
-        <label class="compact-filter-toggle analysis-filter-toggle-card">
-          <input id="continuousOnly" type="checkbox" class="peer sr-only" checked>
-          <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          <span>
-            <strong class="block text-[11px] font-bold text-navy">پوشش کامل بازه</strong>
-            <small class="block text-[9px] text-slate-400">فقط چاه‌های پیوسته</small>
-          </span>
-        </label>
-        <label class="analysis-filter-field analysis-filter-field--compact">
-          <span class="compact-date-label">Sy / S</span>
-          <input
-            id="storageCoefficient"
-            class="field compact-field text-left"
-            name="storage_coefficient"
-            type="number"
-            min="0.0001"
-            max="1"
-            step="0.0001"
-            value="0.1"
-            required
-            inputmode="decimal"
-            aria-label="ضریب ذخیره یا آبدهی ویژه"
-          >
-        </label>
       </section>
 
-      <section class="analysis-filter-section analysis-filter-section--secondary">
-        <label class="analysis-filter-field">
-          <span class="compact-date-label">درون‌یابی سطح</span>
-          <div id="surfaceInterpolationMethods" class="method-chip-group">
-            <label class="method-chip method-chip-active">
-              <input type="checkbox" value="idw" checked disabled class="h-3.5 w-3.5 accent-teal">
-              <span>IDW</span>
-            </label>
-            <label class="method-chip">
-              <input type="checkbox" value="ordinary_kriging" class="h-3.5 w-3.5 accent-teal">
-              <span>Ordinary Kriging</span>
-            </label>
-            <label class="method-chip">
-              <input type="checkbox" value="spline" class="h-3.5 w-3.5 accent-teal">
-              <span>Thin Plate Spline</span>
-            </label>
+      <section class="wizard-panel hidden" data-wizard-panel="1">
+        <div class="wizard-panel-header">
+          <div>
+            <span class="section-kicker">مرحله ۲</span>
+            <h4 class="wizard-panel-title">کیفیت داده و وضعیت شبکه پایش</h4>
+            <p class="wizard-panel-description">وضعیت ماهانه پیزومترهای منتخب در مسیر خام و اصلاحی نگه داشته می‌شود تا اثر داده ناقص، بازنشستگی یا چاه جدید شفاف باشد.</p>
           </div>
-        </label>
-        <label class="analysis-filter-field">
-          <span class="compact-date-label">پشتیبان ثابت اصلاح</span>
-          <select id="correctedSupportMethod" class="field compact-field" name="corrected_support_method" aria-label="روش پشتیبان ثابت اصلاح هیدروگراف">
-            <option value="fixed_thiessen">تیسن ثابت</option>
-            <option value="fixed_grid">شبکه ثابت</option>
-            <option value="fixed_arithmetic">چاه‌های ثابت</option>
-          </select>
-          <small id="correctedSupportHint" class="mt-1 block text-[9px] leading-5 text-slate-400"></small>
-        </label>
-        <button id="applyAnalysisFilters" type="submit" class="primary-button analysis-apply-button">
-          <span>به‌روزرسانی تحلیل</span>
-          <span aria-hidden="true">←</span>
-        </button>
+          <div id="wizardPolicyChip" class="wizard-info-chip">در حال آماده‌سازی...</div>
+        </div>
+        <div class="wizard-callout">
+          <div class="wizard-callout-title">قاعده اجرای تحلیل</div>
+          <p id="wizardPolicySummary" class="wizard-callout-text">در حال آماده‌سازی...</p>
+        </div>
+        <div class="wizard-status-grid">
+          <article class="wizard-status-card">
+            <b>خارج از دامنه / خشک‌شده</b>
+            <p>در کد با `out_of_range_censored` علامت‌گذاری می‌شود و در خروجی‌های اصلاحی از وضعیت آن برای شبکه ثابت استفاده می‌شود.</p>
+          </article>
+          <article class="wizard-status-card">
+            <b>بازنشسته / غیرقابل اندازه‌گیری</b>
+            <p>با `retired_no_longer_measurable` ثبت می‌شود و در تحلیل اصلاحی می‌تواند به‌جای حذف ساده، در چارچوب بازسازی‌شده دیده شود.</p>
+          </article>
+          <article class="wizard-status-card">
+            <b>چاه جدید</b>
+            <p>با `new_well_added` از زمان ورودش شناخته می‌شود و سابقه قبل از ورود برای آن به‌صورت اندازه‌گیری واقعی وجود ندارد.</p>
+          </article>
+          <article class="wizard-status-card">
+            <b>برآوردشده / فاقد داده</b>
+            <p>بازسازی با `imputed` فقط در جریان اصلاحی معنی پیدا می‌کند؛ در مسیر خام داده مفقود صرفاً مقدار معتبر تولید نمی‌کند.</p>
+          </article>
+        </div>
       </section>
-    </div>
-    <details class="analysis-options">
-      <summary>
-        <span>
-          <b>تنظیمات تکمیلی</b>
-          <small>مقایسه شیب و انتخاب دستی پیزومترها</small>
-        </span>
-        <span class="analysis-options-arrow" aria-hidden="true">⌄</span>
-      </summary>
-      <div class="grid gap-3 p-4 lg:grid-cols-2">
-        <div class="analysis-option-card">
+
+      <section class="wizard-panel hidden" data-wizard-panel="2">
+        <div class="wizard-panel-header">
+          <div>
+            <span class="section-kicker">مرحله ۳</span>
+            <h4 class="wizard-panel-title">انتخاب روش محاسبه هیدروگراف آبخوان</h4>
+            <p class="wizard-panel-description">در این مرحله family روش، اجرای سطح پیزومتریک، و مسیر خام یا اصلاحی مشخص می‌شود.</p>
+          </div>
+          <div class="wizard-info-chip">سری اصلاحی اصلی از `corrected_support_method` تعیین می‌شود.</div>
+        </div>
+        <div class="wizard-status-grid">
+          <article class="wizard-status-card">
+            <b>حسابی</b>
+            <p>میانگین ساده چاه‌های عضو شبکه محاسباتی در هر ماه. این family مستقیماً به membership مرحله ۱ وابسته است.</p>
+          </article>
+          <article class="wizard-status-card">
+            <b>تیسن</b>
+            <p>میانگین وزنی بر اساس پهنه‌های تیسن چاه‌های عضو شبکه. وزن‌ها در مسیر خام با شبکه جاری و در مسیر اصلاحی با support ثابت کار می‌کنند.</p>
+          </article>
+          <article class="wizard-status-card">
+            <b>سطح پیزومتریک</b>
+            <p>میانگین مساحتی سطح درون‌یابی‌شده با IDW، Spline یا Kriging. اینجا روش سطح را انتخاب می‌کنید و مرحله ۱ strategy داده را تعیین می‌کند.</p>
+          </article>
+        </div>
+        <div class="wizard-card-grid wizard-card-grid--secondary">
+          <section class="wizard-card">
+            <div class="wizard-card-title">روش‌های سطح پیزومتریک</div>
+            <p class="wizard-card-note">IDW همیشه فعال است و سایر روش‌ها به‌عنوان سری‌های مکمل خام/اصلاحی قابل مقایسه‌اند.</p>
+            <div id="surfaceInterpolationMethods" class="method-chip-group">
+              <label class="method-chip method-chip-active">
+                <input type="checkbox" value="idw" checked disabled class="h-3.5 w-3.5 accent-teal">
+                <span>IDW</span>
+                <span class="method-chip-badge">سریع</span>
+                <span class="method-chip-help" data-tooltip="سریع و پایدار&#10;برای شبکه‌های معمولی و شروع تحلیل مناسب است&#10;سطح محلی‌تر و کمتر مدل‌محور">i</span>
+              </label>
+              <label class="method-chip">
+                <input type="checkbox" value="natural_neighbor" class="h-3.5 w-3.5 accent-teal">
+                <span>Natural Neighbor / TIN</span>
+                <span class="method-chip-badge">متعادل</span>
+                <span class="method-chip-help" data-tooltip="تعادل خوب بین نرمی و حفظ داده&#10;برای نمایش طبیعی‌تر الگوی مکانی مناسب است&#10;وقتی نمی‌خواهید سطح بیش از حد صاف شود">i</span>
+              </label>
+              <label class="method-chip">
+                <input type="checkbox" value="ordinary_kriging" class="h-3.5 w-3.5 accent-teal">
+                <span>Ordinary Kriging</span>
+                <span class="method-chip-badge">دقیق‌تر</span>
+                <span class="method-chip-help" data-tooltip="دقیق‌تر اما سنگین‌تر&#10;برای داده‌های نسبتاً منظم با همبستگی مکانی خوب مناسب است&#10;بدون مدل‌کردن روند سراسری">i</span>
+              </label>
+              <label class="method-chip">
+                <input type="checkbox" value="universal_kriging" class="h-3.5 w-3.5 accent-teal">
+                <span>Universal Kriging</span>
+                <span class="method-chip-badge">پیشرفته</span>
+                <span class="method-chip-help" data-tooltip="پیشرفته برای آبخوان‌های دارای شیب منطقه‌ای&#10;روند کلی را جدا می‌کند و سپس جزئیات را kriging می‌کند&#10;برای تحلیل حرفه‌ای‌تر مناسب است">i</span>
+              </label>
+              <label class="method-chip">
+                <input type="checkbox" value="regression_kriging" class="h-3.5 w-3.5 accent-teal">
+                <span>Regression Kriging</span>
+                <span class="method-chip-badge">حرفه‌ای</span>
+                <span class="method-chip-help" data-tooltip="قوی‌ترین گزینه برای الگوهای پیچیده‌تر&#10;وقتی تغییرات مکانی غیرخطی‌تر هستند بهتر جواب می‌دهد&#10;محاسبات سنگین‌تر ولی تحلیلی‌تر">i</span>
+              </label>
+              <label class="method-chip">
+                <input type="checkbox" value="spline" class="h-3.5 w-3.5 accent-teal">
+                <span>Thin Plate Spline</span>
+                <span class="method-chip-badge">نرم</span>
+                <span class="method-chip-help" data-tooltip="بصری و نرم&#10;برای نمایش‌های پیوسته و نقشه‌های آرام‌تر مناسب است&#10;ممکن است نوسان‌های محلی را هموار کند">i</span>
+              </label>
+            </div>
+          </section>
+          <section class="wizard-card">
+            <div class="wizard-card-title">روش اصلاحی با پشتیبان ثابت</div>
+            <p class="wizard-card-note">این انتخاب تعیین می‌کند primary corrected series در نمودار و افت سالانه از کدام خانواده ساخته شود.</p>
+            <div id="correctedSupportMethodGuide" class="method-chip-group support-method-chip-group">
+              <button type="button" class="method-chip support-method-chip" data-support-value="none">
+                <span>بدون اصلاح</span>
+                <span class="method-chip-badge">خام</span>
+                <span class="method-chip-help" data-tooltip="هیچ اصلاحی اعمال نمی‌شود&#10;سری اصلاحی برابر سری خام باقی می‌ماند&#10;برای مقایسه پایه و کنترل سریع مناسب است">i</span>
+              </button>
+              <button type="button" class="method-chip support-method-chip" data-support-value="fixed_thiessen">
+                <span>تیسن ثابت</span>
+                <span class="method-chip-badge">پیشنهادی</span>
+                <span class="method-chip-help" data-tooltip="وزن‌های مکانی ثابت می‌مانند&#10;برای مقایسه سازگار ماه‌به‌ماه مناسب است&#10;تعادل خوبی بین پایداری و تفسیر مکانی دارد">i</span>
+              </button>
+              <button type="button" class="method-chip support-method-chip" data-support-value="fixed_grid">
+                <span>شبکه ثابت</span>
+                <span class="method-chip-badge">فضایی</span>
+                <span class="method-chip-help" data-tooltip="هر ماه روی شبکه ثابت آبخوان درون‌یابی می‌شود&#10;برای تحلیل‌های سطح پیزومتریک و نقشه‌محور مناسب است&#10;محاسبات آن از روش‌های ساده سنگین‌تر است">i</span>
+              </button>
+              <button type="button" class="method-chip support-method-chip" data-support-value="fixed_arithmetic">
+                <span>چاه‌های ثابت</span>
+                <span class="method-chip-badge">ساده</span>
+                <span class="method-chip-help" data-tooltip="همان مجموعه چاه مبنا در کل بازه حفظ می‌شود&#10;تفسیر آن ساده و مستقیم است&#10;برای گزارش‌های سریع و قابل توضیح مفید است">i</span>
+              </button>
+              <button type="button" class="method-chip support-method-chip" data-support-value="fixed_median">
+                <span>میانه ثابت چاه‌ها</span>
+                <span class="method-chip-badge">پایدار</span>
+                <span class="method-chip-help" data-tooltip="به‌جای میانگین از میانه چاه‌های ثابت استفاده می‌کند&#10;در برابر چاه‌های پرت یا نویزی مقاوم‌تر است&#10;برای شبکه‌هایی با رفتار نامتجانس گزینه خوبی است">i</span>
+              </button>
+            </div>
+            <select id="correctedSupportMethod" class="hidden" name="corrected_support_method" aria-label="روش پشتیبان ثابت اصلاح هیدروگراف">
+              <option value="none">بدون اصلاح</option>
+              <option value="fixed_thiessen">تیسن ثابت</option>
+              <option value="fixed_grid">شبکه ثابت</option>
+              <option value="fixed_arithmetic">چاه‌های ثابت</option>
+              <option value="fixed_median">میانه ثابت چاه‌ها</option>
+            </select>
+            <small id="correctedSupportHint" class="mt-1 block text-[9px] leading-5 text-slate-400"></small>
+          </section>
+        </div>
+        <div class="wizard-card">
+          <div class="wizard-card-title">مقایسه شیب بازه دوم</div>
+          <p class="wizard-card-note">این بخش روی سری‌های trend مقایسه‌ای اثر می‌گذارد و مسیر محاسبه اصلی آبخوان را عوض نمی‌کند.</p>
           <label class="compact-filter-toggle border-0 bg-transparent p-0">
             <input id="comparisonTrendEnabled" type="checkbox" class="peer sr-only">
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
             <span>
-              <strong class="block text-[11px] font-bold text-navy">مقایسه شیب با بازه دوم</strong>
-              <small class="block text-[9px] text-slate-400">خط‌چین مشکی و مقدار مقایسه‌ای</small>
+              <strong class="block text-[11px] font-bold text-navy">فعال‌سازی مقایسه شیب</strong>
+              <small class="block text-[9px] text-slate-400">در صورت فعال‌سازی، trend بازه دوم روی نمودار اضافه می‌شود.</small>
             </span>
           </label>
           <div id="comparisonTrendPanel" class="mt-3 hidden border-t border-slate-100 pt-3">
@@ -144,39 +334,73 @@
                 <select id="comparisonEndMonth" class="field compact-field" name="comparison_end_month" aria-label="ماه پایان مقایسه"></select>
               </div>
             </div>
-            <p class="mt-2 text-[9px] leading-5 text-slate-400">
-              پیش‌فرض: مهر آخرین سال آبی تا پایان بازه اصلی
-            </p>
+            <p class="mt-2 text-[9px] leading-5 text-slate-400">پیش‌فرض: مهر آخرین سال آبی تا پایان بازه اصلی</p>
           </div>
         </div>
-        <div class="analysis-option-card">
-          <label class="compact-filter-toggle border-0 bg-transparent p-0">
-            <input id="manualWellSelection" type="checkbox" class="peer sr-only">
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            <span>
-              <strong class="block text-[11px] font-bold text-navy">انتخاب دستی چاه‌ها</strong>
-              <small class="block text-[9px] text-slate-400">بازسازی هیدروگراف و تیسن با چاه‌های منتخب</small>
-            </span>
-          </label>
-        </div>
-      </div>
-      <div id="manualWellPanel" class="manual-well-panel mx-4 mb-4 hidden">
-        <div class="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between">
+      </section>
+
+      <section class="wizard-panel hidden" data-wizard-panel="3">
+        <div class="wizard-panel-header">
           <div>
-            <div class="text-xs font-bold text-navy">چاه‌های مورد استفاده در محاسبات</div>
-            <div id="manualWellCount" class="mt-1 text-[10px] text-slate-500"></div>
+            <span class="section-kicker">مرحله ۴</span>
+            <h4 class="wizard-panel-title">محاسبه کسری مخزن و تغییر ذخیره</h4>
+            <p class="wizard-panel-description">در این مرحله ضریب ذخیره وارد فرمول افت سالانه می‌شود و خروجی به حجم آبخوان تبدیل می‌شود.</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <input id="manualWellSearch" type="search" class="manual-well-search" placeholder="جست‌وجوی نام چاه...">
-            <button id="selectAllEligibleWells" type="button" class="secondary-button">انتخاب همه دارای داده</button>
-            <button id="clearSelectedWells" type="button" class="secondary-button">پاک‌کردن انتخاب</button>
-          </div>
+          <div class="wizard-info-chip">این مرحله به `storage_coefficient` و مساحت آبخوان متکی است.</div>
         </div>
-        <div id="manualWellList" class="manual-well-list"></div>
+        <div class="wizard-card-grid wizard-card-grid--secondary">
+          <section class="wizard-card">
+            <div class="wizard-card-title">ضریب ذخیره / آبدهی ویژه</div>
+            <label class="analysis-filter-field analysis-filter-field--compact">
+              <span class="compact-date-label">Sy / S</span>
+              <input
+                id="storageCoefficient"
+                class="field compact-field text-left"
+                name="storage_coefficient"
+                type="number"
+                min="0.0001"
+                max="1"
+                step="0.0001"
+                value="0.1"
+                required
+                inputmode="decimal"
+                aria-label="ضریب ذخیره یا آبدهی ویژه"
+              >
+            </label>
+          </section>
+          <section class="wizard-card">
+            <div class="wizard-card-title">منطق فرمول</div>
+            <p class="wizard-card-note">ابتدا افت سالانه هر روش محاسبه می‌شود، بعد در ضریب ذخیره و مساحت آبخوان ضرب می‌شود تا `storage_change_mcm` ساخته شود. جمع انباشته این مقدار همان `cumulative_storage_change_mcm` است.</p>
+            <div id="wizardStorageSummary" class="wizard-inline-summary"></div>
+          </section>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="wizard-footer">
+      <div id="wizardProgressLabel" class="wizard-progress-label">مرحله ۱ از ۴</div>
+      <div class="wizard-footer-actions">
+        <button id="wizardPrevStep" type="button" class="secondary-button">مرحله قبل</button>
+        <button id="wizardNextStep" type="button" class="secondary-button">مرحله بعد</button>
+        <button id="applyAnalysisFilters" type="submit" class="primary-button analysis-apply-button">
+          <span>اجرای تحلیل با این تنظیمات</span>
+          <span aria-hidden="true">←</span>
+        </button>
       </div>
-    </details>
+    </div>
   </form>
 
+  <section id="wizardPendingState" class="panel wizard-pending-state">
+    <div class="wizard-pending-copy">
+      <span class="section-kicker">آماده اجرای تحلیل</span>
+      <h3 class="section-title">سناریوی آبخوان را نهایی کنید</h3>
+      <p id="wizardPendingMessage" class="section-description">پیزومترها، روش‌ها و ضریب ذخیره را انتخاب کنید، سپس «به‌روزرسانی تحلیل» را بزنید تا خروجی‌ها ساخته شوند.</p>
+    </div>
+    <div id="wizardPendingChecklist" class="wizard-pending-checklist"></div>
+  </section>
+
+  <div id="dashboardResults" class="hidden space-y-4">
   <section id="statsGrid" class="dashboard-stats-shell" aria-label="خلاصه وضعیت آبخوان"></section>
 
   <section class="grid gap-4 xl:grid-cols-12">
@@ -338,7 +562,8 @@
       <div class="section-heading-copy">
         <span class="section-kicker">پویایی مکانی سال‌به‌سال</span>
         <h3 class="section-title">خطوط تراز و پهنه تغییرات افت</h3>
-        <p class="section-description">مقایسه تراز ماه منتخب با همان ماه در سال قبل؛ ماه پیش‌فرض مهر است.</p>
+        <p class="section-description">این بخش از روی محاسبات انجام‌شده ساخته می‌شود و فقط بین روش‌های انتخاب‌شده و حالت‌های نمایش جابه‌جا می‌شود.</p>
+        <p class="spatial-source-note">مبنای نقشه: پیزومترهای نهایی‌شده در ویزارد</p>
       </div>
       <div class="spatial-date-badge">
         <span>ماه منتخب</span>
@@ -346,14 +571,6 @@
       </div>
     </div>
     <div class="spatial-toolbar">
-      <label class="spatial-control spatial-control--wide">
-        <span class="field-label">مبنای انتخاب پیزومترها</span>
-        <select id="spatialWellMode" class="field h-10">
-          <option value="calculation">چاه‌های داخل محاسبات / انتخاب دستی</option>
-          <option value="all">همه پیزومترهای دارای مقدار ماه جاری</option>
-          <option value="comparable">فقط چاه‌های دارای داده ماه منتخب و سال قبل</option>
-        </select>
-      </label>
       <label class="spatial-control">
         <span class="field-label">سال نمایش</span>
         <select id="spatialYear" class="field h-10 year-field"></select>
@@ -363,13 +580,17 @@
         <select id="spatialMonth" class="field h-10"></select>
       </label>
       <label class="spatial-control">
-        <span class="field-label">روش درون‌یابی</span>
-        <select id="spatialSurfaceMethod" class="field h-10"></select>
-      </label>
-      <label class="spatial-control">
         <span class="field-label">فاصله خطوط (متر)</span>
         <input id="contourInterval" class="field h-10 text-left" type="number" min="0.01" step="0.01" inputmode="decimal">
       </label>
+    </div>
+    <select id="spatialSurfaceMethod" class="hidden" aria-label="روش درون‌یابی"></select>
+    <div class="spatial-method-strip">
+      <div class="spatial-method-strip-copy">
+        <span>روش‌های انتخاب‌شده</span>
+        <b>نمایش سریع خروجی مکانی</b>
+      </div>
+      <div id="spatialMethodChips" class="spatial-method-chips"></div>
     </div>
     <div id="spatialFrameStats" class="spatial-frame-stats"></div>
     <div class="spatial-map-grid">
@@ -415,6 +636,7 @@
     </div>
     <div id="wellCharts" class="grid grid-cols-1 gap-5 xl:grid-cols-2"></div>
   </section>
+  </div>
 
   <div id="methodGuideModal" class="well-modal hidden" role="dialog" aria-modal="true" aria-labelledby="methodGuideTitle">
     <button type="button" class="well-modal-backdrop" data-close-method-guide aria-label="بستن راهنمای روش‌ها"></button>

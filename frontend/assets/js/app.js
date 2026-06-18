@@ -32,7 +32,12 @@
     chatHistory: [],
     chatAquiferId: null,
     chatContextKey: null,
-    chatRequestToken: 0
+    chatRequestToken: 0,
+    wizardStep: 0,
+    wizardCollapsed: {},
+    manualWellSelections: {},
+    dashboardStage: {},
+    timelineSyncLock: false
   };
 
   const CHAT_HISTORY_STORAGE_PREFIX = "hydrocodeir.aquifer-chat-history.v1";
@@ -43,31 +48,91 @@
   const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
   const BASEMAP_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-  const surfaceMethodOrder = ["idw", "ordinary_kriging", "spline"];
+  const surfaceMethodOrder = [
+    "idw",
+    "natural_neighbor",
+    "ordinary_kriging",
+    "universal_kriging",
+    "regression_kriging",
+    "spline"
+  ];
   const surfaceMethodLabels = {
     idw: "IDW",
+    natural_neighbor: "Natural Neighbor / TIN",
     ordinary_kriging: "Ordinary Kriging",
+    universal_kriging: "Universal Kriging",
+    regression_kriging: "Regression Kriging",
     spline: "Thin Plate Spline"
   };
   const surfaceMethodColors = {
     idw: "#087E8B",
+    natural_neighbor: "#0EA5A4",
     ordinary_kriging: "#7C3AED",
+    universal_kriging: "#2563EB",
+    regression_kriging: "#D97706",
     spline: "#F59E0B"
   };
   const surfaceMethodTrendColors = {
     idw: "#7C3AED",
+    natural_neighbor: "#0F766E",
     ordinary_kriging: "#0F766E",
+    universal_kriging: "#1D4ED8",
+    regression_kriging: "#B45309",
     spline: "#DB2777"
   };
   const correctedSupportLabels = {
     fixed_thiessen: "تیسن ثابت",
     fixed_grid: "شبکه ثابت",
-    fixed_arithmetic: "چاه‌های ثابت"
+    fixed_arithmetic: "چاه‌های ثابت",
+    fixed_median: "میانه ثابت چاه‌ها",
+    none: "بدون اصلاح"
   };
   const correctedSupportHints = {
     fixed_thiessen: "وزن‌های تیسن یک‌بار از چاه‌های منتخب ساخته می‌شوند و در همه ماه‌ها ثابت می‌مانند؛ چاه حذف‌شده با مقدار اصلاحی وارد محاسبه می‌شود.",
     fixed_grid: "یک شبکه ثابت روی مرز آبخوان ساخته می‌شود و مقدار اصلاح‌شده چاه‌ها هر ماه روی همان سلول‌ها درون‌یابی و میانگین مساحتی می‌شود.",
-    fixed_arithmetic: "مجموعه چاه‌های مبنا ثابت می‌ماند و میانگین حسابی از مقدار اصلاح‌شده همان چاه‌ها محاسبه می‌شود."
+    fixed_arithmetic: "مجموعه چاه‌های مبنا ثابت می‌ماند و میانگین حسابی از مقدار اصلاح‌شده همان چاه‌ها محاسبه می‌شود.",
+    fixed_median: "مجموعه چاه‌های مبنا ثابت می‌ماند و در هر ماه میانه تراز چاه‌های اصلاح‌شده محاسبه می‌شود؛ برای شبکه‌های دارای مقادیر پرت پایدارتر است.",
+    none: "هیچ اصلاحی انجام نمی‌شود و سری اصلاحی عملا همان سری خام باقی می‌ماند."
+  };
+  const surfaceMethodGuideMeta = {
+    idw: "سریع، پایدار، مناسب شروع",
+    natural_neighbor: "متعادل، طبیعی، کم‌اغراق",
+    ordinary_kriging: "دقیق‌تر، زمین‌آماری، سنگین‌تر",
+    universal_kriging: "پیشرفته، مناسب روند منطقه‌ای",
+    regression_kriging: "تحلیلی‌تر، مناسب الگوی پیچیده",
+    spline: "نرم، بصری، هموارتر"
+  };
+  const surfaceMethodGuideDescriptions = {
+    idw: "سریع و قابل‌اتکا برای شروع تحلیل؛ چاه‌های نزدیک‌تر اثر بیشتری دارند و برای بیشتر شبکه‌های معمولی انتخاب امنی است.",
+    natural_neighbor: "سطحی متعادل‌تر و طبیعی‌تر می‌دهد و معمولاً نسبت به روش‌های خیلی نرم، ساختار محلی را بهتر نگه می‌دارد.",
+    ordinary_kriging: "وقتی همبستگی مکانی داده‌ها خوب باشد، برآورد دقیق‌تری می‌دهد؛ هزینه محاسباتی آن از روش‌های ساده بیشتر است.",
+    universal_kriging: "برای آبخوان‌هایی که شیب یا روند منطقه‌ای مشخص دارند مناسب‌تر است، چون روند کلی را از تغییرات محلی جدا می‌کند.",
+    regression_kriging: "نسخه تحلیلی‌تر برای الگوهای مکانی پیچیده‌تر است و در عوض به داده و محاسبه بیشتری تکیه می‌کند.",
+    spline: "برای نمایش‌های نرم و پیوسته مناسب است، اما ممکن است نوسان‌های محلی را بیش از حد هموار کند."
+  };
+  const surfaceMethodQuickTags = {
+    idw: "سریع",
+    natural_neighbor: "متعادل",
+    ordinary_kriging: "دقیق‌تر",
+    universal_kriging: "پیشرفته",
+    regression_kriging: "حرفه‌ای",
+    spline: "نرم"
+  };
+  const surfaceMethodTooltipShort = {
+    idw: "سریع و پایدار برای بیشتر شبکه‌ها",
+    natural_neighbor: "نمایش طبیعی‌تر با هموارسازی کمتر",
+    ordinary_kriging: "زمین‌آماری دقیق‌تر برای داده منظم",
+    universal_kriging: "مناسب روندهای منطقه‌ای و شیب‌دار",
+    regression_kriging: "تحلیلی‌تر برای الگوهای پیچیده‌تر",
+    spline: "نرم و بصری، با هموارسازی بیشتر"
+  };
+  const surfaceMethodRecommendedPoints = {
+    idw: 3,
+    natural_neighbor: 4,
+    ordinary_kriging: 6,
+    universal_kriging: 6,
+    regression_kriging: 8,
+    spline: 4
   };
   const methodGuideSections = [
     {
@@ -87,11 +152,9 @@
       title: "روش‌های درون‌یابی سطح",
       items: surfaceMethodOrder.map(method => ({
         label: surfaceMethodLabels[method] || method,
-        description: ({
-          idw: "مقدار هر نقطه از میانگین وزنی چاه‌های اطراف به دست می‌آید و چاه‌های نزدیک‌تر اثر بیشتری دارند.",
-          ordinary_kriging: "یک مدل زمین‌آماری بر پایه همبستگی مکانی داده‌ها ساخته می‌شود و سطح با برآورد کم‌خطاتر بازسازی می‌شود.",
-          spline: "یک سطح نرم و پیوسته از میان نقاط عبور داده می‌شود تا تغییرات مکانی با انحنای حداقلی نمایش داده شود."
-        })[method] || ""
+        description: surfaceMethodGuideDescriptions[method]
+          ? `${surfaceMethodGuideMeta[method]} - ${surfaceMethodGuideDescriptions[method]}`
+          : ""
       }))
     },
     {
@@ -1430,6 +1493,7 @@
   function correctedPrimarySeriesKey(data) {
     const support = correctedSupportMethod(data);
     if (support === "fixed_arithmetic") return "corrected_arithmetic";
+    if (support === "fixed_median") return "corrected_median";
     if (support === "fixed_grid") return `corrected_${primarySurfaceMethod(data)}`;
     return "corrected_thiessen";
   }
@@ -1444,6 +1508,122 @@
 
   function surfaceMethodTrendColor(method) {
     return surfaceMethodTrendColors[method] || "#7C3AED";
+  }
+
+  function renderSpatialMethodChips(data) {
+    const container = document.getElementById("spatialMethodChips");
+    const select = document.getElementById("spatialSurfaceMethod");
+    if (!container || !select) return;
+    const methods = selectedSurfaceMethods(data);
+    const activeMethod = select.value || state.spatialSurfaceMethod || methods[0] || "idw";
+    const monthIndex = state.spatialMonthIndex;
+    const comparisonIndex = spatialComparisonIndex(data, monthIndex);
+    const { currentPoints, declinePoints } = spatialWellPoints(data, monthIndex, comparisonIndex);
+    const coverageMetrics = spatialCoverageMetrics(
+      data?.boundaries?.aquifer?.geometry,
+      currentPoints,
+      declinePoints
+    );
+    container.innerHTML = methods.map(method => `
+      <button
+        type="button"
+        class="spatial-method-chip${method === activeMethod ? " is-active" : ""}"
+        data-spatial-method="${escapeHtml(method)}"
+      >
+        <span class="spatial-method-chip-check${method === activeMethod ? "" : " is-hidden"}">✓</span>
+        <span>${escapeHtml(surfaceMethodLabel(data, method, true))}</span>
+        <span class="spatial-method-chip-badge">${escapeHtml(surfaceMethodQuickTags[method] || "روش")}</span>
+        ${(() => {
+          const quality = spatialMethodQuality(method, coverageMetrics);
+          return `
+            <span class="spatial-method-chip-quality" data-quality="${quality.tone}">
+              <span class="spatial-method-chip-quality-bars">
+                <i class="${quality.level >= 1 ? "is-on" : ""}"></i>
+                <i class="${quality.level >= 2 ? "is-on" : ""}"></i>
+                <i class="${quality.level >= 3 ? "is-on" : ""}"></i>
+              </span>
+              <small>${escapeHtml(quality.label)}</small>
+            </span>
+          `;
+        })()}
+        <span class="spatial-method-chip-help" data-tooltip="${escapeHtml(spatialMethodQuality(method, coverageMetrics).detail || surfaceMethodTooltipShort[method] || "روش انتخاب‌شده برای خروجی مکانی")}">i</span>
+      </button>
+    `).join("");
+    container.querySelectorAll("[data-spatial-method]").forEach(button => {
+      button.onclick = () => {
+        const nextMethod = button.dataset.spatialMethod || methods[0] || "idw";
+        if (select.value === nextMethod) return;
+        select.value = nextMethod;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+    });
+  }
+
+  function spatialCoverageMetrics(geometry, currentPoints, declinePoints) {
+    const pointCount = currentPoints.length;
+    const comparableCount = declinePoints.length;
+    const comparableRatio = pointCount > 0 ? comparableCount / pointCount : 0;
+    let spreadRatio = 0;
+    if (geometry && pointCount >= 2) {
+      const [geoMinX, geoMinY, geoMaxX, geoMaxY] = geometryBounds(geometry);
+      const xs = currentPoints.map(point => point[0]);
+      const ys = currentPoints.map(point => point[1]);
+      const width = Math.max(...xs) - Math.min(...xs);
+      const height = Math.max(...ys) - Math.min(...ys);
+      const geoWidth = Math.max(geoMaxX - geoMinX, Number.EPSILON);
+      const geoHeight = Math.max(geoMaxY - geoMinY, Number.EPSILON);
+      const widthRatio = Math.min(1, width / geoWidth);
+      const heightRatio = Math.min(1, height / geoHeight);
+      spreadRatio = (widthRatio + heightRatio) / 2;
+    }
+    return {
+      pointCount,
+      comparableCount,
+      comparableRatio,
+      spreadRatio
+    };
+  }
+
+  function spatialMethodQuality(method, metrics) {
+    const recommended = surfaceMethodRecommendedPoints[method] || 4;
+    const countRatio = recommended > 0 ? metrics.pointCount / recommended : 1;
+    const countScore = Math.max(0, Math.min(1, countRatio));
+    const compareScore = Math.max(0, Math.min(1, metrics.comparableRatio));
+    const spreadScore = Math.max(0, Math.min(1, metrics.spreadRatio / 0.6));
+    const score = countScore * 0.5 + compareScore * 0.25 + spreadScore * 0.25;
+    const spreadPercent = Math.round(metrics.spreadRatio * 100);
+    const comparePercent = Math.round(metrics.comparableRatio * 100);
+    if (score >= 0.78) {
+      return {
+        tone: "high",
+        level: 3,
+        label: `${faNumber.format(metrics.pointCount)} چاه · ${faNumber.format(comparePercent)}٪`,
+        detail: `${surfaceMethodTooltipShort[method] || "روش انتخاب‌شده"}\n${faNumber.format(metrics.pointCount)} چاه موثر\n${faNumber.format(comparePercent)}٪ پوشش مقایسه سال‌به‌سال\n${faNumber.format(spreadPercent)}٪ پراکندگی نسبی مکانی`
+      };
+    }
+    if (score >= 0.5) {
+      return {
+        tone: "medium",
+        level: 2,
+        label: `${faNumber.format(metrics.pointCount)} چاه · مرزی`,
+        detail: `${surfaceMethodTooltipShort[method] || "روش انتخاب‌شده"}\n${faNumber.format(metrics.pointCount)} چاه موثر\n${faNumber.format(comparePercent)}٪ پوشش مقایسه سال‌به‌سال\n${faNumber.format(spreadPercent)}٪ پراکندگی نسبی مکانی`
+      };
+    }
+    return {
+      tone: "low",
+      level: 1,
+      label: `کم‌پوشش · ${faNumber.format(metrics.pointCount)} چاه`,
+      detail: `${surfaceMethodTooltipShort[method] || "روش انتخاب‌شده"}\n${faNumber.format(metrics.pointCount)} چاه موثر\n${faNumber.format(comparePercent)}٪ پوشش مقایسه سال‌به‌سال\n${faNumber.format(spreadPercent)}٪ پراکندگی نسبی مکانی`
+    };
+  }
+
+  function openWizardEditor(root, step) {
+    setWizardCollapsed(root, false);
+    setWizardStep(root, step);
+    root.querySelector("#analysisFilters")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
   }
 
   function trendChip(label, trend, variant = "") {
@@ -1810,6 +1990,114 @@
     };
   }
 
+  function trendFeatureVector(longitude, latitude, mode = "linear") {
+    if (mode === "quadratic") {
+      return [1, longitude, latitude, longitude * latitude, longitude * longitude, latitude * latitude];
+    }
+    return [1, longitude, latitude];
+  }
+
+  function fitLeastSquares(points, mode = "linear") {
+    const features = points.map(point => trendFeatureVector(point[0], point[1], mode));
+    const width = features[0]?.length || 0;
+    if (!width) return null;
+    const matrix = Array.from({ length: width }, () => Array(width).fill(0));
+    const rhs = Array(width).fill(0);
+    for (let row = 0; row < points.length; row += 1) {
+      const feature = features[row];
+      const value = points[row][2];
+      for (let i = 0; i < width; i += 1) {
+        rhs[i] += feature[i] * value;
+        for (let j = 0; j < width; j += 1) {
+          matrix[i][j] += feature[i] * feature[j];
+        }
+      }
+    }
+    const inverse = invertMatrix(matrix);
+    if (!inverse) return null;
+    return {
+      mode,
+      coefficients: multiplyMatrixVector(inverse, rhs)
+    };
+  }
+
+  function evaluateTrendModel(model, longitude, latitude) {
+    if (!model) return null;
+    const features = trendFeatureVector(longitude, latitude, model.mode);
+    const value = features.reduce((sum, feature, index) => (
+      sum + feature * model.coefficients[index]
+    ), 0);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function buildTrendKrigingModel(points, mode = "linear") {
+    if (points.length < 4) return null;
+    const trendModel = fitLeastSquares(points, mode);
+    if (!trendModel) return null;
+    const residualPoints = points.map(point => {
+      const trend = evaluateTrendModel(trendModel, point[0], point[1]);
+      return [point[0], point[1], point[2] - (trend || 0)];
+    });
+    const residualModel = buildOrdinaryKrigingModel(residualPoints);
+    if (!residualModel) return null;
+    return {
+      trendModel,
+      residualModel
+    };
+  }
+
+  function trendKrigingValue(model, longitude, latitude) {
+    if (!model) return null;
+    const trend = evaluateTrendModel(model.trendModel, longitude, latitude);
+    const residual = ordinaryKrigingValue(model.residualModel, longitude, latitude);
+    if (trend === null || residual === null) return null;
+    const value = trend + residual;
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function triangleArea(a, b, c) {
+    return Math.abs(
+      (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1])) / 2
+    );
+  }
+
+  function barycentricWeights(point, a, b, c) {
+    const denominator = ((b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]));
+    if (Math.abs(denominator) < 1e-12) return null;
+    const w1 = ((b[1] - c[1]) * (point[0] - c[0]) + (c[0] - b[0]) * (point[1] - c[1])) / denominator;
+    const w2 = ((c[1] - a[1]) * (point[0] - c[0]) + (a[0] - c[0]) * (point[1] - c[1])) / denominator;
+    const w3 = 1 - w1 - w2;
+    return [w1, w2, w3];
+  }
+
+  function naturalNeighborTinValue(points, longitude, latitude) {
+    const query = [longitude, latitude];
+    const sorted = [...points].sort((left, right) => (
+      Math.hypot(left[0] - longitude, left[1] - latitude)
+      - Math.hypot(right[0] - longitude, right[1] - latitude)
+    ));
+    const candidates = sorted.slice(0, Math.min(sorted.length, 8));
+    for (let i = 0; i < candidates.length; i += 1) {
+      for (let j = i + 1; j < candidates.length; j += 1) {
+        for (let k = j + 1; k < candidates.length; k += 1) {
+          const a = candidates[i];
+          const b = candidates[j];
+          const c = candidates[k];
+          if (triangleArea(a, b, c) < 1e-12) continue;
+          const weights = barycentricWeights(query, a, b, c);
+          if (!weights) continue;
+          const [w1, w2, w3] = weights;
+          const tolerance = -1e-6;
+          if (w1 >= tolerance && w2 >= tolerance && w3 >= tolerance) {
+            const value = w1 * a[2] + w2 * b[2] + w3 * c[2];
+            return Number.isFinite(value) ? value : null;
+          }
+        }
+      }
+    }
+    return idwValue(points, longitude, latitude, 1.5);
+  }
+
   function ordinaryKrigingValue(model, longitude, latitude) {
     if (!model) return null;
     const { points, values, inverse, nugget, sill, variogramRange } = model;
@@ -1838,12 +2126,36 @@
   function buildSpatialInterpolator(points, method, idwPower = 2) {
     const uniquePoints = aggregateSpatialPoints(points);
     if (!uniquePoints.length) return null;
+    if (method === "natural_neighbor") {
+      return {
+        points: uniquePoints,
+        valueAt: (longitude, latitude) => naturalNeighborTinValue(uniquePoints, longitude, latitude)
+      };
+    }
     if (method === "ordinary_kriging") {
       const model = buildOrdinaryKrigingModel(uniquePoints);
       if (model) {
         return {
           points: uniquePoints,
           valueAt: (longitude, latitude) => ordinaryKrigingValue(model, longitude, latitude)
+        };
+      }
+    }
+    if (method === "universal_kriging") {
+      const model = buildTrendKrigingModel(uniquePoints, "linear");
+      if (model) {
+        return {
+          points: uniquePoints,
+          valueAt: (longitude, latitude) => trendKrigingValue(model, longitude, latitude)
+        };
+      }
+    }
+    if (method === "regression_kriging") {
+      const model = buildTrendKrigingModel(uniquePoints, "quadratic");
+      if (model) {
+        return {
+          points: uniquePoints,
+          valueAt: (longitude, latitude) => trendKrigingValue(model, longitude, latitude)
         };
       }
     }
@@ -2133,7 +2445,7 @@
     return segments;
   }
 
-  function spatialWellPoints(data, monthIndex, comparisonIndex, mode) {
+  function spatialWellPoints(data, monthIndex, comparisonIndex) {
     const currentPoints = [];
     const declinePoints = [];
     data.wells.forEach(well => {
@@ -2143,11 +2455,7 @@
         : null;
       const hasComparison = current !== null && current !== undefined
         && previous !== null && previous !== undefined;
-      const accepted = mode === "calculation"
-        ? well.included
-        : mode === "comparable"
-          ? hasComparison
-          : true;
+      const accepted = well.included;
       if (!accepted || well.longitude === null || well.latitude === null) return;
       if (current !== null && current !== undefined) {
         currentPoints.push([well.longitude, well.latitude, current, well.name]);
@@ -2326,13 +2634,13 @@
       .map(item => item.index);
   }
 
-  function spatialRangeDeclinePoints(data, targetMonth, mode) {
+  function spatialRangeDeclinePoints(data, targetMonth) {
     const labels = spatialMonthLabels(data);
     return labels.flatMap((label, monthIndex) => {
       if (Number(label.slice(5, 7)) !== targetMonth) return [];
       const comparisonIndex = spatialComparisonIndex(data, monthIndex);
       if (comparisonIndex < 0) return [];
-      return spatialWellPoints(data, monthIndex, comparisonIndex, mode).declinePoints;
+      return spatialWellPoints(data, monthIndex, comparisonIndex).declinePoints;
     });
   }
 
@@ -2377,11 +2685,11 @@
     const charts = state.spatialCharts;
     if (!data || !charts) return;
     const monthIndex = state.spatialMonthIndex;
-    const mode = document.getElementById("spatialWellMode")?.value || "calculation";
     const method = document.getElementById("spatialSurfaceMethod")?.value
       || state.spatialSurfaceMethod
       || primarySurfaceMethod(data);
     state.spatialSurfaceMethod = method;
+    renderSpatialMethodChips(data);
     const month = data.hydrographs.thiessen[monthIndex]?.[0];
     const comparisonIndex = spatialComparisonIndex(data, monthIndex);
     const previousYearMonth = comparisonIndex >= 0
@@ -2390,8 +2698,7 @@
     const { currentPoints, declinePoints } = spatialWellPoints(
       data,
       monthIndex,
-      comparisonIndex,
-      mode
+      comparisonIndex
     );
     const geometry = data.boundaries.aquifer.geometry;
     const intervalInput = document.getElementById("contourInterval");
@@ -2486,7 +2793,7 @@
     const maximumDecline = declineValues.length ? Math.max(...declineValues) : 0;
     const declineSurfaceData = declineSurface(declinePoints, geometry, method);
     const targetMonth = Number(month.slice(5, 7));
-    const rangeDeclinePoints = spatialRangeDeclinePoints(data, targetMonth, mode);
+    const rangeDeclinePoints = spatialRangeDeclinePoints(data, targetMonth);
     const declinePieces = declineClassPieces(rangeDeclinePoints);
     charts.decline.setOption({
       series: [
@@ -2535,8 +2842,8 @@
       spatialStats.innerHTML = [
         ["ماه جاری", persianDate(month), "مبنای خطوط تراز"],
         ["ماه مرجع", previousYearMonth ? persianDate(previousYearMonth) : "ناموجود", "همان ماه در سال قبل"],
-        ["چاه‌های تراز", faNumber.format(currentPoints.length), currentPoints.length >= 3 ? "آماده درون‌یابی" : "کمتر از حداقل لازم"],
-        ["چاه‌های مقایسه", faNumber.format(declinePoints.length), previousYearMonth ? "دارای داده دو سال" : "بدون مرجع سال قبل"],
+        ["چاه‌های تراز", faNumber.format(currentPoints.length), currentPoints.length >= 3 ? "از شبکه نهایی محاسبات" : "کمتر از حداقل لازم"],
+        ["چاه‌های مقایسه", faNumber.format(declinePoints.length), previousYearMonth ? "دارای داده دو سال در شبکه نهایی" : "بدون مرجع سال قبل"],
         [
           "دامنه تغییر",
           declineValues.length
@@ -2646,10 +2953,11 @@
       spatialSurfaceMethod.onchange = event => {
         stopSpatialPlayback();
         state.spatialSurfaceMethod = event.target.value;
+        renderSpatialMethodChips(data);
         renderSpatialFrame();
       };
     }
-    document.getElementById("spatialWellMode").onchange = renderSpatialFrame;
+    renderSpatialMethodChips(data);
     document.getElementById("contourInterval").onchange = renderSpatialFrame;
     document.getElementById("spatialYear").onchange = () => {
       const labels = spatialMonthLabels(data);
@@ -2967,6 +3275,7 @@
     };
     addLine("corrected_arithmetic", "اصلاح‌شده حسابی", "#0F766E");
     addLine("corrected_thiessen", "اصلاح‌شده تیسن", "#16A34A");
+    addLine("corrected_median", "اصلاح‌شده میانه", "#B45309");
     surfaceMethodOrder.forEach(method => {
       addLine(
         `corrected_${method}`,
@@ -3036,8 +3345,288 @@
     return trendChip(`${label}${variant ? ` ${variant}` : ""}`, trend, variant === "مقایسه‌ای" ? "comparison" : "");
   }
 
-  function renderFilterControls(data) {
+  function activeDashboardRoot() {
+    return document.querySelector("[data-dashboard]");
+  }
+
+  function wizardStepCount(root = activeDashboardRoot()) {
+    return root?.querySelectorAll("[data-wizard-panel]").length || 0;
+  }
+
+  function setWizardStep(root, nextStep) {
+    if (!root) return;
+    const panels = Array.from(root.querySelectorAll("[data-wizard-panel]"));
+    if (!panels.length) return;
+    const step = Math.max(0, Math.min(nextStep, panels.length - 1));
+    state.wizardStep = step;
+    panels.forEach((panel, index) => {
+      panel.classList.toggle("hidden", index !== step);
+    });
+    root.querySelectorAll("[data-wizard-step]").forEach(button => {
+      const buttonStep = Number(button.dataset.wizardStep);
+      const wasComplete = button.classList.contains("is-complete");
+      const isActive = buttonStep === step;
+      const isComplete = buttonStep < step;
+      button.classList.toggle("is-active", isActive);
+      button.classList.toggle("is-complete", isComplete);
+      button.classList.toggle("is-pending", buttonStep > step);
+      button.setAttribute("aria-current", isActive ? "step" : "false");
+      const badge = button.querySelector(".wizard-step-badge");
+      if (badge) {
+        badge.textContent = isActive ? "مرحله جاری" : isComplete ? "انجام شده" : "در انتظار";
+      }
+      if (!wasComplete && isComplete) {
+        button.classList.remove("just-completed");
+        void button.offsetWidth;
+        button.classList.add("just-completed");
+        window.setTimeout(() => {
+          button.classList.remove("just-completed");
+        }, 560);
+      }
+    });
+    const progress = root.querySelector("#wizardProgressLabel");
+    if (progress) {
+      progress.textContent = `مرحله ${faNumber.format(step + 1)} از ${faNumber.format(panels.length)}`;
+    }
+    const prev = root.querySelector("#wizardPrevStep");
+    const next = root.querySelector("#wizardNextStep");
+    if (prev) prev.disabled = step === 0;
+    if (next) next.disabled = step === panels.length - 1;
+    updateWizardStageUI(root);
+  }
+
+  function dashboardStageState(root = activeDashboardRoot()) {
+    const aquiferId = root?.dataset.aquiferId;
+    if (!aquiferId) return { applied: false, dirty: false };
+    if (!state.dashboardStage[aquiferId]) {
+      state.dashboardStage[aquiferId] = { applied: false, dirty: false };
+    }
+    return state.dashboardStage[aquiferId];
+  }
+
+  function wizardCollapsedState(root = activeDashboardRoot()) {
+    const aquiferId = root?.dataset.aquiferId;
+    if (!aquiferId) return false;
+    if (typeof state.wizardCollapsed[aquiferId] !== "boolean") {
+      state.wizardCollapsed[aquiferId] = false;
+    }
+    return state.wizardCollapsed[aquiferId];
+  }
+
+  function setWizardCollapsed(root = activeDashboardRoot(), collapsed = false) {
+    if (!root?.dataset.aquiferId) return;
+    state.wizardCollapsed[root.dataset.aquiferId] = collapsed;
+    const form = root.querySelector("#analysisFilters");
+    form?.classList.toggle("is-collapsed", collapsed);
+    const toggle = root.querySelector("#wizardCollapseToggle");
+    if (toggle) {
+      toggle.textContent = collapsed ? "باز کردن ویزارد" : "جمع کردن ویزارد";
+    }
+    root.querySelector("#wizardCollapsedSummary")?.classList.toggle("hidden", !collapsed);
+    root.querySelector("#wizardQuickEditActions")?.classList.toggle("hidden", !collapsed);
+  }
+
+  function wizardRequirements(root = activeDashboardRoot(), data = state.currentData) {
+    const selectedCount = selectedManualWellIds().length;
+    const comparisonEnabled = Boolean(root?.querySelector("#comparisonTrendEnabled")?.checked);
+    const storage = Number(root?.querySelector("#storageCoefficient")?.value);
+    const comparisonStartYear = Number(root?.querySelector("#comparisonStartYear")?.value);
+    const comparisonStartMonth = Number(root?.querySelector("#comparisonStartMonth")?.value);
+    const comparisonEndYear = Number(root?.querySelector("#comparisonEndYear")?.value);
+    const comparisonEndMonth = Number(root?.querySelector("#comparisonEndMonth")?.value);
+    const range = currentManualRange(root, data);
+    const comparisonComplete = !comparisonEnabled || (
+      comparisonStartYear
+      && comparisonStartMonth
+      && comparisonEndYear
+      && comparisonEndMonth
+    );
+    return [
+      {
+        label: "بازه تحلیل مشخص شده",
+        ready: Boolean(range)
+      },
+      {
+        label: "حداقل یک پیزومتر انتخاب شده",
+        ready: selectedCount > 0
+      },
+      {
+        label: "ضریب ذخیره معتبر است",
+        ready: Number.isFinite(storage) && storage > 0
+      },
+      {
+        label: comparisonEnabled ? "بازه مقایسه کامل شده" : "مقایسه شیب غیرفعال است",
+        ready: comparisonComplete
+      }
+    ];
+  }
+
+  function setDashboardResultsVisibility(root = activeDashboardRoot()) {
+    if (!root) return;
+    const stage = dashboardStageState(root);
+    const results = root.querySelector("#dashboardResults");
+    const pending = root.querySelector("#wizardPendingState");
+    const shouldShowResults = stage.applied && !stage.dirty;
+    results?.classList.toggle("hidden", !shouldShowResults);
+    pending?.classList.toggle("hidden", shouldShowResults);
+    updateWizardStageUI(root);
+  }
+
+  function renderWizardPendingState(root = activeDashboardRoot(), data = state.currentData) {
+    if (!root || !data) return;
+    const checklist = root.querySelector("#wizardPendingChecklist");
+    const message = root.querySelector("#wizardPendingMessage");
+    const requirements = wizardRequirements(root, data);
+    const readyCount = requirements.filter(item => item.ready).length;
+    if (message) {
+      message.textContent = readyCount === requirements.length
+        ? "سناریو آماده اجرا است. برای ساخت خروجی‌ها دکمه «به‌روزرسانی تحلیل» را بزنید."
+        : "برای نمایش خروجی‌ها، آیتم‌های زیر را کامل کنید و سپس تحلیل را اجرا کنید.";
+    }
+    if (checklist) {
+      checklist.innerHTML = requirements.map(item => `
+        <div class="wizard-pending-item${item.ready ? " is-ready" : ""}">
+          ${item.ready ? "آماده" : "در انتظار"} · ${escapeHtml(item.label)}
+        </div>
+      `).join("");
+    }
+  }
+
+  function updateWizardStageUI(root = activeDashboardRoot()) {
+    if (!root) return;
+    const stage = dashboardStageState(root);
+    const stageLabel = root.querySelector("#wizardStageLabel");
+    const heroNote = root.querySelector("#wizardHeroNote");
+    const heroSelection = root.querySelector("#wizardHeroSelection");
+    const heroPeriod = root.querySelector("#wizardHeroPeriod");
+    const progressBar = root.querySelector("#wizardProgressBar");
+    const progressLabel = root.querySelector("#wizardProgressLabel");
+    const applyButton = root.querySelector("#applyAnalysisFilters");
+    const collapsedSummary = root.querySelector("#wizardCollapsedSummary");
+    const quickEditActions = root.querySelector("#wizardQuickEditActions");
+    const stepCount = wizardStepCount(root) || 1;
+    const stepShare = ((state.wizardStep + 1) / stepCount) * 70;
+    const requirements = wizardRequirements(root, state.currentData);
+    const allReady = requirements.every(item => item.ready);
+    const readinessShare = (requirements.filter(item => item.ready).length / requirements.length) * 30;
+    if (progressBar) {
+      progressBar.style.width = `${Math.max(12, Math.min(100, stepShare + readinessShare))}%`;
+    }
+    if (stageLabel) {
+      stageLabel.textContent = stage.applied && !stage.dirty ? "تحلیل اجرا شده" : stage.dirty ? "نیازمند به‌روزرسانی" : "در حال تنظیم سناریو";
+    }
+    if (heroNote) {
+      heroNote.textContent = stage.applied && !stage.dirty
+        ? "خروجی‌ها بر اساس آخرین تنظیمات همین ویزارد ساخته شده‌اند."
+        : stage.dirty
+          ? "تنظیمات تغییر کرده‌اند؛ برای دیدن خروجی تازه، تحلیل را دوباره اجرا کنید."
+          : "تا وقتی تصمیم‌ها نهایی نشوند، خروجی تحلیلی نمایش داده نمی‌شود.";
+    }
+    if (heroSelection) {
+      heroSelection.textContent = `${faNumber.format(selectedManualWellIds().length)} پیزومتر`;
+    }
+    if (heroPeriod) {
+      const startYear = root.querySelector("#startYear")?.value;
+      const startMonth = Number(root.querySelector("#startMonth")?.value || 0);
+      const endYear = root.querySelector("#endYear")?.value;
+      const endMonth = Number(root.querySelector("#endMonth")?.value || 0);
+      heroPeriod.textContent = startYear && startMonth && endYear && endMonth
+        ? `${monthNames[startMonth - 1]} ${startYear} تا ${monthNames[endMonth - 1]} ${endYear}`
+        : "—";
+    }
+    if (progressLabel) {
+      progressLabel.textContent = stage.applied && !stage.dirty
+        ? `تحلیل اجرا شده · مرحله ${faNumber.format(state.wizardStep + 1)} از ${faNumber.format(stepCount)}`
+        : `مرحله ${faNumber.format(state.wizardStep + 1)} از ${faNumber.format(stepCount)}`;
+    }
+    if (collapsedSummary) {
+      const methods = selectedSurfaceMethodsFromForm(root)
+        .map(method => surfaceMethodLabel(state.currentData, method, true))
+        .join(" + ");
+      const correctedSupport = correctedSupportLabels[root.querySelector("#correctedSupportMethod")?.value || "fixed_thiessen"];
+      const storageValue = root.querySelector("#storageCoefficient")?.value || "—";
+      collapsedSummary.textContent = `${faNumber.format(selectedManualWellIds(root).length)} پیزومتر | ${methods || "IDW"} | ${correctedSupport} | Sy=${storageValue}`;
+      collapsedSummary.classList.toggle("hidden", !wizardCollapsedState(root));
+    }
+    if (quickEditActions) {
+      quickEditActions.innerHTML = [
+        [0, "ویرایش پیزومترها"],
+        [1, "وضعیت شبکه"],
+        [2, "روش‌ها"],
+        [3, "ذخیره"]
+      ].map(([step, label]) => `
+        <button type="button" class="wizard-quick-edit-button" data-quick-edit-step="${step}">${escapeHtml(label)}</button>
+      `).join("");
+      quickEditActions.classList.toggle("hidden", !wizardCollapsedState(root));
+      quickEditActions.querySelectorAll("[data-quick-edit-step]").forEach(button => {
+        button.onclick = () => openWizardEditor(root, Number(button.dataset.quickEditStep));
+      });
+    }
+    if (applyButton && applyButton.dataset.loading !== "true") {
+      applyButton.disabled = !allReady;
+    }
+    renderWizardPendingState(root, state.currentData);
+  }
+
+  function markWizardDirty(root = activeDashboardRoot()) {
+    const stage = dashboardStageState(root);
+    if (stage.applied) {
+      stage.dirty = true;
+    }
+    setDashboardResultsVisibility(root);
+  }
+
+  function wizardPolicyText(root, data) {
+    return "مجموعه محاسباتی مستقیماً با پیزومترهای منتخب شما بسته می‌شود؛ خروجی خام و جریان اصلاحی روی همان شبکه انتخابی اجرا می‌شوند.";
+  }
+
+  function syncWizardSummaries(root, data = state.currentData) {
+    if (!root || !data) return;
+    const startYear = root.querySelector("#startYear")?.value;
+    const startMonth = Number(root.querySelector("#startMonth")?.value || 0);
+    const endYear = root.querySelector("#endYear")?.value;
+    const endMonth = Number(root.querySelector("#endMonth")?.value || 0);
+    const startLabel = startYear && startMonth ? `${monthNames[startMonth - 1]} ${startYear}` : "—";
+    const endLabel = endYear && endMonth ? `${monthNames[endMonth - 1]} ${endYear}` : "—";
+    const selectedCount = selectedManualWellIds().length;
+    const step0 = `${faNumber.format(selectedCount)} پیزومتر منتخب · ${startLabel} تا ${endLabel}`;
+    const policyChip = root.querySelector("#wizardPolicyChip");
+    const policySummary = root.querySelector("#wizardPolicySummary");
+    const step1 = "شبکه انتخابی با policy اصلاحی";
+    const methods = selectedSurfaceMethodsFromForm(root)
+      .map(method => surfaceMethodLabel(data, method, true))
+      .join("، ");
+    const correctedSupport = correctedSupportLabels[root.querySelector("#correctedSupportMethod")?.value || "fixed_thiessen"];
+    const comparisonEnabled = root.querySelector("#comparisonTrendEnabled")?.checked;
+    const step2 = `${methods || "IDW"} · ${correctedSupport}${comparisonEnabled ? " · با مقایسه شیب" : ""}`;
+    const storageValue = root.querySelector("#storageCoefficient")?.value || "—";
+    const step3 = `Sy/S = ${faNumber.format(Number(storageValue) || 0)}`;
+    ["wizardSummary0", "wizardSummary1", "wizardSummary2", "wizardSummary3"].forEach((id, index) => {
+      const element = root.querySelector(`#${id}`);
+      if (!element) return;
+      element.textContent = [step0, step1, step2, step3][index];
+    });
+    if (policyChip) {
+      policyChip.textContent = "مسیر محاسبات: انتخاب پیزومتر";
+    }
+    if (policySummary) {
+      policySummary.textContent = wizardPolicyText(root, data);
+    }
+    const storageSummary = root.querySelector("#wizardStorageSummary");
+    if (storageSummary) {
+      const area = data.storage?.area_km2 == null ? "نامشخص" : `${formatNumber(data.storage.area_km2, " km²")}`;
+      storageSummary.textContent = `مساحت مبنا: ${area} · این ضریب روی افت سالانه روش‌های خام و اصلاحی اعمال می‌شود.`;
+    }
+    updateWizardStageUI(root);
+  }
+
+  function renderFilterControls(data, root = activeDashboardRoot()) {
     state.currentData = data;
+    if (root?.dataset.aquiferId) {
+      state.manualWellSelections[root.dataset.aquiferId] = new Set(
+        data.filters.manual_selection ? (data.filters.selected_well_ids || []) : []
+      );
+    }
     const years = Array.from(
       { length: data.filters.maximum_year - data.filters.minimum_year + 1 },
       (_, index) => data.filters.minimum_year + index
@@ -3060,7 +3649,8 @@
     renderMonthOptions("end", data.filters.end_month);
     renderMonthOptions("comparisonStart", data.filters.comparison_start_month);
     renderMonthOptions("comparisonEnd", data.filters.comparison_end_month);
-    document.getElementById("continuousOnly").checked = data.filters.continuous_only;
+    const continuousOnlyInput = document.getElementById("continuousOnly");
+    if (continuousOnlyInput) continuousOnlyInput.checked = false;
     const storageInput = document.getElementById("storageCoefficient");
     if (storageInput && data.filters.storage_coefficient != null) {
       storageInput.value = String(data.filters.storage_coefficient);
@@ -3085,11 +3675,21 @@
     if (correctedSupportSelect) {
       correctedSupportSelect.value = correctedSupportMethod(data);
       const hint = document.getElementById("correctedSupportHint");
+      const chips = Array.from(document.querySelectorAll(".support-method-chip"));
       const updateHint = () => {
         if (hint) {
           hint.textContent = correctedSupportHints[correctedSupportSelect.value] || "";
         }
+        chips.forEach(chip => {
+          chip.classList.toggle("is-active", chip.dataset.supportValue === correctedSupportSelect.value);
+        });
       };
+      chips.forEach(chip => {
+        chip.onclick = () => {
+          correctedSupportSelect.value = chip.dataset.supportValue || "fixed_thiessen";
+          correctedSupportSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+      });
       correctedSupportSelect.onchange = updateHint;
       updateHint();
     }
@@ -3101,6 +3701,7 @@
         .join("");
       spatialSurfaceMethod.value = primarySurfaceMethod(data);
     }
+    renderSpatialMethodChips(data);
     const annualSurfaceMethod = document.getElementById("annualSurfaceMethod");
     if (annualSurfaceMethod) {
       const methods = annualDeclineMethods(data);
@@ -3130,7 +3731,11 @@
     document.getElementById("comparisonTrendEnabled").checked =
       Boolean(data.filters.comparison_enabled);
     syncComparisonTrendUI();
-    renderManualWellSelector(data);
+    renderManualWellSelector(data, root);
+    syncWizardSummaries(root, data);
+    setWizardStep(root, state.wizardStep);
+    setWizardCollapsed(root, wizardCollapsedState(root));
+    setDashboardResultsVisibility(root);
   }
 
   function syncComparisonTrendUI() {
@@ -3153,21 +3758,193 @@
     return surfaceMethodOrder.filter(method => methods.includes(method));
   }
 
-  function selectedManualWellIds() {
-    return Array.from(
-      document.querySelectorAll('#manualWellList input[type="checkbox"]:checked')
-    ).map(input => input.value);
+  function selectedManualWellIds(root = activeDashboardRoot()) {
+    const aquiferId = root?.dataset.aquiferId;
+    const stateSelection = aquiferId
+      ? Array.from(state.manualWellSelections[aquiferId] || [])
+      : [];
+    const domSelection = root
+      ? Array.from(
+          root.querySelectorAll('#manualWellList input[type="checkbox"]:checked')
+        ).map(input => input.value)
+      : [];
+    return domSelection.length ? domSelection : stateSelection;
+  }
+
+  function currentManualRange(root = activeDashboardRoot(), data = state.currentData) {
+    if (!root || !data) return null;
+    const startYear = Number(root.querySelector("#startYear")?.value);
+    const startMonth = Number(root.querySelector("#startMonth")?.value);
+    const endYear = Number(root.querySelector("#endYear")?.value);
+    const endMonth = Number(root.querySelector("#endMonth")?.value);
+    if (!startYear || !startMonth || !endYear || !endMonth) return null;
+    const monthsPerYear = data.calendar?.months_per_year || monthNames.length;
+    const startIndex = startYear * monthsPerYear + startMonth;
+    const endIndex = endYear * monthsPerYear + endMonth;
+    if (startIndex > endIndex) return null;
+    return { startIndex, endIndex };
+  }
+
+  function visibleTimelineMonths(root = activeDashboardRoot(), data = state.currentData) {
+    const range = currentManualRange(root, data);
+    const timeline = Array.isArray(data?.calendar?.timeline_months) ? data.calendar.timeline_months : [];
+    if (!range) return [];
+    return timeline
+      .filter(item => item.index >= range.startIndex && item.index <= range.endIndex)
+      .map(item => {
+        const year = Math.floor((item.index - 1) / monthNames.length);
+        const month = ((item.index - 1) % monthNames.length) + 1;
+        return {
+          ...item,
+          year,
+          month,
+          monthName: monthNames[month - 1]
+        };
+      });
+  }
+
+  function timelineCellSize(length) {
+    if (length <= 18) return 22;
+    if (length <= 36) return 14;
+    if (length <= 72) return 10;
+    if (length <= 144) return 6;
+    return 4;
+  }
+
+  function shouldShowQuarterLabels(length) {
+    return length <= 48;
+  }
+
+  function quarterMarkerMonth(month) {
+    return month === 1 || month === 4 || month === 7 || month === 10;
+  }
+
+  function renderTimelineAxis(months) {
+    const axis = document.getElementById("manualWellTimelineAxis");
+    if (!axis) return;
+    if (!months.length) {
+      axis.innerHTML = "";
+      return;
+    }
+    const cellSize = timelineCellSize(months.length);
+    const groups = [];
+    months.forEach(month => {
+      const last = groups[groups.length - 1];
+      if (last && last.year === month.year) {
+        last.count += 1;
+        last.endLabel = month.label;
+      } else {
+        groups.push({
+          year: month.year,
+          count: 1,
+          startLabel: month.label,
+          endLabel: month.label
+        });
+      }
+    });
+    axis.innerHTML = `
+      <div class="well-coverage-axis-shell" style="--coverage-months: ${months.length}; --coverage-cell-size: ${cellSize}px">
+        <div class="well-coverage-year-band">
+          ${groups.map(group => `
+            <span class="well-coverage-year-chip" style="grid-column: span ${group.count}">
+              <b>${escapeHtml(String(group.year))}</b>
+            </span>
+          `).join("")}
+        </div>
+        <div class="well-coverage-axis">
+          ${months.map(month => `
+            <span class="well-coverage-axis-cell${month.month === 7 ? " water-year-start" : ""}">
+              ${shouldShowQuarterLabels(months.length) && quarterMarkerMonth(month.month) ? `<span>${escapeHtml(month.monthName)}</span>` : ""}
+            </span>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function timelineScrollContainers(root = activeDashboardRoot()) {
+    if (!root) return [];
+    return [
+      ...root.querySelectorAll(".manual-well-timeline-wrap"),
+      root.querySelector("#manualWellTimelineAxis")
+    ].filter(Boolean);
+  }
+
+  function syncTimelineScroll(source, root = activeDashboardRoot()) {
+    if (state.timelineSyncLock) return;
+    state.timelineSyncLock = true;
+    const left = source.scrollLeft;
+    timelineScrollContainers(root).forEach(element => {
+      if (element !== source) {
+        element.scrollLeft = left;
+      }
+    });
+    window.requestAnimationFrame(() => {
+      state.timelineSyncLock = false;
+    });
+  }
+
+  function bindTimelineScrollSync(root = activeDashboardRoot()) {
+    timelineScrollContainers(root).forEach(element => {
+      if (element.dataset.timelineSyncBound === "true") return;
+      element.dataset.timelineSyncBound = "true";
+      element.addEventListener("scroll", () => syncTimelineScroll(element, root), { passive: true });
+    });
+  }
+
+  function wellCoverage(well, months) {
+    const available = new Set(well.available_month_indexes || []);
+    const observed = months.filter(month => available.has(month.index)).length;
+    const total = months.length;
+    return {
+      observed,
+      total,
+      complete: total > 0 && observed === total
+    };
+  }
+
+  function renderCoverageCells(well, months) {
+    const available = new Set(well.available_month_indexes || []);
+    return months.map(month => {
+      const hasData = available.has(month.index);
+      return `
+        <span class="well-coverage-cell ${hasData ? "has-data" : "no-data"}${month.month === 7 ? " water-year-start" : ""}" title="${escapeHtml(`${month.monthName} ${month.year}`)}"></span>
+      `;
+    }).join("");
+  }
+
+  function ensureManualSelectionState(data, root = activeDashboardRoot()) {
+    const aquiferId = root?.dataset.aquiferId;
+    if (!aquiferId) return new Set();
+    if (!state.manualWellSelections[aquiferId]) {
+      state.manualWellSelections[aquiferId] = new Set(data.filters.selected_well_ids || []);
+    }
+    return state.manualWellSelections[aquiferId];
+  }
+
+  function toggleManualSelection(wellId, checked, root = activeDashboardRoot()) {
+    const aquiferId = root?.dataset.aquiferId;
+    if (!aquiferId) return;
+    const selected = ensureManualSelectionState(state.currentData, root);
+    if (checked) selected.add(wellId);
+    else selected.delete(wellId);
   }
 
   function updateManualWellCount() {
     const count = selectedManualWellIds().length;
-    const eligible = document.querySelectorAll(
-      '#manualWellList input[type="checkbox"]:not(:disabled)'
-    ).length;
+    const eligible = document.querySelectorAll('#manualWellList .manual-well-option[data-has-range-data="true"]').length;
+    const complete = document.querySelectorAll('#manualWellList .manual-well-option[data-complete="true"]').length;
     const label = document.getElementById("manualWellCount");
     if (label) {
-      label.textContent = `${faNumber.format(count)} چاه انتخاب‌شده از ${faNumber.format(eligible)} چاه دارای داده در بازه`;
+      label.textContent = `${faNumber.format(count)} پیزومتر انتخاب‌شده · ${faNumber.format(eligible)} دارای داده در بازه · ${faNumber.format(complete)} کامل در بازه`;
     }
+    const selectedMetric = document.getElementById("manualSelectedMetric");
+    const eligibleMetric = document.getElementById("manualEligibleMetric");
+    const completeMetric = document.getElementById("manualCompleteMetric");
+    if (selectedMetric) selectedMetric.textContent = faNumber.format(count);
+    if (eligibleMetric) eligibleMetric.textContent = faNumber.format(eligible);
+    if (completeMetric) completeMetric.textContent = faNumber.format(complete);
+    syncWizardSummaries(activeDashboardRoot());
   }
 
   function syncManualSelectionUI() {
@@ -3175,41 +3952,65 @@
     const panel = document.getElementById("manualWellPanel");
     const continuousOnly = document.getElementById("continuousOnly");
     if (!toggle || !panel || !continuousOnly) return;
-    panel.classList.toggle("hidden", !toggle.checked);
-    continuousOnly.disabled = toggle.checked;
-    continuousOnly.closest("label")?.classList.toggle("opacity-50", toggle.checked);
+    toggle.checked = true;
+    panel.classList.remove("hidden");
+    continuousOnly.checked = false;
+    continuousOnly.disabled = true;
     updateManualWellCount();
   }
 
-  function renderManualWellSelector(data) {
+  function renderManualWellSelector(data, root = activeDashboardRoot()) {
     const toggle = document.getElementById("manualWellSelection");
-    const list = document.getElementById("manualWellList");
-    const search = document.getElementById("manualWellSearch");
+    const list = root?.querySelector("#manualWellList");
+    const search = root?.querySelector("#manualWellSearch");
     if (!toggle || !list || !search) return;
 
-    toggle.checked = Boolean(data.filters.manual_selection);
+    toggle.checked = true;
+    const selected = ensureManualSelectionState(data, root);
+    const months = visibleTimelineMonths(root, data);
+    renderTimelineAxis(months);
     list.innerHTML = data.wells.map(well => {
       const suffix = well.name_suffix > 1 ? ` (${faNumber.format(well.name_suffix)})` : "";
-      const disabled = !well.has_range_data;
+      const coverage = wellCoverage(well, months);
+      const checked = selected.has(well.id) || Boolean(well.selected);
+      const badgeClass = coverage.complete ? "is-complete" : "is-partial";
+      const badgeText = coverage.complete ? "کامل در بازه" : "ناقص در بازه";
+      const coverageStyle = `--coverage-months: ${Math.max(coverage.total, 1)}; --coverage-cell-size: ${timelineCellSize(Math.max(coverage.total, 1))}px`;
       return `
-        <label class="manual-well-option${disabled ? " is-disabled" : ""}" data-well-name="${escapeHtml(well.name.toLocaleLowerCase("fa-IR"))}">
-          <input
-            type="checkbox"
-            value="${escapeHtml(well.id)}"
-            ${well.included ? "checked" : ""}
-            ${disabled ? "disabled" : ""}
-          >
-          <span>
-            <strong class="block font-medium">${escapeHtml(well.name)}${suffix}</strong>
-            <small class="mt-1 block text-[9px] text-slate-400">
-              ${disabled ? "فاقد داده در بازه" : well.included ? "داخل محاسبات فعلی" : "قابل انتخاب"}
-            </small>
+        <label class="manual-well-option" data-complete="${coverage.complete ? "true" : "false"}" data-has-range-data="${well.has_range_data ? "true" : "false"}" data-well-name="${escapeHtml(well.name.toLocaleLowerCase("fa-IR"))}">
+          <span class="manual-well-option-main">
+            <input
+              type="checkbox"
+              value="${escapeHtml(well.id)}"
+              ${checked ? "checked" : ""}
+            >
+            <span class="manual-well-option-copy">
+              <strong>${escapeHtml(well.name)}${suffix}</strong>
+              <small class="mt-1 block text-[9px] text-slate-400">
+                ${well.has_range_data ? (checked ? "داخل انتخاب فعلی" : "قابل انتخاب") : "در این بازه داده‌ای ندارد ولی قابل انتخاب است"}
+              </small>
+              <span class="manual-well-badges">
+                <span class="manual-well-badge ${badgeClass}">${badgeText}</span>
+                <span class="manual-well-badge">${faNumber.format(coverage.observed)} از ${faNumber.format(coverage.total)} ماه</span>
+                ${!well.has_range_data ? '<span class="manual-well-empty-note">بدون داده در بازه</span>' : ""}
+              </span>
+            </span>
+          </span>
+          <span class="manual-well-timeline-wrap">
+            <span class="well-coverage-strip" style="${coverageStyle}">
+              ${renderCoverageCells(well, months)}
+            </span>
           </span>
         </label>
       `;
     }).join("");
 
-    list.onchange = updateManualWellCount;
+    list.onchange = event => {
+      const input = event.target.closest('input[type="checkbox"]');
+      if (!input) return;
+      toggleManualSelection(input.value, input.checked, root);
+      updateManualWellCount();
+    };
     toggle.onchange = syncManualSelectionUI;
     search.value = "";
     search.oninput = () => {
@@ -3219,17 +4020,28 @@
       });
     };
     document.getElementById("selectAllEligibleWells").onclick = () => {
-      list.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(input => {
+      list.querySelectorAll('input[type="checkbox"]').forEach(input => {
         input.checked = true;
+        toggleManualSelection(input.value, true, root);
+      });
+      updateManualWellCount();
+    };
+    document.getElementById("selectCompleteRangeWells").onclick = () => {
+      list.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        const option = input.closest(".manual-well-option");
+        input.checked = option?.dataset.complete === "true";
+        toggleManualSelection(input.value, input.checked, root);
       });
       updateManualWellCount();
     };
     document.getElementById("clearSelectedWells").onclick = () => {
       list.querySelectorAll('input[type="checkbox"]').forEach(input => {
         input.checked = false;
+        toggleManualSelection(input.value, false, root);
       });
       updateManualWellCount();
     };
+    bindTimelineScrollSync(root);
     syncManualSelectionUI();
   }
 
@@ -3252,6 +4064,12 @@
       side.toLowerCase().endsWith("end") ? last : first
     );
     monthSelect.value = String(Math.min(Math.max(preferred || first, first), last));
+  }
+
+  function refreshManualWellPreview(root = activeDashboardRoot()) {
+    if (!state.currentData || !root) return;
+    renderManualWellSelector(state.currentData, root);
+    syncWizardSummaries(root, state.currentData);
   }
 
   function renderStats(data) {
@@ -4991,7 +5809,7 @@
 
   function renderDashboardData(data, activeTab = "chart") {
     disposeVisuals();
-    renderFilterControls(data);
+    renderFilterControls(data, activeDashboardRoot());
     resetAquiferChat(data);
     renderStats(data);
     resetAiAnalysisCard();
@@ -5080,6 +5898,7 @@
     const button = root.querySelector("#applyAnalysisFilters");
     if (button) {
       button.disabled = true;
+      button.dataset.loading = "true";
       button.textContent = "در حال محاسبه...";
     }
     try {
@@ -5123,21 +5942,54 @@
       }
       const data = await response.json();
       if (token !== state.requestToken) return;
+      const stage = dashboardStageState(root);
+      if (filters) {
+        stage.applied = true;
+        stage.dirty = false;
+        setWizardCollapsed(root, true);
+      } else if (!stage.applied) {
+        stage.applied = false;
+        stage.dirty = false;
+      }
       renderDashboardData(data, activeTab);
+      if (filters) {
+        root.querySelector("#dashboardResults")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }
     } catch (error) {
       console.error("Dashboard rendering failed:", error);
       window.alert(error.message);
     } finally {
       const activeButton = root.querySelector("#applyAnalysisFilters");
       if (activeButton) {
+        delete activeButton.dataset.loading;
         activeButton.disabled = false;
-        activeButton.innerHTML = "<span>به‌روزرسانی تحلیل</span><span aria-hidden=\"true\">←</span>";
+        activeButton.innerHTML = "<span>اجرای تحلیل با این تنظیمات</span><span aria-hidden=\"true\">←</span>";
+        updateWizardStageUI(root);
       }
     }
   }
 
   function initializeDashboard(root) {
     const form = root.querySelector("#analysisFilters");
+    dashboardStageState(root);
+    wizardCollapsedState(root);
+    root.querySelectorAll("[data-wizard-step]").forEach(button => {
+      button.addEventListener("click", () => {
+        setWizardStep(root, Number(button.dataset.wizardStep));
+      });
+    });
+    root.querySelector("#wizardPrevStep")?.addEventListener("click", () => {
+      setWizardStep(root, state.wizardStep - 1);
+    });
+    root.querySelector("#wizardNextStep")?.addEventListener("click", () => {
+      setWizardStep(root, state.wizardStep + 1);
+    });
+    root.querySelector("#wizardCollapseToggle")?.addEventListener("click", () => {
+      setWizardCollapsed(root, !wizardCollapsedState(root));
+    });
     root.querySelector("#methodGuideButton")?.addEventListener("click", openMethodGuideModal);
     root.querySelector("#reportPdfButton")?.addEventListener("click", openPdfReport);
     root.querySelector("#aiOpenModalButton")?.addEventListener("click", openAiModal);
@@ -5153,8 +6005,20 @@
     });
     root.querySelector("#aiProvider")?.addEventListener("change", syncAiModelOptions);
     root.querySelector("#aiModel")?.addEventListener("change", updateAiModelHint);
-    root.querySelector("#startYear").addEventListener("change", () => renderMonthOptions("start"));
-    root.querySelector("#endYear").addEventListener("change", () => renderMonthOptions("end"));
+    root.querySelector("#startYear").addEventListener("change", () => {
+      renderMonthOptions("start");
+      refreshManualWellPreview(root);
+    });
+    root.querySelector("#endYear").addEventListener("change", () => {
+      renderMonthOptions("end");
+      refreshManualWellPreview(root);
+    });
+    root.querySelector("#startMonth").addEventListener("change", () => {
+      refreshManualWellPreview(root);
+    });
+    root.querySelector("#endMonth").addEventListener("change", () => {
+      refreshManualWellPreview(root);
+    });
     root.querySelector("#comparisonStartYear").addEventListener(
       "change",
       () => renderMonthOptions("comparisonStart")
@@ -5165,8 +6029,21 @@
     );
     root.querySelector("#comparisonTrendEnabled").addEventListener(
       "change",
-      syncComparisonTrendUI
+      () => {
+        syncComparisonTrendUI();
+        syncWizardSummaries(root);
+        markWizardDirty(root);
+      }
     );
+    form.addEventListener("change", event => {
+      if (event.target.id === "comparisonTrendEnabled") return;
+      syncWizardSummaries(root);
+      markWizardDirty(root);
+    });
+    form.addEventListener("input", () => {
+      syncWizardSummaries(root);
+      markWizardDirty(root);
+    });
     form.addEventListener("submit", event => {
       event.preventDefault();
       const startYear = Number(root.querySelector("#startYear").value);
@@ -5216,10 +6093,10 @@
         window.alert("بازه مقایسه شیب باید با بازه تحلیل هم‌پوشانی داشته باشد.");
         return;
       }
-      const manualSelection = root.querySelector("#manualWellSelection").checked;
-      const selectedWellIds = manualSelection ? selectedManualWellIds() : [];
-      if (manualSelection && !selectedWellIds.length) {
-        window.alert("برای انتخاب دستی، حداقل یک چاه دارای داده را انتخاب کنید.");
+      const manualSelection = true;
+      const selectedWellIds = selectedManualWellIds();
+      if (!selectedWellIds.length) {
+        window.alert("برای اجرای تحلیل، حداقل یک پیزومتر دارای داده را انتخاب کنید.");
         return;
       }
       loadDashboard(root, {
@@ -5232,7 +6109,7 @@
         comparisonEndYear,
         comparisonEndMonth,
         comparisonEnabled,
-        continuousOnly: root.querySelector("#continuousOnly").checked,
+        continuousOnly: false,
         manualSelection,
         selectedWellIds
       });

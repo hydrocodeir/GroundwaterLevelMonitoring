@@ -106,7 +106,14 @@ class GroundwaterDataTests(unittest.TestCase):
 
     def test_piezometric_surface_supports_multiple_interpolation_methods(self) -> None:
         group_id = next(iter(self.service.groups))
-        for method in ("idw", "ordinary_kriging", "spline"):
+        for method in (
+            "idw",
+            "natural_neighbor",
+            "ordinary_kriging",
+            "universal_kriging",
+            "regression_kriging",
+            "spline",
+        ):
             with self.subTest(method=method):
                 payload = self.service.dashboard(
                     group_id,
@@ -180,6 +187,22 @@ class GroundwaterDataTests(unittest.TestCase):
             payload["corrected_hydrograph"][0]["method"],
             "corrected_idw",
         )
+
+    def test_corrected_support_method_can_select_fixed_median(self) -> None:
+        group_id = next(iter(self.service.groups))
+        payload = self.service.dashboard(
+            group_id,
+            storage_coefficient=0.08,
+            corrected_support_method="fixed_median",
+        )
+
+        self.assertEqual(payload["filters"]["corrected_support_method"], "fixed_median")
+        self.assertEqual(
+            payload["corrected_hydrograph"][0]["method"],
+            "corrected_median",
+        )
+        self.assertIn("corrected_median", payload["corrected"]["hydrographs"])
+        self.assertIn("corrected_median", payload["corrected"]["annual_decline"])
 
     def test_manual_selection_limits_corrected_status_outputs(self) -> None:
         group_id = next(iter(self.service.groups))
