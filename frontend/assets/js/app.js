@@ -1367,6 +1367,82 @@
     return `<span class="trend-chip ${direction} ${variant}"><b>${label}</b><span>${trendText(trend, true)}</span></span>`;
   }
 
+  function isLegendSeriesSelected(selected, name) {
+    return selected?.[name] !== false;
+  }
+
+  function renderAquiferTrendSummary(data, surfacePayloads, selected) {
+    const items = [
+      {
+        label: "حسابی اصلی",
+        seriesName: "میانگین حسابی",
+        trend: data.hydrographs.arithmetic_trend
+      },
+      {
+        label: "تیسن اصلی",
+        seriesName: "میانگین تیسن",
+        trend: data.hydrographs.thiessen_trend
+      },
+      ...(data.filters.comparison_enabled ? [
+        {
+          label: "حسابی مقایسه‌ای",
+          seriesName: "روند حسابی (مقایسه‌ای)",
+          trend: data.hydrographs.arithmetic_comparison_trend,
+          variant: "comparison"
+        },
+        {
+          label: "تیسن مقایسه‌ای",
+          seriesName: "روند تیسن (مقایسه‌ای)",
+          trend: data.hydrographs.thiessen_comparison_trend,
+          variant: "comparison"
+        }
+      ] : []),
+      ...surfacePayloads.flatMap(([method, payload]) => {
+        const label = surfaceMethodLabel(data, method, true);
+        return [
+          {
+            label: `${label} اصلی`,
+            seriesName: label,
+            trend: payload.trend
+          },
+          ...(data.filters.comparison_enabled && payload?.comparison_trend ? [{
+            label: `${label} مقایسه‌ای`,
+            seriesName: `روند ${label} (مقایسه‌ای)`,
+            trend: payload.comparison_trend,
+            variant: "comparison"
+          }] : [])
+        ];
+      }),
+      {
+        label: "اصلاحی حسابی",
+        seriesName: "اصلاح‌شده حسابی",
+        trend: correctedTrend(data, "corrected_arithmetic")
+      },
+      {
+        label: "اصلاحی تیسن",
+        seriesName: "اصلاح‌شده تیسن",
+        trend: correctedTrend(data, "corrected_thiessen")
+      },
+      ...selectedSurfaceMethods(data).map(method => ({
+        label: `اصلاحی ${surfaceMethodLabels[method] || method}`,
+        seriesName: `اصلاح‌شده ${surfaceMethodLabels[method] || method}`,
+        trend: correctedTrend(data, `corrected_${method}`)
+      }))
+    ].filter(item => (
+      isLegendSeriesSelected(selected, item.seriesName)
+      && item.trend?.direction
+      && item.trend.direction !== "insufficient"
+      && item.trend.decline_per_year !== null
+      && item.trend.decline_per_year !== undefined
+    ));
+    const summary = document.getElementById("aquiferTrendSummary");
+    if (!summary) return;
+    summary.innerHTML = items
+      .map(item => trendChip(item.label, item.trend, item.variant || ""))
+      .join("");
+    summary.classList.toggle("hidden", items.length === 0);
+  }
+
   function riskLevelLabel(level) {
     return {
       low: "کم",
@@ -2368,8 +2444,30 @@
       ? `${methodLabel} · ${faNumber.format(currentPoints.length)} چاه · ${faNumber.format(levels.length)} خط · فاصله ${formatNumber(interval, " متر")}`
       : `${methodLabel} · ${faNumber.format(currentPoints.length)} چاه · حداقل ۳ چاه برای درون‌یابی لازم است`;
     document.getElementById("declineMapSummary").textContent = previousYearMonth
-      ? `${methodLabel} · ${faNumber.format(declinePoints.length)} چاه · مرز کلاس‌ها ثابت بر اساس ${faNumber.format(rangeDeclinePoints.length)} مشاهده در کل بازه · دامنه این سال ${formatSignedNumber(minimumDecline)} تا ${formatSignedNumber(maximumDecline)} متر · نسبت به ${persianDate(previousYearMonth)}`
+      ? `${methodLabel} · ${faNumber.format(declinePoints.length)} چاه قابل مقایسه · نسبت به ${persianDate(previousYearMonth)}`
       : "برای این ماه، مقدار ماه مشابه در سال قبل داخل بازه موجود نیست";
+    const spatialStats = document.getElementById("spatialFrameStats");
+    if (spatialStats) {
+      spatialStats.innerHTML = [
+        ["ماه جاری", persianDate(month), "مبنای خطوط تراز"],
+        ["ماه مرجع", previousYearMonth ? persianDate(previousYearMonth) : "ناموجود", "همان ماه در سال قبل"],
+        ["چاه‌های تراز", faNumber.format(currentPoints.length), currentPoints.length >= 3 ? "آماده درون‌یابی" : "کمتر از حداقل لازم"],
+        ["چاه‌های مقایسه", faNumber.format(declinePoints.length), previousYearMonth ? "دارای داده دو سال" : "بدون مرجع سال قبل"],
+        [
+          "دامنه تغییر",
+          declineValues.length
+            ? `${formatSignedNumber(minimumDecline, " متر")} تا ${formatSignedNumber(maximumDecline, " متر")}`
+            : "—",
+          `${faNumber.format(rangeDeclinePoints.length)} مشاهده برای کلاس‌بندی`
+        ]
+      ].map(([label, value, note]) => `
+        <article class="spatial-stat">
+          <span>${label}</span>
+          <b dir="auto">${value}</b>
+          <small>${note}</small>
+        </article>
+      `).join("");
+    }
     document.getElementById("declineClassLegend").innerHTML = declinePieces.map(piece => `
       <span class="inline-flex items-center gap-1.5 rounded-md bg-white/90 px-2 py-1 text-slate-600 shadow-sm ring-1 ring-slate-100">
         <i class="h-2.5 w-2.5 rounded-sm" style="background:${piece.color}"></i>
@@ -3341,13 +3439,16 @@
     mapElement.style.height = "";
     window.requestAnimationFrame(() => {
       if (window.innerWidth >= 1280) {
+        const mapChromeHeight = Array.from(mapPanel.children)
+          .filter(element => element !== mapElement)
+          .reduce((sum, element) => sum + element.getBoundingClientRect().height, 0);
         const panelHeight = Math.max(
           mapPanel.getBoundingClientRect().height,
           analysisPanel.getBoundingClientRect().height
         );
         const mapHeight = Math.max(
           460,
-          panelHeight - mapHeading.getBoundingClientRect().height
+          panelHeight - mapChromeHeight
         );
         mapElement.style.height = `${mapHeight}px`;
       }
@@ -3411,10 +3512,19 @@
       }
     };
     option.legend = {
-      top: 4,
-      right: 0,
-      textStyle: { fontFamily: "Vazirmatn", fontSize: 11 },
-      itemWidth: 18,
+      type: "scroll",
+      orient: "horizontal",
+      top: 8,
+      left: 24,
+      right: 24,
+      height: 54,
+      pageButtonPosition: "end",
+      pageIconColor: "#087E8B",
+      pageIconInactiveColor: "#CBD5E1",
+      pageTextStyle: { color: "#64748B", fontFamily: "Vazirmatn", fontSize: 10 },
+      textStyle: { fontFamily: "Vazirmatn", fontSize: 10, color: "#64748B" },
+      itemWidth: 14,
+      itemHeight: 8,
       selected: {
         "میانگین حسابی": false,
         "روند حسابی (بازه اصلی)": false,
@@ -3429,7 +3539,7 @@
         "بارش ماهانه": false
       }
     };
-    option.grid.top = 112;
+    option.grid.top = 86;
     option.series = [
       precipitationBarSeries(data.precipitation),
       ...correctedStatusAreaSeries(data),
@@ -3510,24 +3620,10 @@
     ];
     chart.setOption(option);
     state.charts.push(chart);
-    document.getElementById("aquiferTrendSummary").innerHTML = [
-      trendChip("حسابی اصلی", data.hydrographs.arithmetic_trend),
-      trendChip("تیسن اصلی", data.hydrographs.thiessen_trend),
-      ...surfacePayloads.slice(0, 1).map(([method, payload]) => (
-        trendChip(`${surfaceMethodLabel(data, method, true)} اصلی`, payload.trend)
-      )),
-      trendChip(
-        `اصلاحی ${correctedPrimaryLabel(data, true)}`,
-        correctedTrend(data, correctedPrimarySeriesKey(data))
-      ),
-      ...(comparisonEnabled ? [
-        trendChip(
-          "اصلاحی مقایسه‌ای",
-          correctedComparisonTrend(data, correctedPrimarySeriesKey(data)),
-          "comparison"
-        )
-      ] : [])
-    ].join("");
+    renderAquiferTrendSummary(data, surfacePayloads, option.legend.selected);
+    chart.on("legendselectchanged", parameters => {
+      renderAquiferTrendSummary(data, surfacePayloads, parameters.selected || option.legend.selected);
+    });
     const stationNames = data.precipitation.stations
       .map(station => station.name)
       .join("، ");

@@ -172,52 +172,50 @@
     </details>
   </form>
 
-  <section id="statsGrid" class="dashboard-stats-shell"></section>
+  <section id="statsGrid" class="dashboard-stats-shell" aria-label="خلاصه وضعیت آبخوان"></section>
 
   <section class="grid gap-4 xl:grid-cols-12">
     <article class="panel overflow-hidden xl:col-span-5" data-aquifer-map-panel>
-      <div class="section-heading section-heading--stacked" data-aquifer-map-heading>
-        <div>
+      <div class="map-panel-header" data-aquifer-map-heading>
+        <div class="section-heading-copy">
           <span class="section-kicker">نمای مکانی</span>
           <h3 class="section-title">شبکه پایش و پهنه‌های تیسن</h3>
           <p class="section-description">مرزها، وضعیت ورود چاه‌ها به محاسبات و وزن مکانی ایستگاه‌ها</p>
         </div>
-        <div class="map-panel-toolbar">
-          <div class="map-panel-legend">
-            <span class="legend-item"><i class="bg-teal"></i> داخل محاسبات</span>
-            <span class="legend-item"><i class="bg-amber-400"></i> خارج از محاسبات</span>
-            <span class="legend-item"><i class="bg-coral"></i> فاقد داده</span>
-            <span class="legend-item"><b class="text-base leading-none text-coral">×</b> بازنشسته</span>
-            <span class="legend-item"><b class="text-base leading-none text-teal">+</b> چاه جدید</span>
-            <span class="legend-item"><b class="text-base leading-none text-violet-700">×</b> ایستگاه بارش منتخب</span>
-          </div>
-          <div class="map-filter-row" aria-label="فیلتر نمایش چاه‌ها روی نقشه">
-            <label class="map-filter-toggle">
-              <input id="showExcludedWells" type="checkbox" checked>
-              <span>نمایش خارج از محاسبات</span>
-            </label>
-            <label class="map-filter-toggle">
-              <input id="showNoDataWells" type="checkbox" checked>
-              <span>نمایش فاقد داده</span>
-            </label>
-            <label class="map-filter-toggle">
-              <input id="showPrecipitationStations" type="checkbox" checked>
-              <span>نمایش ایستگاه‌های بارش</span>
-            </label>
-          </div>
+        <div class="map-filter-row" aria-label="فیلتر نمایش چاه‌ها روی نقشه">
+          <label class="map-filter-toggle">
+            <input id="showExcludedWells" type="checkbox" checked>
+            <span>خارج از محاسبات</span>
+          </label>
+          <label class="map-filter-toggle">
+            <input id="showNoDataWells" type="checkbox" checked>
+            <span>فاقد داده</span>
+          </label>
+          <label class="map-filter-toggle">
+            <input id="showPrecipitationStations" type="checkbox" checked>
+            <span>ایستگاه بارش</span>
+          </label>
         </div>
+      </div>
+      <div class="map-panel-legend">
+        <span class="legend-item"><i class="bg-teal"></i> داخل</span>
+        <span class="legend-item"><i class="bg-amber-400"></i> خارج</span>
+        <span class="legend-item"><i class="bg-coral"></i> بی‌داده</span>
+        <span class="legend-item"><b class="legend-symbol text-coral">×</b> بازنشسته</span>
+        <span class="legend-item"><b class="legend-symbol text-teal">+</b> جدید</span>
+        <span class="legend-item"><b class="legend-symbol text-violet-700">×</b> بارش</span>
       </div>
       <div id="map" class="h-[460px] w-full"></div>
     </article>
 
     <article class="panel overflow-hidden xl:col-span-7" data-aquifer-analysis-panel>
-      <div class="section-heading section-heading--analysis">
-        <div class="analysis-heading-copy">
-          <span class="section-kicker">تحلیل آبخوان</span>
-          <h3 class="section-title">هیدروگراف معرف و افت سالانه</h3>
-          <p class="section-description">مقایسه روش‌های خام/مرسوم و هیدروگراف‌های اصلاح‌شده با پشتیبان ثابت</p>
-        </div>
-        <div class="analysis-heading-tools">
+      <div class="analysis-panel-header">
+        <div class="analysis-panel-topbar">
+          <div class="section-heading-copy">
+            <span class="section-kicker">تحلیل آبخوان</span>
+            <h3 class="section-title">هیدروگراف معرف و افت سالانه</h3>
+            <p class="section-description">مقایسه روش‌های خام/مرسوم و هیدروگراف‌های اصلاح‌شده با پشتیبان ثابت</p>
+          </div>
           <div class="analysis-heading-actions">
             <button id="reportPdfButton" type="button" class="secondary-button h-11 px-4 text-xs">
               گزارش PDF
@@ -226,6 +224,8 @@
               <span>تحلیل با AI</span>
             </button>
           </div>
+        </div>
+        <div class="analysis-panel-controls">
           <label class="analysis-view-select">
             <span>نمای کارت</span>
             <select id="aquiferViewSelect" class="field h-10 w-44 text-xs">
@@ -328,53 +328,58 @@
     </article>
   </section>
 
-  <section class="panel overflow-hidden">
-    <div class="section-heading">
-      <div>
+  <section class="panel spatial-panel overflow-hidden">
+    <div class="spatial-panel-header">
+      <div class="section-heading-copy">
         <span class="section-kicker">پویایی مکانی سال‌به‌سال</span>
         <h3 class="section-title">خطوط تراز و پهنه تغییرات افت</h3>
         <p class="section-description">مقایسه تراز ماه منتخب با همان ماه در سال قبل؛ ماه پیش‌فرض مهر است.</p>
       </div>
-      <div class="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[17rem_7rem_7rem_12rem_8rem]">
-        <label class="block">
-          <span class="field-label">مبنای انتخاب پیزومترها</span>
-          <select id="spatialWellMode" class="field h-11">
-            <option value="calculation">چاه‌های داخل محاسبات / انتخاب دستی</option>
-            <option value="all">همه پیزومترهای دارای مقدار ماه جاری</option>
-            <option value="comparable">فقط چاه‌های دارای داده ماه منتخب و سال قبل</option>
-          </select>
-        </label>
-        <label class="block">
-          <span class="field-label">سال نمایش</span>
-          <select id="spatialYear" class="field h-11 year-field"></select>
-        </label>
-        <label class="block">
-          <span class="field-label">ماه نمایش</span>
-          <select id="spatialMonth" class="field h-11"></select>
-        </label>
-        <label class="block">
-          <span class="field-label">روش درون‌یابی</span>
-          <select id="spatialSurfaceMethod" class="field h-11"></select>
-        </label>
-        <label class="block">
-          <span class="field-label">فاصله خطوط (متر)</span>
-          <input id="contourInterval" class="field h-11 text-left" type="number" min="0.01" step="0.01" inputmode="decimal">
-        </label>
+      <div class="spatial-date-badge">
+        <span>ماه منتخب</span>
+        <b id="spatialMonthLabel" dir="ltr">—</b>
       </div>
     </div>
-    <div class="grid items-stretch gap-px bg-slate-200 lg:grid-cols-2">
-      <article class="flex flex-col bg-white">
-        <header class="map-analysis-header" data-spatial-map-header="contour">
+    <div class="spatial-toolbar">
+      <label class="spatial-control spatial-control--wide">
+        <span class="field-label">مبنای انتخاب پیزومترها</span>
+        <select id="spatialWellMode" class="field h-10">
+          <option value="calculation">چاه‌های داخل محاسبات / انتخاب دستی</option>
+          <option value="all">همه پیزومترهای دارای مقدار ماه جاری</option>
+          <option value="comparable">فقط چاه‌های دارای داده ماه منتخب و سال قبل</option>
+        </select>
+      </label>
+      <label class="spatial-control">
+        <span class="field-label">سال نمایش</span>
+        <select id="spatialYear" class="field h-10 year-field"></select>
+      </label>
+      <label class="spatial-control">
+        <span class="field-label">ماه نمایش</span>
+        <select id="spatialMonth" class="field h-10"></select>
+      </label>
+      <label class="spatial-control">
+        <span class="field-label">روش درون‌یابی</span>
+        <select id="spatialSurfaceMethod" class="field h-10"></select>
+      </label>
+      <label class="spatial-control">
+        <span class="field-label">فاصله خطوط (متر)</span>
+        <input id="contourInterval" class="field h-10 text-left" type="number" min="0.01" step="0.01" inputmode="decimal">
+      </label>
+    </div>
+    <div id="spatialFrameStats" class="spatial-frame-stats"></div>
+    <div class="spatial-map-grid">
+      <article class="spatial-map-card">
+        <header class="spatial-map-header" data-spatial-map-header="contour">
           <div>
             <h4>خطوط هم‌تراز آب زیرزمینی</h4>
             <p id="contourMapSummary">در حال آماده‌سازی...</p>
           </div>
           <span class="map-analysis-swatch contour"></span>
         </header>
-        <div id="contourMapChart" class="h-[500px] w-full shrink-0"></div>
+        <div id="contourMapChart" class="spatial-map-canvas"></div>
       </article>
-      <article class="flex flex-col bg-white">
-        <header class="map-analysis-header" data-spatial-map-header="decline">
+      <article class="spatial-map-card">
+        <header class="spatial-map-header" data-spatial-map-header="decline">
           <div>
             <h4>پهنه‌بندی تغییرات تراز سال‌به‌سال</h4>
             <p id="declineMapSummary">در حال آماده‌سازی...</p>
@@ -382,14 +387,13 @@
           </div>
           <span class="map-analysis-swatch heat"></span>
         </header>
-        <div id="declineMapChart" class="h-[500px] w-full shrink-0"></div>
+        <div id="declineMapChart" class="spatial-map-canvas"></div>
       </article>
     </div>
-    <div class="flex flex-col items-center justify-center gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4 md:flex-row">
+    <div class="spatial-playbar">
       <button id="spatialPreviousMonth" type="button" class="month-control-button">سال قبل</button>
       <button id="spatialPlay" type="button" class="month-play-button" aria-label="پخش تغییرات سال‌به‌سال ماه منتخب">پخش</button>
       <button id="spatialNextMonth" type="button" class="month-control-button">سال بعد</button>
-      <div id="spatialMonthLabel" dir="ltr" class="min-w-40 rounded-xl border border-teal/20 bg-white px-4 py-2 text-center text-sm font-bold text-teal shadow-sm"></div>
     </div>
   </section>
 
