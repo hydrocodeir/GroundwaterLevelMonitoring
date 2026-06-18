@@ -172,18 +172,18 @@
     </details>
   </form>
 
-  <section id="statsGrid" class="grid grid-cols-2 gap-3 lg:grid-cols-5"></section>
+  <section id="statsGrid" class="dashboard-stats-shell"></section>
 
   <section class="grid gap-4 xl:grid-cols-12">
     <article class="panel overflow-hidden xl:col-span-5" data-aquifer-map-panel>
-      <div class="section-heading" data-aquifer-map-heading>
+      <div class="section-heading section-heading--stacked" data-aquifer-map-heading>
         <div>
           <span class="section-kicker">نمای مکانی</span>
           <h3 class="section-title">شبکه پایش و پهنه‌های تیسن</h3>
           <p class="section-description">مرزها، وضعیت ورود چاه‌ها به محاسبات و وزن مکانی ایستگاه‌ها</p>
         </div>
-        <div class="flex flex-col items-start gap-2 md:items-end">
-          <div class="flex flex-wrap justify-end gap-3 text-[10px] text-slate-500">
+        <div class="map-panel-toolbar">
+          <div class="map-panel-legend">
             <span class="legend-item"><i class="bg-teal"></i> داخل محاسبات</span>
             <span class="legend-item"><i class="bg-amber-400"></i> خارج از محاسبات</span>
             <span class="legend-item"><i class="bg-coral"></i> فاقد داده</span>
@@ -191,7 +191,7 @@
             <span class="legend-item"><b class="text-base leading-none text-teal">+</b> چاه جدید</span>
             <span class="legend-item"><b class="text-base leading-none text-violet-700">×</b> ایستگاه بارش منتخب</span>
           </div>
-          <div class="flex flex-wrap gap-2" aria-label="فیلتر نمایش چاه‌ها روی نقشه">
+          <div class="map-filter-row" aria-label="فیلتر نمایش چاه‌ها روی نقشه">
             <label class="map-filter-toggle">
               <input id="showExcludedWells" type="checkbox" checked>
               <span>نمایش خارج از محاسبات</span>
@@ -211,15 +211,14 @@
     </article>
 
     <article class="panel overflow-hidden xl:col-span-7" data-aquifer-analysis-panel>
-      <div class="section-heading">
-        <div>
+      <div class="section-heading section-heading--analysis">
+        <div class="analysis-heading-copy">
           <span class="section-kicker">تحلیل آبخوان</span>
           <h3 class="section-title">هیدروگراف معرف و افت سالانه</h3>
           <p class="section-description">مقایسه روش‌های خام/مرسوم و هیدروگراف‌های اصلاح‌شده با پشتیبان ثابت</p>
-          <div id="aquiferTrendSummary" class="mt-3 flex flex-wrap gap-2"></div>
         </div>
-        <div class="flex max-w-full flex-col items-end gap-3">
-          <div class="flex flex-wrap justify-end gap-2">
+        <div class="analysis-heading-tools">
+          <div class="analysis-heading-actions">
             <button id="reportPdfButton" type="button" class="secondary-button h-11 px-4 text-xs">
               گزارش PDF
             </button>
@@ -227,8 +226,8 @@
               <span>تحلیل با AI</span>
             </button>
           </div>
-          <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
-            نمای کارت
+          <label class="analysis-view-select">
+            <span>نمای کارت</span>
             <select id="aquiferViewSelect" class="field h-10 w-44 text-xs">
               <option value="chart">هیدروگراف + بارش</option>
               <option value="annual">تغییرات سالانه</option>
@@ -249,6 +248,7 @@
             <button class="tab-button" type="button" data-tab-group="aquifer" data-tab="table">جدول افت</button>
           </div>
         </div>
+        <div id="aquiferTrendSummary" class="trend-chip-grid"></div>
       </div>
       <div data-tab-panel="aquifer-chart">
         <div id="aquiferChart" class="h-[390px] w-full px-2 pb-2"></div>

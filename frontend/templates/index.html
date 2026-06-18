@@ -71,15 +71,15 @@
           </div>
         </div>
         <input id="selectedAquiferId" type="hidden" name="aquifer_id">
-        <div data-selection-panel="map" class="min-h-0 flex-1 p-3 pt-2">
-          <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+        <div data-selection-panel="map" class="flex min-h-0 flex-1 flex-col p-3 pt-2">
+          <div class="selection-map-shell">
             <div class="flex shrink-0 flex-col justify-between gap-1.5 border-b border-slate-100 bg-white px-4 py-2 md:flex-row md:items-center">
               <div>
                 <div class="text-xs font-bold text-navy">روی پلیگون آبخوان کلیک کنید</div>
                 <div class="mt-1 text-[10px] text-slate-500">محدوده‌های مطالعاتی در لایه زیرین و آبخوان‌ها در لایه انتخابی نمایش داده شده‌اند.</div>
               </div>
             </div>
-            <div id="aquiferSelectionMap" class="h-full min-h-[340px] flex-1 w-full"></div>
+            <div id="aquiferSelectionMap" class="selection-map-canvas"></div>
           </div>
         </div>
         <div data-selection-panel="dropdown" class="hidden min-h-0 flex-1 p-3">

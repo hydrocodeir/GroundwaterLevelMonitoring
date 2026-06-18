@@ -2,7 +2,7 @@
   const state = {
     data: null,
     charts: [],
-    method: "thiessen",
+    method: "",
     requestToken: 0,
     mapRenderToken: 0,
     mapResizeObserver: null,
@@ -131,6 +131,19 @@
     select.value = String(selectedYear);
   }
 
+  function methodLabel(method) {
+    return state.data?.method_labels?.[method] || method;
+  }
+
+  function availableMethods() {
+    return state.data?.method_order || [];
+  }
+
+  function currentMethod() {
+    if (availableMethods().includes(state.method)) return state.method;
+    return state.data?.filters?.map_method || availableMethods()[0] || "";
+  }
+
   function renderMonthOptions(prefix) {
     if (!state.data) return;
     const filters = state.data.filters;
@@ -148,6 +161,22 @@
       (_, index) => minimum + index
     ).map(month => `<option value="${month}">${monthNames[month - 1]}</option>`).join("");
     monthSelect.value = String(Math.min(maximum, Math.max(minimum, selected)));
+  }
+
+  function renderMethodOptions(data) {
+    const select = document.getElementById("comparisonMapMethod");
+    const rawMethods = (data.method_order || []).filter(method => !method.startsWith("corrected_"));
+    const correctedMethods = (data.method_order || []).filter(method => method.startsWith("corrected_"));
+    select.innerHTML = `
+      <optgroup label="افت‌های محاسبه‌شده">
+        ${rawMethods.map(method => `<option value="${method}">${escapeHtml(methodLabel(method))}</option>`).join("")}
+      </optgroup>
+      <optgroup label="افت‌های اصلاح‌شده">
+        ${correctedMethods.map(method => `<option value="${method}">${escapeHtml(methodLabel(method))}</option>`).join("")}
+      </optgroup>
+    `;
+    state.method = currentMethod();
+    select.value = state.method;
   }
 
   function renderFilterControls(data) {
@@ -168,13 +197,12 @@
     renderMonthOptions("End");
     document.getElementById("comparisonStartMonth").value = String(filters.start_month);
     document.getElementById("comparisonEndMonth").value = String(filters.end_month);
+    renderMethodOptions(data);
   }
 
   function geometryOuterRings(geometry) {
     if (geometry.type === "Polygon") return [geometry.coordinates[0]];
-    if (geometry.type === "MultiPolygon") {
-      return geometry.coordinates.map(polygon => polygon[0]);
-    }
+    if (geometry.type === "MultiPolygon") return geometry.coordinates.map(polygon => polygon[0]);
     return [];
   }
 
@@ -195,18 +223,15 @@
   }
 
   function comparisonBounds(data) {
-    return data.aquifers.reduce(
-      (bounds, aquifer) => {
-        const current = geometryBounds(aquifer.geometry);
-        return [
-          Math.min(bounds[0], current[0]),
-          Math.min(bounds[1], current[1]),
-          Math.max(bounds[2], current[2]),
-          Math.max(bounds[3], current[3])
-        ];
-      },
-      [Infinity, Infinity, -Infinity, -Infinity]
-    );
+    return data.aquifers.reduce((bounds, aquifer) => {
+      const current = geometryBounds(aquifer.geometry);
+      return [
+        Math.min(bounds[0], current[0]),
+        Math.min(bounds[1], current[1]),
+        Math.max(bounds[2], current[2]),
+        Math.max(bounds[3], current[3])
+      ];
+    }, [Infinity, Infinity, -Infinity, -Infinity]);
   }
 
   function configureComparisonLeaflet(chart) {
@@ -229,23 +254,19 @@
     if (!map) return;
     const [minimumX, minimumY, maximumX, maximumY] = comparisonBounds(data);
     map.invalidateSize({ animate: false, pan: false });
-    map.fitBounds(
-      L.latLngBounds([minimumY, minimumX], [maximumY, maximumX]),
-      {
-        paddingTopLeft: [32, 32],
-        paddingBottomRight: [32, 32],
-        maxZoom: MAP_MAX_ZOOM,
-        animate: false
-      }
-    );
+    map.fitBounds(L.latLngBounds([minimumY, minimumX], [maximumY, maximumX]), {
+      paddingTopLeft: [32, 32],
+      paddingBottomRight: [32, 32],
+      maxZoom: MAP_MAX_ZOOM,
+      animate: false
+    });
   }
 
   function mapOption(data, metric, pieces, unit) {
-    const methodLabel = state.method === "thiessen"
-      ? "میانگین وزنی تیسن"
-      : "میانگین حسابی";
+    const method = currentMethod();
     const seriesData = data.aquifers.map(aquifer => {
-      const value = aquifer.methods[state.method][metric];
+      const methodMetrics = aquifer.methods[method] || {};
+      const value = methodMetrics[metric];
       const piece = pieceForValue(pieces, value);
       const [minimumX, minimumY, maximumX, maximumY] = geometryBounds(aquifer.geometry);
       return {
@@ -282,8 +303,8 @@
         formatter: parameters => {
           const aquifer = parameters.data?.aquifer;
           if (!aquifer) return "";
-          const method = aquifer.methods[state.method];
-          const value = method[metric];
+          const methodMetrics = aquifer.methods[method] || {};
+          const value = methodMetrics[metric];
           const metricLabel = metric === "observed_decline"
             ? "افت ابتدا تا انتهای بازه"
             : "نرخ افت روندی";
@@ -292,9 +313,9 @@
               <strong>${escapeHtml(aquifer.aquifer)}</strong>
               <div class="mt-1 text-slate-500">محدوده ${escapeHtml(aquifer.mahdoude)}</div>
               <div class="mt-2">${metricLabel}: <b dir="ltr">${formatSigned(value, unit)}</b></div>
-              <div>روش: ${methodLabel}</div>
+              <div>روش: ${escapeHtml(methodLabel(method))}</div>
               <div>چاه واجد پوشش: ${faNumber.format(aquifer.selected_wells)} از ${faNumber.format(aquifer.total_wells)}</div>
-              <div>تراز ابتدا / انتها: <b dir="ltr">${formatNumber(method.start_level)} / ${formatNumber(method.end_level)}</b></div>
+              <div>تراز ابتدا / انتها: <b dir="ltr">${formatNumber(methodMetrics.start_level)} / ${formatNumber(methodMetrics.end_level)}</b></div>
             </div>
           `;
         }
@@ -344,18 +365,16 @@
               borderRadius: 3
             }
           });
-          return {
-            type: "group",
-            children
-          }
+          return { type: "group", children };
         }
       }]
     };
   }
 
   function metricValues(data, metric) {
+    const method = currentMethod();
     return data.aquifers
-      .map(aquifer => aquifer.methods[state.method][metric])
+      .map(aquifer => aquifer.methods[method]?.[metric])
       .filter(Number.isFinite);
   }
 
@@ -369,29 +388,20 @@
       entries.forEach(entry => {
         if (entry.contentRect.width <= 0 || entry.contentRect.height <= 0) return;
         const chart = echarts.getInstanceByDom(entry.target);
-        chart?.resize({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height
-        });
+        chart?.resize({ width: entry.contentRect.width, height: entry.contentRect.height });
       });
     });
     containers.forEach(container => state.mapResizeObserver.observe(container));
   }
 
   function renderStats(data) {
-    const available = data.stats.available_aquifers[state.method];
-    const selectedWells = data.aquifers.reduce(
-      (total, aquifer) => total + aquifer.selected_wells,
-      0
-    );
-    const methodLabel = state.method === "thiessen"
-      ? "میانگین وزنی تیسن"
-      : "میانگین حسابی";
+    const available = data.stats.available_aquifers[currentMethod()] || {};
+    const selectedWells = data.aquifers.reduce((total, aquifer) => total + aquifer.selected_wells, 0);
     const cards = [
       ["آبخوان‌های بررسی‌شده", faNumber.format(data.stats.aquifer_count), "کل پلیگون‌های منطبق با داده ورودی"],
       ["چاه‌های واجد پوشش", faNumber.format(selectedWells), "پوشش‌دهنده ابتدا تا انتهای بازه"],
-      ["افت مشاهده‌شده معتبر", faNumber.format(available.observed_decline), "آبخوان دارای مقدار دقیق ابتدا و انتها"],
-      ["روش فعال", methodLabel, `${faNumber.format(available.trend_decline_per_year)} آبخوان دارای روند معتبر`]
+      ["افت مشاهده‌شده معتبر", faNumber.format(available.observed_decline || 0), "آبخوان دارای مقدار دقیق ابتدا و انتها"],
+      ["روش فعال", methodLabel(currentMethod()), `${faNumber.format(available.trend_decline_per_year || 0)} آبخوان دارای روند معتبر`]
     ];
     document.getElementById("comparisonStats").innerHTML = cards.map(([label, value, note]) => `
       <article class="stat-card">
@@ -403,33 +413,30 @@
   }
 
   function rankedAquifers(data, metric) {
+    const method = currentMethod();
     return [...data.aquifers].sort((first, second) => {
-      const firstValue = first.methods[state.method][metric];
-      const secondValue = second.methods[state.method][metric];
+      const firstValue = first.methods[method]?.[metric];
+      const secondValue = second.methods[method]?.[metric];
       const firstValid = Number.isFinite(firstValue);
       const secondValid = Number.isFinite(secondValue);
-      if (firstValid && secondValid && secondValue !== firstValue) {
-        return secondValue - firstValue;
-      }
+      if (firstValid && secondValid && secondValue !== firstValue) return secondValue - firstValue;
       if (firstValid !== secondValid) return firstValid ? -1 : 1;
       return first.aquifer.localeCompare(second.aquifer, "fa");
     });
   }
 
   function paginationButtons(key, pageCount, currentPage) {
-    return Array.from(
-      { length: pageCount },
-      (_, index) => index + 1
-    ).map(page => `
-      <button
-        type="button"
-        class="comparison-page-button${page === currentPage ? " is-active" : ""}"
-        data-comparison-page="${key}"
-        data-page="${page}"
-        aria-label="صفحه ${page}"
-        ${page === currentPage ? 'aria-current="page"' : ""}
-      >${faNumber.format(page)}</button>
-    `).join("");
+    return Array.from({ length: pageCount }, (_, index) => index + 1)
+      .map(page => `
+        <button
+          type="button"
+          class="comparison-page-button${page === currentPage ? " is-active" : ""}"
+          data-comparison-page="${key}"
+          data-page="${page}"
+          aria-label="صفحه ${page}"
+          ${page === currentPage ? 'aria-current="page"' : ""}
+        >${faNumber.format(page)}</button>
+      `).join("");
   }
 
   function renderComparisonTable(data, key, metric, unit) {
@@ -439,14 +446,15 @@
     state.tablePages[key] = currentPage;
     const start = (currentPage - 1) * comparisonPageSize;
     const pageRows = rows.slice(start, start + comparisonPageSize);
+    const method = currentMethod();
     const validBeforePage = rows
       .slice(0, start)
-      .filter(aquifer => Number.isFinite(aquifer.methods[state.method][metric]))
+      .filter(aquifer => Number.isFinite(aquifer.methods[method]?.[metric]))
       .length;
     let validRank = validBeforePage;
     const body = pageRows.map(aquifer => {
-      const method = aquifer.methods[state.method];
-      const value = method[metric];
+      const methodMetrics = aquifer.methods[method] || {};
+      const value = methodMetrics[metric];
       const hasValue = Number.isFinite(value);
       if (hasValue) validRank += 1;
       const valueClass = hasValue
@@ -464,8 +472,8 @@
             <span class="mt-1 block text-[9px] text-slate-400">${escapeHtml(aquifer.mahdoude)}</span>
           </td>
           <td class="text-center">${faNumber.format(aquifer.selected_wells)} از ${faNumber.format(aquifer.total_wells)}</td>
-          <td dir="ltr" class="text-center">${formatNumber(method.start_level)}</td>
-          <td dir="ltr" class="text-center">${formatNumber(method.end_level)}</td>
+          <td dir="ltr" class="text-center">${formatNumber(methodMetrics.start_level)}</td>
+          <td dir="ltr" class="text-center">${formatNumber(methodMetrics.end_level)}</td>
           <td dir="ltr" class="text-center ${valueClass}">${hasValue ? formatSigned(value, unit) : "بدون داده"}</td>
         </tr>
       `;
@@ -473,6 +481,7 @@
     const firstVisible = rows.length ? start + 1 : 0;
     const lastVisible = Math.min(start + comparisonPageSize, rows.length);
     document.getElementById(`${key}ComparisonTable`).innerHTML = `
+      <div class="border-b border-slate-100 px-5 py-3 text-sm font-bold text-navy">${escapeHtml(methodLabel(method))}</div>
       <div class="table-scroll flex-1">
         <table class="data-table">
           <thead>
@@ -514,11 +523,10 @@
     renderLegend("observedClassLegend", observedPieces);
     renderLegend("trendClassLegend", trendPieces);
 
-    const methodLabel = state.method === "thiessen" ? "تیسن" : "حسابی";
     document.getElementById("observedMapSummary").textContent =
-      `${faNumber.format(observedValues.length)} آبخوان دارای مقدار معتبر · روش ${methodLabel} · واحد متر`;
+      `${faNumber.format(observedValues.length)} آبخوان دارای مقدار معتبر · روش ${methodLabel(currentMethod())} · واحد متر`;
     document.getElementById("trendMapSummary").textContent =
-      `${faNumber.format(trendValues.length)} آبخوان دارای روند معتبر · روش ${methodLabel} · واحد متر بر سال`;
+      `${faNumber.format(trendValues.length)} آبخوان دارای روند معتبر · روش ${methodLabel(currentMethod())} · واحد متر بر سال`;
 
     if (!state.charts.length) {
       const observedElement = document.getElementById("observedComparisonMap");
@@ -539,14 +547,8 @@
       state.charts = [observed, trend];
       observeMapContainers();
     }
-    state.charts[0].setOption(
-      mapOption(data, "observed_decline", observedPieces, " متر"),
-      { replaceMerge: ["series"] }
-    );
-    state.charts[1].setOption(
-      mapOption(data, "trend_decline_per_year", trendPieces, " متر/سال"),
-      { replaceMerge: ["series"] }
-    );
+    state.charts[0].setOption(mapOption(data, "observed_decline", observedPieces, " متر"), { replaceMerge: ["series"] });
+    state.charts[1].setOption(mapOption(data, "trend_decline_per_year", trendPieces, " متر/سال"), { replaceMerge: ["series"] });
     configureComparisonLeaflet(state.charts[0]);
     configureComparisonLeaflet(state.charts[1]);
     return true;
@@ -570,9 +572,16 @@
       console.error("Comparison map containers did not receive a visible size.");
       return;
     }
-    window.requestAnimationFrame(() => {
-      renderMapsWhenReady(data, renderToken, attempt + 1);
-    });
+    window.requestAnimationFrame(() => renderMapsWhenReady(data, renderToken, attempt + 1));
+  }
+
+  function rerenderComparisonViews() {
+    if (!state.data) return;
+    state.tablePages.observed = 1;
+    state.tablePages.trend = 1;
+    renderStats(state.data);
+    renderComparisonTables(state.data);
+    renderMaps(state.data);
   }
 
   function renderComparison(data) {
@@ -587,9 +596,7 @@
     document.getElementById("comparisonLoading").classList.add("hidden");
     document.getElementById("comparisonMaps").classList.remove("hidden");
     const renderToken = ++state.mapRenderToken;
-    window.requestAnimationFrame(() => {
-      renderMapsWhenReady(data, renderToken);
-    });
+    window.requestAnimationFrame(() => renderMapsWhenReady(data, renderToken));
   }
 
   async function loadComparison(filters = null) {
@@ -630,25 +637,11 @@
   }
 
   function initialize() {
-    document.getElementById("comparisonStartYear").addEventListener(
-      "change",
-      () => renderMonthOptions("Start")
-    );
-    document.getElementById("comparisonEndYear").addEventListener(
-      "change",
-      () => renderMonthOptions("End")
-    );
-    document.getElementById("comparisonMethod").addEventListener("change", event => {
-      state.method = event.target.checked ? "thiessen" : "arithmetic";
-      document.getElementById("comparisonMethodTitle").textContent =
-        state.method === "thiessen" ? "میانگین وزنی تیسن" : "میانگین حسابی";
-      if (state.data) {
-        state.tablePages.observed = 1;
-        state.tablePages.trend = 1;
-        renderStats(state.data);
-        renderComparisonTables(state.data);
-        renderMaps(state.data);
-      }
+    document.getElementById("comparisonStartYear").addEventListener("change", () => renderMonthOptions("Start"));
+    document.getElementById("comparisonEndYear").addEventListener("change", () => renderMonthOptions("End"));
+    document.getElementById("comparisonMapMethod").addEventListener("change", event => {
+      state.method = event.target.value;
+      rerenderComparisonViews();
     });
     document.getElementById("comparisonMaps").addEventListener("click", event => {
       const tab = event.target.closest("[data-comparison-tab]");
@@ -659,10 +652,7 @@
           button.classList.toggle("is-active", button === tab);
         });
         document.querySelectorAll(`[data-comparison-panel^="${key}-"]`).forEach(panel => {
-          panel.classList.toggle(
-            "hidden",
-            panel.dataset.comparisonPanel !== `${key}-${view}`
-          );
+          panel.classList.toggle("hidden", panel.dataset.comparisonPanel !== `${key}-${view}`);
         });
         if (view === "map") {
           const chartIndex = key === "observed" ? 0 : 1;
@@ -690,10 +680,7 @@
         endMonth: Number(document.getElementById("comparisonEndMonth").value)
       };
       const monthsPerYear = state.data?.calendar.months_per_year || monthNames.length;
-      if (
-        dateIndex(filters.startYear, filters.startMonth, monthsPerYear)
-        > dateIndex(filters.endYear, filters.endMonth, monthsPerYear)
-      ) {
+      if (dateIndex(filters.startYear, filters.startMonth, monthsPerYear) > dateIndex(filters.endYear, filters.endMonth, monthsPerYear)) {
         window.alert("تاریخ شروع باید قبل از تاریخ پایان باشد.");
         return;
       }

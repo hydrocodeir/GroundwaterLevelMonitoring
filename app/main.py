@@ -276,6 +276,7 @@ def comparison_data(
     start_month: int | None = Query(default=None),
     end_year: int | None = Query(default=None),
     end_month: int | None = Query(default=None),
+    corrected_support_method: str = Query(default="fixed_thiessen"),
 ) -> dict:
     try:
         return get_data_service().comparison(
@@ -283,6 +284,7 @@ def comparison_data(
             start_month=start_month,
             end_year=end_year,
             end_month=end_month,
+            corrected_support_method=corrected_support_method,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

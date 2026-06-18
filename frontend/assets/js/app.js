@@ -1339,6 +1339,10 @@
     return data?.corrected?.hydrographs?.[`${key}_trend`] || {};
   }
 
+  function correctedComparisonTrend(data, key) {
+    return data?.corrected?.hydrographs?.[`${key}_comparison_trend`] || {};
+  }
+
   function correctedPrimarySeriesKey(data) {
     const support = correctedSupportMethod(data);
     if (support === "fixed_arithmetic") return "corrected_arithmetic";
@@ -3080,41 +3084,65 @@
       : change < 0
         ? `${formatNumber(Math.abs(change), " متر")} افت`
         : `${formatNumber(change, " متر")} افزایش`;
-    const cards = [
-      ["کل پیزومترها", formatNumber(stats.total_wells), "شامل تمام نقاط ثبت‌شده", "bg-navy"],
-      ["داخل محاسبات", formatNumber(stats.selected_wells), `${formatNumber(stats.selected_sites)} ایستگاه مکانی تیسن`, "bg-teal"],
-      ["خارج از محاسبات", formatNumber(stats.excluded_wells), "با برچسب مجزا در نمودارها", "bg-amber-400"],
-      ["تعداد ماه‌ها", formatNumber(data.hydrographs.arithmetic.length), "در بازه ماهانه منتخب", "bg-aqua"],
+    const featuredCards = [
+      {
+        eyebrow: "شاخص کلیدی",
+        label: "تغییر دوره",
+        value: changeLabel,
+        note: "اختلاف اولین و آخرین مقدار موجود در بازه تحلیل",
+        tone: change < 0 ? "alert" : "default"
+      },
+      {
+        eyebrow: "شبکه تحلیلی",
+        label: "چاه‌های داخل محاسبات",
+        value: formatNumber(stats.selected_wells),
+        note: `${formatNumber(stats.selected_sites)} ایستگاه مکانی برای تیسن و تحلیل سطح`,
+        tone: "support"
+      }
+    ];
+    const compactCards = [
+      ["کل پیزومترها", formatNumber(stats.total_wells), "همه نقاط ثبت‌شده"],
+      ["خارج از محاسبات", formatNumber(stats.excluded_wells), "با برچسب مجزا در نمودارها"],
+      ["تعداد ماه‌ها", formatNumber(data.hydrographs.arithmetic.length), "در بازه ماهانه منتخب"],
       [
         "ضریب ذخیره",
         data.storage?.coefficient == null ? "—" : faNumber.format(data.storage.coefficient),
         data.storage?.area_km2 == null
           ? "مساحت آبخوان نامشخص"
-          : `${formatNumber(data.storage.area_km2, " km²")} · ${surfaceHydrographLabel(data, true)}`,
-        "bg-violet-600"
+          : `${formatNumber(data.storage.area_km2, " km²")}`
       ],
       [
         "پشتیبان اصلاح",
         formatNumber(corrected.fixed_support_well_count),
-        `${correctedPrimaryLabel(data, true)} · ${formatNumber(corrected.fixed_support_site_count)} سایت`,
-        "bg-emerald-600"
+        `${correctedPrimaryLabel(data, true)} · ${formatNumber(corrected.fixed_support_site_count)} سایت`
       ],
       [
         "برآورد اصلاحی",
         formatNumber(totalImputed),
-        `${formatNumber(totalRetired)} ماه-چاه بازنشسته/غیرقابل اندازه‌گیری`,
-        "bg-coral"
-      ],
-      ["تغییر دوره", changeLabel, "اولین تا آخرین مقدار موجود", change < 0 ? "bg-coral" : "bg-teal"]
+        `${formatNumber(totalRetired)} ماه-چاه بازنشسته`
+      ]
     ];
-    document.getElementById("statsGrid").innerHTML = cards.map(([label, value, note, color]) => `
-      <article class="stat-card">
-        <span class="absolute -left-4 -top-4 h-16 w-16 rounded-full ${color} opacity-10"></span>
-        <div class="text-xs text-slate-500">${label}</div>
-        <div class="mt-3 text-xl font-bold text-navy md:text-2xl">${value}</div>
-        <div class="mt-2 text-[10px] leading-5 text-slate-400">${note}</div>
-      </article>
-    `).join("");
+    document.getElementById("statsGrid").innerHTML = `
+      <div class="dashboard-stats-featured">
+        ${featuredCards.map(card => `
+          <article class="stat-hero-card" data-tone="${card.tone}">
+            <div class="stat-hero-eyebrow">${card.eyebrow}</div>
+            <div class="stat-hero-label">${card.label}</div>
+            <div class="stat-hero-value">${card.value}</div>
+            <div class="stat-hero-note">${card.note}</div>
+          </article>
+        `).join("")}
+      </div>
+      <div class="dashboard-stats-secondary">
+        ${compactCards.map(([label, value, note]) => `
+          <article class="stat-mini-card">
+            <div class="stat-mini-label">${label}</div>
+            <div class="stat-mini-value">${value}</div>
+            <div class="stat-mini-note">${note}</div>
+          </article>
+        `).join("")}
+      </div>
+    `;
     document.getElementById("periodBadge").textContent =
       `${periodDateLabel(data.filters.start_year, data.filters.start_month)} تا ${periodDateLabel(data.filters.end_year, data.filters.end_month)}`;
     document.getElementById("wellCountLabel").textContent =
@@ -3485,7 +3513,7 @@
     document.getElementById("aquiferTrendSummary").innerHTML = [
       trendChip("حسابی اصلی", data.hydrographs.arithmetic_trend),
       trendChip("تیسن اصلی", data.hydrographs.thiessen_trend),
-      ...surfacePayloads.map(([method, payload]) => (
+      ...surfacePayloads.slice(0, 1).map(([method, payload]) => (
         trendChip(`${surfaceMethodLabel(data, method, true)} اصلی`, payload.trend)
       )),
       trendChip(
@@ -3494,22 +3522,10 @@
       ),
       ...(comparisonEnabled ? [
         trendChip(
-          "حسابی مقایسه‌ای",
-          data.hydrographs.arithmetic_comparison_trend,
+          "اصلاحی مقایسه‌ای",
+          correctedComparisonTrend(data, correctedPrimarySeriesKey(data)),
           "comparison"
-        ),
-        trendChip(
-          "تیسن مقایسه‌ای",
-          data.hydrographs.thiessen_comparison_trend,
-          "comparison"
-        ),
-        ...surfacePayloads.map(([method, payload]) => (
-          trendChip(
-            `${surfaceMethodLabel(data, method, true)} مقایسه‌ای`,
-            payload.comparison_trend,
-            "comparison"
-          )
-        ))
+        )
       ] : [])
     ].join("");
     const stationNames = data.precipitation.stations

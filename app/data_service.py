@@ -1760,6 +1760,14 @@ class GroundwaterData:
             "surface_methods": corrected_surface_methods,
             "annual_decline": corrected_annual_decline,
             "hydrographs": hydrographs,
+            "value_maps": {
+                "corrected_arithmetic": corrected_arithmetic_values,
+                "corrected_thiessen": corrected_thiessen_values,
+                **{
+                    f"corrected_{method}": payload["values"]
+                    for method, payload in corrected_surface_methods.items()
+                },
+            },
             "validation": validation,
             "note": (
                 "روش‌های اصلاحی از پشتیبان مکانی ثابت استفاده می‌کنند. "
@@ -3994,6 +4002,7 @@ class GroundwaterData:
         start_month: int | None = None,
         end_year: int | None = None,
         end_month: int | None = None,
+        corrected_support_method: str = "fixed_thiessen",
     ) -> dict[str, Any]:
         (
             start_year_value,
@@ -4012,10 +4021,50 @@ class GroundwaterData:
             end_year_value,
             end_month_value,
         )
+        start_water_year = self._water_year_for_month(
+            start_year_value,
+            start_month_value,
+        )
+        end_water_year = self._water_year_for_month(
+            end_year_value,
+            end_month_value,
+        )
+        annual_end_water_year = (
+            end_water_year - 1
+            if end_month_value == WATER_YEAR_START_MONTH
+            else end_water_year
+        )
         start_index = months[0][0]
         end_index = months[-1][0]
         minimum, maximum = self._comparison_period_bounds()
         aquifers = []
+        method_order = [
+            "thiessen",
+            "arithmetic",
+            *SURFACE_INTERPOLATION_METHOD_ORDER,
+            "corrected_thiessen",
+            "corrected_arithmetic",
+            *[
+                f"corrected_{method}"
+                for method in SURFACE_INTERPOLATION_METHOD_ORDER
+            ],
+        ]
+        method_labels = {
+            "thiessen": "تیسن",
+            "arithmetic": "حسابی",
+            **{
+                method: SURFACE_INTERPOLATION_LABELS[method]
+                for method in SURFACE_INTERPOLATION_METHOD_ORDER
+            },
+            "corrected_thiessen": "اصلاح‌شده تیسن",
+            "corrected_arithmetic": "اصلاح‌شده حسابی",
+            **{
+                f"corrected_{method}": (
+                    f"اصلاح‌شده {SURFACE_INTERPOLATION_LABELS[method]}"
+                )
+                for method in SURFACE_INTERPOLATION_METHOD_ORDER
+            },
+        }
 
         for group_id, group in self.groups.items():
             group_frame = self.monthly[self.monthly["_aquifer_id"] == group_id]
@@ -4044,6 +4093,36 @@ class GroundwaterData:
                 display_frame,
                 weights,
             )
+            surface_methods: dict[str, dict[str, Any]] = {}
+            primary_surface_method = SURFACE_INTERPOLATION_METHOD_ORDER[0]
+            for method in SURFACE_INTERPOLATION_METHOD_ORDER:
+                method_values, method_metadata = self._piezometric_surface_value_map(
+                    group_id,
+                    display_frame,
+                    selected_sites,
+                    method,
+                )
+                surface_methods[method] = {
+                    "values": method_values,
+                    "metadata": method_metadata,
+                }
+            corrected_analysis = self._corrected_analysis_payload(
+                group_id,
+                months,
+                display_frame,
+                selected_join_keys,
+                False,
+                weights,
+                arithmetic_values,
+                thiessen_values,
+                surface_methods,
+                primary_surface_method,
+                corrected_support_method,
+                start_water_year,
+                annual_end_water_year,
+                None,
+                surface_methods[primary_surface_method]["metadata"]["area_m2"],
+            )
 
             def method_metrics(values: dict[int, float]) -> dict[str, Any]:
                 start_level = finite_or_none(values.get(start_index))
@@ -4061,6 +4140,21 @@ class GroundwaterData:
                     "trend_decline_per_year": trend["decline_per_year"],
                     "trend_direction": trend["direction"],
                 }
+            methods = {
+                "thiessen": method_metrics(thiessen_values),
+                "arithmetic": method_metrics(arithmetic_values),
+                **{
+                    method: method_metrics(payload["values"])
+                    for method, payload in surface_methods.items()
+                },
+                **{
+                    method: method_metrics(values)
+                    for method, values in corrected_analysis.get(
+                        "value_maps",
+                        {},
+                    ).items()
+                },
+            }
 
             aquifers.append(
                 {
@@ -4070,10 +4164,7 @@ class GroundwaterData:
                     "total_wells": group["well_count"],
                     "selected_wells": selected_well_count,
                     "selected_sites": len(weights),
-                    "methods": {
-                        "thiessen": method_metrics(thiessen_values),
-                        "arithmetic": method_metrics(arithmetic_values),
-                    },
+                    "methods": methods,
                     "geometry": mapping(
                         self.boundary_matches[group_id]["aquifer"].geometry.simplify(
                             COMPARISON_GEOMETRY_TOLERANCE,
@@ -4095,6 +4186,9 @@ class GroundwaterData:
                 "end_year": end_year_value,
                 "end_month": end_month_value,
                 "continuous_only": True,
+                "selected_methods": method_order,
+                "map_method": method_order[0],
+                "corrected_support_method": corrected_support_method,
             },
             "calendar": {
                 "months_per_year": MONTHS_PER_YEAR,
@@ -4115,9 +4209,11 @@ class GroundwaterData:
                             "trend_decline_per_year",
                         )
                     }
-                    for method in ("thiessen", "arithmetic")
+                    for method in method_order
                 },
             },
+            "method_order": method_order,
+            "method_labels": method_labels,
             "aquifers": aquifers,
         }
 

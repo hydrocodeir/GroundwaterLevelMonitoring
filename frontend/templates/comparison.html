@@ -65,7 +65,7 @@
             فیلتر پوشش کل بازه همیشه فعال است
           </div>
         </div>
-        <div class="grid gap-4 p-5 md:p-6 xl:grid-cols-[1fr_1fr_1.2fr_auto] xl:items-end">
+        <div class="grid gap-4 p-5 md:p-6 xl:grid-cols-[1fr_1fr_1.05fr_auto] xl:items-end">
           <fieldset class="date-fieldset">
             <legend>شروع بازه</legend>
             <label>
@@ -88,16 +88,15 @@
               <select id="comparisonEndMonth" class="field"></select>
             </label>
           </fieldset>
-          <label class="filter-toggle">
-            <input id="comparisonMethod" type="checkbox" class="peer sr-only" checked>
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            <span>
-              <strong id="comparisonMethodTitle" class="block text-xs font-bold text-navy">میانگین وزنی تیسن</strong>
-              <small class="mt-1 block text-[10px] leading-5 text-slate-500">
-                روشن: تیسن · خاموش: میانگین حسابی
-              </small>
-            </span>
-          </label>
+          <div class="grid gap-3">
+            <label class="block">
+              <span class="field-label">روش فعال مقایسه</span>
+              <select id="comparisonMapMethod" class="field h-11"></select>
+            </label>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] leading-5 text-slate-500">
+              فقط یک روش در هر لحظه نمایش داده می‌شود و با تغییر آن، نقشه و جدول به‌روزرسانی می‌شوند.
+            </div>
+          </div>
           <button id="applyComparisonFilters" type="submit" class="primary-button">
             <span>به‌روزرسانی مقایسه</span>
             <span aria-hidden="true">←</span>
