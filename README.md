@@ -163,7 +163,18 @@ restart داشبورد، تب «تراز + AET» به‌صورت خودکار د
 ## AI Agent Setup
 
 برای فعال‌سازی تحلیل هوشمند داشبورد، فایل `.env` را بر اساس `.env.example`
-بسازید و یکی از ارائه‌دهنده‌ها را انتخاب کنید.
+بسازید و یکی از ارائه‌دهنده‌ها را انتخاب کنید. ارائه‌دهنده پیش‌فرض پروژه
+`nvidia` است.
+
+### NVIDIA API Catalog
+
+```env
+NVIDIA_API_KEY=your_nvidia_api_key
+NVIDIA_MODEL=meta/llama-3.2-3b-instruct
+NVIDIA_MODELS=meta/llama-3.2-3b-instruct
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+AI_PROVIDER=nvidia
+```
 
 ### Google Gemini
 
@@ -197,8 +208,11 @@ AI_PROVIDER=openrouter
 ```
 
 - کلیدهای API فقط در بک‌اند خوانده می‌شوند و هرگز به فرانت ارسال نمی‌شوند.
-- در پنجره «تحلیل با AI» می‌توان بین OpenRouter، Gemini و Groq و مدل‌های
-  مجاز هر ارائه‌دهنده انتخاب کرد.
+- در پنجره «تحلیل با AI» می‌توان بین NVIDIA، OpenRouter، Gemini و Groq و
+  مدل‌های مجاز هر ارائه‌دهنده انتخاب کرد.
+- مدل‌های NVIDIA از API Catalog و endpoint سازگار با OpenAI استفاده می‌کنند.
+  درخواست‌ها با `temperature=0.2`، `top_p=0.7` و `max_tokens=1024` ارسال
+  می‌شوند و فهرست قابل انتخاب از طریق `NVIDIA_MODELS` کنترل می‌شود.
 - مدل `gemini-3.5-flash` در Free Tier برای ورودی و خروجی رایگان است و
   محدودیت نرخ حساب Google AI Studio روی آن اعمال می‌شود.
 - مدل‌های OpenRouter با پسوند `:free` یا مدل `openrouter/free` رایگان هستند.

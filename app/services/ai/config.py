@@ -8,7 +8,12 @@ from app.settings import load_environment
 
 load_environment()
 
-SUPPORTED_PROVIDERS = {"gemini", "groq", "openrouter"}
+SUPPORTED_PROVIDERS = {"gemini", "groq", "nvidia", "openrouter"}
+DEFAULT_NVIDIA_MODEL = "meta/llama-3.2-3b-instruct"
+DEFAULT_NVIDIA_MODELS = (
+    "meta/llama-3.2-3b-instruct",
+)
+DEFAULT_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 DEFAULT_GEMINI_MODELS = (
     "gemini-3.5-flash",
@@ -42,7 +47,7 @@ DEFAULT_OPENROUTER_MODELS = (
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_SITE_URL = "http://localhost:3000"
 DEFAULT_OPENROUTER_APP_NAME = "Groundwater Dashboard AI"
-DEFAULT_AI_PROVIDER = "openrouter"
+DEFAULT_AI_PROVIDER = "nvidia"
 
 
 def _model_list_from_env(name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
@@ -68,16 +73,22 @@ class AIConfig:
     openrouter_base_url: str
     openrouter_site_url: str
     openrouter_app_name: str
+    nvidia_api_key: str = ""
+    nvidia_model: str = DEFAULT_NVIDIA_MODEL
+    nvidia_base_url: str = DEFAULT_NVIDIA_BASE_URL
     gemini_api_key: str = ""
     gemini_model: str = DEFAULT_GEMINI_MODEL
     gemini_base_url: str = DEFAULT_GEMINI_BASE_URL
     timeout_seconds: int = 60
     max_request_bytes: int = 64_000
+    nvidia_models: tuple[str, ...] = DEFAULT_NVIDIA_MODELS
     gemini_models: tuple[str, ...] = DEFAULT_GEMINI_MODELS
     groq_models: tuple[str, ...] = DEFAULT_GROQ_MODELS
     openrouter_models: tuple[str, ...] = DEFAULT_OPENROUTER_MODELS
 
     def default_model_for(self, provider: str) -> str:
+        if provider == "nvidia":
+            return self.nvidia_model
         if provider == "gemini":
             return self.gemini_model
         if provider == "groq":
@@ -85,6 +96,8 @@ class AIConfig:
         return self.openrouter_model
 
     def allowed_models_for(self, provider: str) -> tuple[str, ...]:
+        if provider == "nvidia":
+            return _unique_models(self.nvidia_model, self.nvidia_models)
         if provider == "gemini":
             return _unique_models(self.gemini_model, self.gemini_models)
         if provider == "groq":
@@ -94,6 +107,8 @@ class AIConfig:
         return ()
 
     def has_api_key_for(self, provider: str) -> bool:
+        if provider == "nvidia":
+            return bool(self.nvidia_api_key)
         if provider == "gemini":
             return bool(self.gemini_api_key)
         if provider == "groq":
@@ -105,6 +120,12 @@ class AIConfig:
     @classmethod
     def from_env(cls) -> "AIConfig":
         provider = os.getenv("AI_PROVIDER", DEFAULT_AI_PROVIDER).strip().lower()
+        nvidia_api_key = os.getenv("NVIDIA_API_KEY", "").strip()
+        nvidia_model = os.getenv("NVIDIA_MODEL", DEFAULT_NVIDIA_MODEL).strip()
+        nvidia_base_url = os.getenv(
+            "NVIDIA_BASE_URL",
+            DEFAULT_NVIDIA_BASE_URL,
+        ).strip()
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
         gemini_model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
         gemini_base_url = os.getenv(
@@ -138,9 +159,16 @@ class AIConfig:
             openrouter_base_url=openrouter_base_url or DEFAULT_OPENROUTER_BASE_URL,
             openrouter_site_url=openrouter_site_url or DEFAULT_OPENROUTER_SITE_URL,
             openrouter_app_name=openrouter_app_name or DEFAULT_OPENROUTER_APP_NAME,
+            nvidia_api_key=nvidia_api_key,
+            nvidia_model=nvidia_model or DEFAULT_NVIDIA_MODEL,
+            nvidia_base_url=nvidia_base_url or DEFAULT_NVIDIA_BASE_URL,
             gemini_api_key=gemini_api_key,
             gemini_model=gemini_model or DEFAULT_GEMINI_MODEL,
             gemini_base_url=gemini_base_url or DEFAULT_GEMINI_BASE_URL,
+            nvidia_models=_model_list_from_env(
+                "NVIDIA_MODELS",
+                DEFAULT_NVIDIA_MODELS,
+            ),
             gemini_models=_model_list_from_env(
                 "GEMINI_MODELS",
                 DEFAULT_GEMINI_MODELS,

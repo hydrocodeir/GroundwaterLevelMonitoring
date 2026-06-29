@@ -21,6 +21,7 @@ from app.services.ai.errors import (
 from app.services.ai.groq_client import GroqClient
 from app.services.ai.gemini_client import GeminiClient
 from app.services.ai.http_client import get_openrouter_credits
+from app.services.ai.nvidia_client import NvidiaClient
 from app.services.ai.openrouter_client import OpenRouterClient
 from app.services.ai.prompts import (
     build_chat_question_prompt,
@@ -162,6 +163,21 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     return parsed
 
 
+def _is_transient_provider_error(error: AIProviderError) -> bool:
+    message = (error.message or "").lower()
+    return any(
+        pattern in message
+        for pattern in (
+            "broken pipe",
+            "connection reset",
+            "connection aborted",
+            "connection was interrupted",
+            "remote end closed",
+            "temporarily unavailable",
+        )
+    )
+
+
 def calculate_precomputed_risk_level(summary_data: dict[str, Any]) -> RiskLevel:
     groundwater_change = _coerce_float(summary_data.get("groundwater_level_change_m"))
     precipitation_anomaly = _coerce_float(summary_data.get("precipitation_anomaly_percent"))
@@ -209,8 +225,17 @@ class AIAnalysisService:
         model = model or config.default_model_for(provider)
         if provider not in SUPPORTED_PROVIDERS:
             raise AIConfigurationError(
-                f"Invalid AI_PROVIDER '{provider}'. Supported providers are gemini, groq, and openrouter.",
+                f"Invalid AI_PROVIDER '{provider}'. Supported providers are gemini, groq, nvidia, and openrouter.",
                 provider,
+            )
+        if provider == "nvidia":
+            if not config.nvidia_api_key:
+                raise AIConfigurationError("NVIDIA_API_KEY is missing.", provider)
+            return NvidiaClient(
+                api_key=config.nvidia_api_key,
+                model=model,
+                base_url=config.nvidia_base_url,
+                timeout_seconds=config.timeout_seconds,
             )
         if provider == "gemini":
             if not config.gemini_api_key:
@@ -278,7 +303,7 @@ class AIAnalysisService:
     def _fallback_requests(self, request: AIAnalysisRequest | AIChatRequest) -> list[Any]:
         current_provider = request.provider or self.config.provider
         fallback_requests: list[Any] = []
-        for provider in ("openrouter", "gemini", "groq"):
+        for provider in ("nvidia", "openrouter", "gemini", "groq"):
             if provider == current_provider:
                 continue
             if not self.config.has_api_key_for(provider):
@@ -497,6 +522,25 @@ class AIAnalysisService:
                     last_error = fallback_error
                     continue
             raise last_error
+        except AIProviderError as error:
+            if not _is_transient_provider_error(error):
+                raise
+            last_error: AIProviderError = error
+            for fallback_request in self._fallback_requests(request):
+                LOGGER.warning(
+                    "AI provider %s had a transient failure; retrying analysis with provider=%s model=%s.",
+                    request.provider or self.config.provider,
+                    fallback_request.provider,
+                    fallback_request.model,
+                )
+                try:
+                    return self._analyze_once(fallback_request)
+                except AIProviderError as fallback_error:
+                    if not _is_transient_provider_error(fallback_error):
+                        raise
+                    last_error = fallback_error
+                    continue
+            raise last_error
 
     def chat(
         self,
@@ -517,6 +561,25 @@ class AIAnalysisService:
                 try:
                     return self._chat_once(fallback_request, aquifer_context)
                 except AIForbiddenError as fallback_error:
+                    last_error = fallback_error
+                    continue
+            raise last_error
+        except AIProviderError as error:
+            if not _is_transient_provider_error(error):
+                raise
+            last_error: AIProviderError = error
+            for fallback_request in self._fallback_requests(request):
+                LOGGER.warning(
+                    "AI provider %s had a transient failure; retrying chat with provider=%s model=%s.",
+                    request.provider or self.config.provider,
+                    fallback_request.provider,
+                    fallback_request.model,
+                )
+                try:
+                    return self._chat_once(fallback_request, aquifer_context)
+                except AIProviderError as fallback_error:
+                    if not _is_transient_provider_error(fallback_error):
+                        raise
                     last_error = fallback_error
                     continue
             raise last_error
@@ -598,17 +661,18 @@ def _model_usage_hint(
 def get_ai_options(config: AIConfig | None = None) -> dict[str, Any]:
     config = config or AIConfig.from_env()
     labels = {
+        "nvidia": "NVIDIA",
         "openrouter": "OpenRouter",
         "groq": "Groq",
         "gemini": "Gemini",
     }
     providers = []
     openrouter_credit_status = _openrouter_credit_status(config)
-    for provider in ("openrouter", "gemini", "groq"):
+    for provider in ("nvidia", "openrouter", "gemini", "groq"):
         models = []
         for model in config.allowed_models_for(provider):
             is_free = (
-                provider in {"gemini", "groq"}
+                provider in {"gemini", "groq", "nvidia"}
                 or model == "openrouter/free"
                 or model.endswith(":free")
             )

@@ -6,8 +6,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 RiskLevel = Literal["low", "moderate", "high", "critical"]
-ProviderName = Literal["gemini", "groq", "openrouter"]
+ProviderName = Literal["gemini", "groq", "nvidia", "openrouter"]
 LanguageCode = Literal["fa", "en"]
+SurfaceInterpolationMethod = Literal[
+    "idw",
+    "natural_neighbor",
+    "ordinary_kriging",
+    "universal_kriging",
+    "regression_kriging",
+    "spline",
+]
+CorrectedSupportMethod = Literal[
+    "fixed_thiessen",
+    "fixed_arithmetic",
+    "fixed_grid",
+    "fixed_median",
+    "none",
+]
 
 
 class AIAnalysisRequest(BaseModel):
@@ -82,19 +97,12 @@ class AIChatFilters(BaseModel):
     manual_selection: bool = False
     selected_well_ids: list[str] = Field(default_factory=list, max_length=250)
     storage_coefficient: float | None = Field(default=None, gt=0)
-    surface_interpolation_methods: list[
-        Literal["idw", "ordinary_kriging", "spline"]
-    ] = Field(default_factory=list, max_length=3)
-    surface_interpolation_method: Literal[
-        "idw",
-        "ordinary_kriging",
-        "spline",
-    ] = "idw"
-    corrected_support_method: Literal[
-        "fixed_thiessen",
-        "fixed_arithmetic",
-        "fixed_grid",
-    ] = "fixed_thiessen"
+    surface_interpolation_methods: list[SurfaceInterpolationMethod] = Field(
+        default_factory=list,
+        max_length=6,
+    )
+    surface_interpolation_method: SurfaceInterpolationMethod = "idw"
+    corrected_support_method: CorrectedSupportMethod = "fixed_thiessen"
 
 
 class AIChatRequest(BaseModel):

@@ -555,6 +555,9 @@
   }
 
   function providerUnavailableHint(providerId) {
+    if (providerId === "nvidia") {
+      return "NVIDIA موقتاً دسترسی این کلید یا موقعیت شبکه را رد کرده است. OpenRouter یا Gemini را انتخاب کنید.";
+    }
     if (providerId === "groq") {
       return "Groq موقتاً دسترسی این حساب یا موقعیت شبکه را رد کرده است. OpenRouter یا Gemini را انتخاب کنید.";
     }
@@ -573,6 +576,9 @@
 
   function providerModelHint(provider) {
     if (!provider) return "";
+    if (provider.id === "nvidia") {
+      return "مدل‌های NVIDIA از سهمیه حساب NVIDIA API Catalog استفاده می‌کنند و ممکن است محدودیت نرخ داشته باشند.";
+    }
     if (provider.id === "groq") {
       return "مدل‌های Groq از سهمیه Free Tier حساب شما استفاده می‌کنند و محدودیت نرخ دارند.";
     }
@@ -897,6 +903,9 @@
     if (forbidden && provider === "groq") {
       return "Groq دسترسی این حساب یا موقعیت شبکه را رد کرده است. یک provider دیگر انتخاب کنید.";
     }
+    if (forbidden && provider === "nvidia") {
+      return "NVIDIA دسترسی این کلید یا موقعیت شبکه را رد کرده است. یک provider دیگر انتخاب کنید.";
+    }
     if (forbidden && provider === "gemini") {
       return "Gemini دسترسی این کلید، پروژه یا موقعیت شبکه را رد کرده است. یک provider دیگر انتخاب کنید.";
     }
@@ -1175,9 +1184,11 @@
       if (status) {
         status.textContent = forbidden && provider === "groq"
           ? "Groq دسترسی این حساب یا موقعیت شبکه را با خطای 403 رد کرده است. از OpenRouter استفاده کنید یا وضعیت دسترسی حساب Groq را در کنسول آن بررسی کنید."
-          : forbidden && provider === "gemini"
-            ? "Gemini دسترسی این کلید یا پروژه را رد کرده است. فعال بودن Gemini API و محدودیت‌های کلید در Google AI Studio را بررسی کنید."
-            : error.message || "تحلیل AI ناموفق بود.";
+          : forbidden && provider === "nvidia"
+            ? "NVIDIA دسترسی این کلید یا موقعیت شبکه را رد کرده است. کلید NVIDIA API Catalog و محدودیت‌های حساب را بررسی کنید."
+            : forbidden && provider === "gemini"
+              ? "Gemini دسترسی این کلید یا پروژه را رد کرده است. فعال بودن Gemini API و محدودیت‌های کلید در Google AI Studio را بررسی کنید."
+              : error.message || "تحلیل AI ناموفق بود.";
         status.className = "rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-[10px] leading-6 text-red-700";
       }
       if (card) card.classList.add("hidden");

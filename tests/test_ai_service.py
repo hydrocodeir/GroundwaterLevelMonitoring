@@ -15,6 +15,7 @@ from app.services.ai.errors import AIForbiddenError, AIProviderError, AIValidati
 from app.services.ai.groq_client import GroqClient
 from app.services.ai.http_client import post_chat_completion
 from app.services.ai.gemini_client import GeminiClient
+from app.services.ai.nvidia_client import NvidiaClient
 from app.services.ai.openrouter_client import OpenRouterClient
 from app.services.ai.schemas import (
     AIAnalysisRequest,
@@ -252,6 +253,33 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(context["precipitation"]["stations"][0]["series"][0][1], 11.5)
         self.assertEqual(context["piezometers"][0]["series"][1][1], 19.5)
 
+    def test_chat_request_accepts_all_dashboard_filter_methods(self) -> None:
+        request = AIChatRequest.model_validate(
+            {
+                "aquifer_id": "aquifer-id",
+                "provider": "nvidia",
+                "model": "meta/llama-3.2-3b-instruct",
+                "question": "وضعیت آبخوان چیست؟",
+                "filters": {
+                    "surface_interpolation_methods": [
+                        "idw",
+                        "natural_neighbor",
+                        "ordinary_kriging",
+                        "universal_kriging",
+                        "regression_kriging",
+                        "spline",
+                    ],
+                    "surface_interpolation_method": "regression_kriging",
+                    "corrected_support_method": "fixed_median",
+                },
+            }
+        )
+
+        self.assertEqual(request.provider, "nvidia")
+        self.assertEqual(request.filters.surface_interpolation_method, "regression_kriging")
+        self.assertEqual(request.filters.corrected_support_method, "fixed_median")
+        self.assertIn("natural_neighbor", request.filters.surface_interpolation_methods)
+
     def test_service_repairs_response_when_analysis_text_is_missing(self) -> None:
         client = FakeClient(
             [
@@ -352,6 +380,48 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(result.provider, "gemini")
         self.assertEqual(result.model, "gemini-3.5-flash")
 
+    def test_service_builds_selected_nvidia_model(self) -> None:
+        client = FakeClient(
+            {
+                "analysis": "NVIDIA response.",
+                "risk_level": "high",
+                "key_findings": [],
+                "recommendations": [],
+                "uncertainty_note": "Summary data only.",
+            }
+        )
+        client.provider_name = "nvidia"
+        client.model = "meta/llama-3.2-3b-instruct"
+        config = AIConfig(
+            provider="nvidia",
+            groq_api_key="",
+            groq_model="llama-3.1-8b-instant",
+            groq_base_url="https://api.groq.com/openai/v1",
+            openrouter_api_key="openrouter-key",
+            openrouter_model="openrouter/auto",
+            openrouter_base_url="https://openrouter.ai/api/v1",
+            openrouter_site_url="http://localhost:3000",
+            openrouter_app_name="Groundwater Dashboard AI",
+            nvidia_api_key="nvidia-key",
+        )
+        request = self.build_request(language="en").model_copy(
+            update={
+                "provider": "nvidia",
+                "model": "meta/llama-3.2-3b-instruct",
+            }
+        )
+
+        with patch.object(AIAnalysisService, "_build_client", return_value=client) as builder:
+            result = AIAnalysisService(config=config).analyze(request)
+
+        builder.assert_called_once_with(
+            config,
+            provider="nvidia",
+            model="meta/llama-3.2-3b-instruct",
+        )
+        self.assertEqual(result.provider, "nvidia")
+        self.assertEqual(result.model, "meta/llama-3.2-3b-instruct")
+
     def test_gemini_client_uses_native_json_generation_contract(self) -> None:
         client = GeminiClient(
             api_key="gemini-key",
@@ -418,17 +488,25 @@ class AIServiceTests(unittest.TestCase):
                 openrouter_base_url="https://openrouter.ai/api/v1",
                 openrouter_site_url="http://localhost:3000",
                 openrouter_app_name="Groundwater Dashboard AI",
+                nvidia_api_key="nvidia-secret",
                 gemini_api_key="gemini-secret",
             )
         )
 
         providers = {provider["id"]: provider for provider in options["providers"]}
+        self.assertTrue(providers["nvidia"]["enabled"])
+        self.assertEqual(
+            providers["nvidia"]["default_model"],
+            "meta/llama-3.2-3b-instruct",
+        )
+        self.assertTrue(providers["nvidia"]["models"][0]["free"])
         self.assertFalse(providers["openrouter"]["enabled"])
         self.assertEqual(providers["openrouter"]["default_model"], "openrouter/free")
         self.assertTrue(providers["gemini"]["enabled"])
         self.assertEqual(providers["gemini"]["default_model"], "gemini-3.5-flash")
         self.assertTrue(providers["gemini"]["models"][0]["free"])
         self.assertTrue(providers["groq"]["enabled"])
+        self.assertNotIn("nvidia-secret", json.dumps(options))
         self.assertNotIn("groq-secret", json.dumps(options))
         self.assertNotIn("gemini-secret", json.dumps(options))
         self.assertTrue(providers["groq"]["models"])
@@ -583,6 +661,78 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(captured["model"], "llama-3.1-8b-instant")
         self.assertEqual(captured["temperature"], 0.2)
         self.assertNotIn("response_format", captured)
+
+    def test_nvidia_client_uses_catalog_payload(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content='{"analysis":"ok"}'
+                            )
+                        )
+                    ]
+                )
+
+        class FakeOpenAIClient:
+            def __init__(self, **kwargs):
+                captured["client_kwargs"] = kwargs
+                self.chat = SimpleNamespace(completions=FakeCompletions())
+
+        fake_module = SimpleNamespace(OpenAI=FakeOpenAIClient)
+
+        with patch("app.services.ai.nvidia_client.importlib.import_module", return_value=fake_module):
+            client = NvidiaClient(
+                api_key="test-key",
+                model="meta/llama-3.2-3b-instruct",
+                base_url="https://integrate.api.nvidia.com/v1",
+                timeout_seconds=15,
+            )
+            content = client.complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(content, '{"analysis":"ok"}')
+        self.assertEqual(captured["client_kwargs"]["api_key"], "test-key")
+        self.assertEqual(captured["client_kwargs"]["base_url"], "https://integrate.api.nvidia.com/v1")
+        self.assertEqual(captured["client_kwargs"]["timeout"], 15)
+        self.assertEqual(captured["client_kwargs"]["max_retries"], 0)
+        self.assertEqual(captured["model"], "meta/llama-3.2-3b-instruct")
+        self.assertEqual(captured["temperature"], 0.2)
+        self.assertEqual(captured["top_p"], 0.7)
+        self.assertEqual(captured["max_tokens"], 1024)
+        self.assertFalse(captured["stream"])
+
+    def test_nvidia_html_forbidden_error_gets_actionable_message(self) -> None:
+        class PermissionDeniedError(Exception):
+            status_code = 403
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                raise PermissionDeniedError(
+                    "<html><head><title>403 Forbidden</title></head>"
+                    "<body><center><h1>403 Forbidden</h1></center></body></html>"
+                )
+
+        class FakeOpenAIClient:
+            def __init__(self, **kwargs):
+                self.chat = SimpleNamespace(completions=FakeCompletions())
+
+        fake_module = SimpleNamespace(OpenAI=FakeOpenAIClient)
+
+        with patch("app.services.ai.nvidia_client.importlib.import_module", return_value=fake_module):
+            client = NvidiaClient(
+                api_key="test-key",
+                model="meta/llama-3.2-3b-instruct",
+            )
+            with self.assertRaises(AIForbiddenError) as ctx:
+                client.complete([{"role": "user", "content": "Hello"}])
+
+        self.assertIn("nvidia rejected access with HTTP 403", str(ctx.exception))
+        self.assertIn("network location", str(ctx.exception))
+        self.assertNotIn("<html>", str(ctx.exception))
 
     def test_openrouter_client_uses_json_mode_when_supported(self) -> None:
         with patch(
