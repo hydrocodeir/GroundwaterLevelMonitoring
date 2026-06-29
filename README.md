@@ -171,7 +171,7 @@ restart داشبورد، تب «تراز + AET» به‌صورت خودکار د
 ```env
 NVIDIA_API_KEY=your_nvidia_api_key
 NVIDIA_MODEL=meta/llama-3.2-3b-instruct
-NVIDIA_MODELS=meta/llama-3.2-3b-instruct
+NVIDIA_MODELS=meta/llama-3.2-3b-instruct,openai/gpt-oss-120b,nvidia/nemotron-3-super-120b-a12b,z-ai/glm-5.1,qwen/qwen3-next-80b-a3b-instruct,qwen/qwen3.5-397b-a17b,moonshotai/kimi-k2.6,minimaxai/minimax-m2.7,deepseek-ai/deepseek-v4-flash,google/gemma-4-31b-it
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 AI_PROVIDER=nvidia
 ```
@@ -211,8 +211,9 @@ AI_PROVIDER=openrouter
 - در پنجره «تحلیل با AI» می‌توان بین NVIDIA، OpenRouter، Gemini و Groq و
   مدل‌های مجاز هر ارائه‌دهنده انتخاب کرد.
 - مدل‌های NVIDIA از API Catalog و endpoint سازگار با OpenAI استفاده می‌کنند.
-  درخواست‌ها با `temperature=0.2`، `top_p=0.7` و `max_tokens=1024` ارسال
-  می‌شوند و فهرست قابل انتخاب از طریق `NVIDIA_MODELS` کنترل می‌شود.
+  فهرست قابل انتخاب از طریق `NVIDIA_MODELS` کنترل می‌شود و برای مدل‌های
+  بزرگ‌تر، پارامترهای پیشنهادی NVIDIA مانند `max_tokens`، `top_p` و
+  `extra_body` به‌صورت مدل‌محور در کلاینت اعمال می‌شود.
 - مدل `gemini-3.5-flash` در Free Tier برای ورودی و خروجی رایگان است و
   محدودیت نرخ حساب Google AI Studio روی آن اعمال می‌شود.
 - مدل‌های OpenRouter با پسوند `:free` یا مدل `openrouter/free` رایگان هستند.

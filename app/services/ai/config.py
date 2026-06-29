@@ -12,6 +12,15 @@ SUPPORTED_PROVIDERS = {"gemini", "groq", "nvidia", "openrouter"}
 DEFAULT_NVIDIA_MODEL = "meta/llama-3.2-3b-instruct"
 DEFAULT_NVIDIA_MODELS = (
     "meta/llama-3.2-3b-instruct",
+    "openai/gpt-oss-120b",
+    "nvidia/nemotron-3-super-120b-a12b",
+    "z-ai/glm-5.1",
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "qwen/qwen3.5-397b-a17b",
+    "moonshotai/kimi-k2.6",
+    "minimaxai/minimax-m2.7",
+    "deepseek-ai/deepseek-v4-flash",
+    "google/gemma-4-31b-it",
 )
 DEFAULT_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"

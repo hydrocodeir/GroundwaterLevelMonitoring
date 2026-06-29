@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 from starlette.requests import Request
 
 from app.main import ai_analyze, ai_chat
-from app.services.ai.config import AIConfig
+from app.services.ai.config import AIConfig, DEFAULT_NVIDIA_MODELS
 from app.services.ai.errors import AIForbiddenError, AIProviderError, AIValidationError
 from app.services.ai.groq_client import GroqClient
 from app.services.ai.http_client import post_chat_completion
@@ -500,6 +500,8 @@ class AIServiceTests(unittest.TestCase):
             "meta/llama-3.2-3b-instruct",
         )
         self.assertTrue(providers["nvidia"]["models"][0]["free"])
+        nvidia_models = {model["id"] for model in providers["nvidia"]["models"]}
+        self.assertTrue(set(DEFAULT_NVIDIA_MODELS).issubset(nvidia_models))
         self.assertFalse(providers["openrouter"]["enabled"])
         self.assertEqual(providers["openrouter"]["default_model"], "openrouter/free")
         self.assertTrue(providers["gemini"]["enabled"])
@@ -704,6 +706,65 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(captured["top_p"], 0.7)
         self.assertEqual(captured["max_tokens"], 1024)
         self.assertFalse(captured["stream"])
+
+    def test_nvidia_client_uses_model_specific_payload_options(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content='{"analysis":"ok"}'
+                            )
+                        )
+                    ]
+                )
+
+        class FakeOpenAIClient:
+            def __init__(self, **kwargs):
+                self.chat = SimpleNamespace(completions=FakeCompletions())
+
+        fake_module = SimpleNamespace(OpenAI=FakeOpenAIClient)
+
+        with patch("app.services.ai.nvidia_client.importlib.import_module", return_value=fake_module):
+            NvidiaClient(
+                api_key="test-key",
+                model="nvidia/nemotron-3-super-120b-a12b",
+            ).complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(captured["temperature"], 1)
+        self.assertEqual(captured["top_p"], 0.95)
+        self.assertEqual(captured["max_tokens"], 16384)
+        self.assertFalse(captured["stream"])
+        self.assertEqual(
+            captured["extra_body"],
+            {
+                "chat_template_kwargs": {"enable_thinking": True},
+                "reasoning_budget": 16384,
+            },
+        )
+
+        captured.clear()
+        with patch("app.services.ai.nvidia_client.importlib.import_module", return_value=fake_module):
+            NvidiaClient(
+                api_key="test-key",
+                model="qwen/qwen3.5-397b-a17b",
+            ).complete([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(captured["temperature"], 0.6)
+        self.assertEqual(captured["top_p"], 0.95)
+        self.assertEqual(captured["max_tokens"], 16384)
+        self.assertEqual(captured["presence_penalty"], 0)
+        self.assertEqual(
+            captured["extra_body"],
+            {
+                "top_k": 20,
+                "repetition_penalty": 1,
+            },
+        )
 
     def test_nvidia_html_forbidden_error_gets_actionable_message(self) -> None:
         class PermissionDeniedError(Exception):

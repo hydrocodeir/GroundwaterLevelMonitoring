@@ -13,6 +13,73 @@ from app.services.ai.errors import (
 )
 
 
+NVIDIA_MODEL_OPTIONS: dict[str, dict[str, object]] = {
+    "openai/gpt-oss-120b": {
+        "temperature": 1,
+        "top_p": 1,
+        "max_tokens": 4096,
+    },
+    "nvidia/nemotron-3-super-120b-a12b": {
+        "temperature": 1,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "extra_body": {
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_budget": 16384,
+        },
+    },
+    "z-ai/glm-5.1": {
+        "temperature": 1,
+        "top_p": 1,
+        "max_tokens": 16384,
+    },
+    "qwen/qwen3-next-80b-a3b-instruct": {
+        "temperature": 0.6,
+        "top_p": 0.7,
+        "max_tokens": 4096,
+    },
+    "qwen/qwen3.5-397b-a17b": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "presence_penalty": 0,
+        "extra_body": {
+            "top_k": 20,
+            "repetition_penalty": 1,
+        },
+    },
+    "moonshotai/kimi-k2.6": {
+        "temperature": 1,
+        "top_p": 1,
+        "max_tokens": 16384,
+    },
+    "minimaxai/minimax-m2.7": {
+        "temperature": 1,
+        "top_p": 0.95,
+        "max_tokens": 8192,
+    },
+    "deepseek-ai/deepseek-v4-flash": {
+        "temperature": 1,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "extra_body": {
+            "chat_template_kwargs": {
+                "thinking": True,
+                "reasoning_effort": "high",
+            },
+        },
+    },
+    "google/gemma-4-31b-it": {
+        "temperature": 1,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "extra_body": {
+            "chat_template_kwargs": {"enable_thinking": True},
+        },
+    },
+}
+
+
 @dataclass(frozen=True)
 class NvidiaClient:
     api_key: str
@@ -28,7 +95,7 @@ class NvidiaClient:
         return "nvidia"
 
     def _payload(self, messages: list[dict[str, str]]) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
@@ -36,6 +103,14 @@ class NvidiaClient:
             "max_tokens": self.max_tokens,
             "stream": False,
         }
+        model_options = NVIDIA_MODEL_OPTIONS.get(self.model, {})
+        for key in ("temperature", "top_p", "max_tokens", "presence_penalty"):
+            if key in model_options:
+                payload[key] = model_options[key]
+        extra_body = model_options.get("extra_body")
+        if isinstance(extra_body, dict):
+            payload["extra_body"] = extra_body
+        return payload
 
     @staticmethod
     def _extract_content(response: Any) -> str:
