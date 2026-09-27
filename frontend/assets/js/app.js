@@ -3074,11 +3074,16 @@
 
   function baseChartOption() {
     return {
-      animationDuration: 450,
-      textStyle: { fontFamily: "Vazirmatn", color: "#475569" },
+      animationDuration: 520,
+      animationEasing: "cubicOut",
+      color: ["#1E40AF", "#087E8B", "#D97706", "#64748B"],
+      textStyle: { fontFamily: "Vazirmatn", color: "#334155" },
       tooltip: {
         trigger: "axis",
-        textStyle: { fontFamily: "Vazirmatn" },
+        backgroundColor: "rgba(15, 23, 42, 0.92)",
+        borderWidth: 0,
+        textStyle: { fontFamily: "Vazirmatn", color: "#F8FAFC", fontSize: 11 },
+        extraCssText: "border-radius:12px;box-shadow:0 18px 48px rgba(15,23,42,.22);",
         valueFormatter: value => value == null ? "بدون داده" : `${faNumber.format(value)} متر`
       },
       grid: { top: 50, right: 68, bottom: 58, left: 68 },
@@ -3090,7 +3095,8 @@
           hideOverlap: true,
           fontSize: 10
         },
-        axisLine: { lineStyle: { color: "#CBD5E1" } }
+        axisLine: { lineStyle: { color: "#D8E0EA" } },
+        axisTick: { lineStyle: { color: "#D8E0EA" } }
       },
       yAxis: [
         {
@@ -3098,7 +3104,7 @@
           name: "تراز (متر)",
           nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 10, padding: [0, 0, 8, 0] },
           scale: true,
-          splitLine: { lineStyle: { color: "#E9EFF2", type: "dashed" } },
+          splitLine: { lineStyle: { color: "#E6EDF5", type: "dashed" } },
           axisLabel: { formatter: value => faNumber.format(value), fontSize: 10 }
         },
         {
@@ -3106,13 +3112,13 @@
           name: "بارش (mm/month)",
           min: 0,
           nameTextStyle: { fontFamily: "Vazirmatn", fontSize: 9, padding: [0, 0, 8, 0] },
-          axisLine: { show: true, lineStyle: { color: "#0EA5E9" } },
-          axisTick: { show: true, lineStyle: { color: "#0EA5E9" } },
+          axisLine: { show: true, lineStyle: { color: "#1E40AF" } },
+          axisTick: { show: true, lineStyle: { color: "#1E40AF" } },
           splitLine: { show: false },
           axisLabel: {
             formatter: value => faNumber.format(value),
             fontSize: 9,
-            color: "#0284C7"
+            color: "#1E40AF"
           }
         }
       ],
@@ -3124,8 +3130,13 @@
           height: 18,
           bottom: 8,
           borderColor: "transparent",
-          fillerColor: "rgba(8, 126, 139, 0.15)",
-          handleStyle: { color: "#087E8B" }
+          fillerColor: "rgba(30, 64, 175, 0.16)",
+          handleStyle: { color: "#1E40AF" },
+          moveHandleStyle: { color: "#1E40AF" },
+          selectedDataBackground: {
+            lineStyle: { color: "#1E40AF" },
+            areaStyle: { color: "rgba(30, 64, 175, 0.08)" }
+          }
         }
       ]
     };
@@ -3139,13 +3150,13 @@
       data: precipitation.series.map(item => item[1]),
       barMaxWidth: 14,
       itemStyle: {
-        color: "rgba(14, 165, 233, 0.34)",
-        borderColor: "rgba(2, 132, 199, 0.62)",
+        color: "rgba(30, 64, 175, 0.24)",
+        borderColor: "rgba(30, 64, 175, 0.5)",
         borderWidth: 0.7,
         borderRadius: [3, 3, 0, 0]
       },
       emphasis: {
-        itemStyle: { color: "rgba(2, 132, 199, 0.58)" }
+        itemStyle: { color: "rgba(30, 64, 175, 0.48)" }
       },
       tooltip: {
         valueFormatter: value => (

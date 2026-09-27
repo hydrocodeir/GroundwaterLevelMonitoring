@@ -1,22 +1,22 @@
 <div class="space-y-4" data-dashboard data-aquifer-id="{{ group.id }}">
-  <section class="panel relative overflow-hidden p-4 md:p-5">
-    <div class="absolute inset-y-0 right-0 w-1.5 bg-gradient-to-b from-teal to-aqua"></div>
+  <section class="panel dashboard-hero-panel relative overflow-hidden p-4 md:p-5">
+    <div class="absolute inset-y-0 right-0 w-1.5 bg-gradient-to-b from-teal to-sky-500"></div>
     <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
       <div class="pr-3">
         <div class="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-teal">
           <span class="inline-block h-2 w-2 rounded-full bg-teal"></span>
           محدوده مطالعاتی {{ group.mahdoude }}
         </div>
-        <h2 class="text-xl font-bold tracking-tight text-navy md:text-2xl">آبخوان {{ group.aquifer }}</h2>
+        <h2 class="text-xl font-bold text-slate-950 md:text-2xl">آبخوان {{ group.aquifer }}</h2>
         <p class="mt-1 text-[11px] leading-5 text-slate-500">
           تحلیل یکپارچه تراز آب، افت سالانه، شبکه پایش و پهنه‌بندی تیسن
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <span id="periodBadge" class="rounded-lg border border-teal/15 bg-teal/5 px-3 py-2 text-[11px] font-medium text-teal">
+        <span id="periodBadge" class="metric-pill">
           در حال خواندن دوره آماری...
         </span>
-        <span class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+        <span class="metric-pill metric-pill-muted">
           واحد تراز و افت: متر
         </span>
       </div>
@@ -400,10 +400,10 @@
     <div id="wizardPendingChecklist" class="wizard-pending-checklist"></div>
   </section>
 
-  <div id="dashboardResults" class="hidden space-y-4">
+  <div id="dashboardResults" class="hidden space-y-5">
   <section id="statsGrid" class="dashboard-stats-shell" aria-label="خلاصه وضعیت آبخوان"></section>
 
-  <section class="grid gap-4 xl:grid-cols-12">
+  <section class="grid gap-5 xl:grid-cols-12">
     <article class="panel overflow-hidden xl:col-span-5" data-aquifer-map-panel>
       <div class="map-panel-header" data-aquifer-map-heading>
         <div class="section-heading-copy">
@@ -479,17 +479,17 @@
         </div>
         <div id="aquiferTrendSummary" class="trend-chip-grid"></div>
       </div>
-      <div data-tab-panel="aquifer-chart">
+      <div class="chart-panel-body" data-tab-panel="aquifer-chart">
         <div id="aquiferChart" class="h-[390px] w-full px-2 pb-2"></div>
         <div id="precipitationSource" class="mx-5 mb-3 rounded-xl border border-sky-100 bg-sky-50/70 px-4 py-2.5 text-[10px] leading-6 text-slate-600"></div>
         <div class="mx-5 mb-5 rounded-2xl border border-sand bg-sand/30 px-4 py-3 text-[10px] leading-6 text-slate-600">
           خط‌چین قرمز شیب بازه اصلی است؛ با فعال‌کردن مقایسه، خط‌چین مشکی بازه دوم نیز اضافه می‌شود. جدول فقط از ماه‌های بازه اصلی استفاده می‌کند.
         </div>
       </div>
-      <div class="hidden" data-tab-panel="aquifer-table">
+      <div class="hidden chart-panel-body" data-tab-panel="aquifer-table">
         <div id="aquiferAnnualTable" class="table-scroll max-h-[510px]"></div>
       </div>
-      <div class="hidden" data-tab-panel="aquifer-annual">
+      <div class="hidden chart-panel-body" data-tab-panel="aquifer-annual">
         <div class="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
           <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
             روش افت
@@ -516,13 +516,13 @@
           بارش و AET مجموع ماه‌های موجود در سال آبی هستند. NDVI به‌صورت پیش‌فرض میانگین شاخص انتخابی در ماه‌های خرداد تا شهریور (۳ تا ۶ شمسی) است و از فهرست بالا می‌توان آن را به کل سال آبی تغییر داد. خط بنفش مساحت احتمالی کشت آبی همین چهار ماه را بر حسب هکتار نشان می‌دهد. سال‌های کمتر از ۱۲ ماه با برچسب «ناقص» مشخص شده‌اند.
         </div>
       </div>
-      <div class="hidden" data-tab-panel="aquifer-risk">
+      <div class="hidden chart-panel-body" data-tab-panel="aquifer-risk">
         <div id="aquiferRiskPanel" class="p-5"></div>
       </div>
-      <div class="hidden" data-tab-panel="aquifer-scenario">
+      <div class="hidden chart-panel-body" data-tab-panel="aquifer-scenario">
         <div id="aquiferScenarioPanel" class="p-5"></div>
       </div>
-      <div class="hidden" data-tab-panel="aquifer-ndvi">
+      <div class="hidden chart-panel-body" data-tab-panel="aquifer-ndvi">
         <div class="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3 sm:flex-row sm:items-center sm:justify-end">
           <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
             روش تراز
@@ -542,7 +542,7 @@
           ستون‌ها NDVI ماهانه آبخوان را از Landsat 8 نشان می‌دهند. شاخص آماری از فهرست بالا قابل تغییر است.
         </div>
       </div>
-      <div class="hidden" data-tab-panel="aquifer-aet">
+      <div class="hidden chart-panel-body" data-tab-panel="aquifer-aet">
         <div class="flex justify-end border-b border-slate-100 bg-slate-50/70 px-5 py-3">
           <label class="flex items-center gap-2 text-[10px] font-medium text-slate-600">
             روش تراز
