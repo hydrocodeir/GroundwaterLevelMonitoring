@@ -1,0 +1,7 @@
+<!doctype html><html><meta charset="utf-8"><title>Mashhad continuous bedrock</title><p id="status">Pyodide</p><script>
+window.worker=new Worker('surface-worker.js',{type:'module'});
+window.runStep=data=>new Promise((resolve,reject)=>{
+ worker.onmessage=({data})=>{if(data.progress){console.log(data.progress);return}data.error?reject(Error(data.error)):resolve(data.result)};
+ worker.onerror=e=>reject(Error(e.message));worker.postMessage({...data,base:location.origin});
+});
+</script></html>

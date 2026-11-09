@@ -1,0 +1,10 @@
+<!doctype html><html><meta charset="utf-8"><title>Local Mashhad bedrock processing</title>
+<p id="status">Client-side Pyodide computation</p>
+<script>
+window.worker=new Worker('msl-worker.js',{type:'module'});
+window.runStep=data=>new Promise((resolve,reject)=>{
+  worker.onmessage=({data})=>data.error?reject(Error(data.error)):resolve(data.result);
+  worker.onerror=e=>reject(Error(e.message));
+  worker.postMessage({...data,base:location.origin});
+});
+</script></html>

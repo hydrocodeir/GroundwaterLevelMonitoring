@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#112e46">
+    <title>مقایسه سه‌بعدی ذخیره آبخوان | سامانه پایش آب زیرزمینی</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('assets', path='img/favicon-32.png') }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d.css') }}?v={{ asset_version }}">
+    <script type="module" src="{{ url_for('assets', path='js/aquifer3d.js') }}?v={{ asset_version }}"></script>
+  </head>
+  <body class="aquifer3d-page">
+    <div class="aquifer3d-backdrop" aria-hidden="true"></div>
+    <div class="aquifer3d-shell">
+      <header class="aquifer3d-header">
+        <nav class="aquifer3d-nav" aria-label="ناوبری صفحه">
+          <a class="aquifer3d-brand" href="/" aria-label="بازگشت به داشبورد پایش آب زیرزمینی">
+            <span class="aquifer3d-brand-mark"><img src="{{ url_for('assets', path='img/HydroCode.png') }}" alt=""></span>
+            <span><strong>پایش آب زیرزمینی</strong><small>HydroCodeIR</small></span>
+          </a>
+          <a class="aquifer3d-back" href="/"><span aria-hidden="true">→</span> بازگشت به داشبورد</a>
+        </nav>
+
+        <div class="aquifer3d-intro">
+          <div>
+            <p class="aquifer3d-eyebrow"><span></span> نمای حجمی و تغییرات زمانی آبخوان</p>
+            <h1>آبِ آبخوان، پیش و پس از افت</h1>
+            <p class="aquifer3d-lede">یک آبخوان را انتخاب کنید تا سطح آب در شهریور سال مبنا با شهریور ۱۴۰۴ مقایسه شود. ارتفاع سطح آب از داده‌های پیزومترها برآورد می‌شود؛ حجم آب قابل زهکشی با کف مدل و آبدهی ویژه، به‌صورت سناریویی، برآورد می‌شود.</p>
+          </div>
+          <div class="aquifer3d-date-card" aria-label="تاریخ انتهای مقایسه">
+            <span>انتهای مقایسه</span>
+            <strong>شهریور ۱۴۰۴</strong>
+            <small>پایان سال آبی WY ۱۴۰۳</small>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="aquifer3d-config aquifer3d-card" aria-labelledby="aquifer3d-config-title">
+          <div class="aquifer3d-section-heading">
+            <div>
+              <p class="aquifer3d-kicker">۰۱ / ورودی‌های تحلیل</p>
+              <h2 id="aquifer3d-config-title">محدوده و فرض‌های محاسبه</h2>
+            </div>
+            <span class="aquifer3d-local-badge"><span aria-hidden="true">●</span> محاسبه در مرورگر شما</span>
+          </div>
+
+          <div class="aquifer3d-form-grid">
+            <label class="aquifer3d-field" for="aquiferSelect3d">
+              <span class="aquifer3d-field-label">آبخوان</span>
+              <select id="aquiferSelect3d" required aria-describedby="aquifer3d-aquifer-help">
+                <option value="">در حال بارگذاری آبخوان‌ها…</option>
+              </select>
+              <small id="aquifer3d-aquifer-help">مرز سه‌بعدی از پلیگون همین آبخوان ساخته می‌شود.</small>
+            </label>
+
+            <label class="aquifer3d-field" for="baselineYear">
+              <span class="aquifer3d-field-label">سال مبنا</span>
+              <select id="baselineYear" required aria-describedby="aquifer3d-year-help">
+                <option value="">در حال بررسی دوره داده‌ها…</option>
+              </select>
+              <small id="aquifer3d-year-help">شهریور سال انتخابی؛ پایان سال آبیِ آغازشده در سال قبل.</small>
+            </label>
+
+            <label class="aquifer3d-field" for="syInput">
+              <span class="aquifer3d-field-label">آبدهی ویژه <span dir="ltr">(Sy)</span></span>
+              <span class="aquifer3d-input-suffix">
+                <input id="syInput" type="number" min="0" max="1" step="any" inputmode="decimal" placeholder="مقدار دارای منبع" aria-describedby="aquifer3d-sy-help">
+                <span>بی‌بعد</span>
+              </span>
+              <small id="aquifer3d-sy-help">مقدار باید ویژهٔ همین آبخوان و دارای منبع باشد؛ پیشنهاد پژوهشی نیشابور فقط برای همان آبخوان کاربرد دارد.</small>
+            </label>
+
+            <label class="aquifer3d-field" id="karatThicknessField" for="karatThicknessInput" hidden>
+              <span class="aquifer3d-field-label">ضخامت اشباع فرضی کرات در شهریور ۱۴۰۴</span>
+              <span class="aquifer3d-input-suffix">
+                <input id="karatThicknessInput" type="number" min="20" max="300" step="1" inputmode="decimal" value="65" aria-describedby="aquifer3d-karat-thickness-help">
+                <span>متر</span>
+              </span>
+              <small id="aquifer3d-karat-thickness-help">پیش‌فرض سناریو ۶۵ متر زیر سطح آب درون‌یابی‌شده از ۵ چاه شهریور ۱۴۰۴ است. فقط اگر عمق محاسبه‌شده از سطح زمین محلی بیش از ۳۰۰ متر شود، کف به عمق ۳۰۰ متر محدود می‌شود و ضخامت نسبت به سطح آب پنج‌چاهیِ مرجع کمتر از مقدار انتخابی خواهد بود.</small>
+            </label>
+
+            <label class="aquifer3d-field aquifer3d-file-field" for="bedrockFile">
+              <span class="aquifer3d-field-label">دادهٔ سنگ‌بستر <span class="aquifer3d-optional">اختیاری</span></span>
+              <input id="bedrockFile" type="file" accept=".csv,text/csv" aria-describedby="aquifer3d-bedrock-help">
+              <small id="aquifer3d-bedrock-help">برای نیشابور، عمق سنگ کفِ تقریبی برگرفته از شکل S4 خودکار استفاده می‌شود. CSV شما با ستون‌های <code dir="ltr">lon,lat,bedrock_msl</code> جایگزین آن می‌شود.</small>
+            </label>
+          </div>
+
+          <div class="aquifer3d-action-row">
+            <button id="build3d" class="aquifer3d-build-button" type="button">ساخت مقایسهٔ سه‌بعدی <span aria-hidden="true">←</span></button>
+            <p id="status3d" class="aquifer3d-status" role="status" aria-live="polite">برای شروع، آبخوان و سال مبنا را انتخاب کنید.</p>
+          </div>
+        </section>
+
+        <section class="aquifer3d-summary" aria-labelledby="aquifer3d-summary-title">
+          <div class="aquifer3d-section-heading aquifer3d-summary-heading">
+            <div>
+              <p class="aquifer3d-kicker">۰۲ / برآوردها</p>
+              <h2 id="aquifer3d-summary-title">آنچه از داده‌ها می‌دانیم</h2>
+            </div>
+            <p>اعداد پس از اجرای تحلیل ظاهر می‌شوند.</p>
+          </div>
+          <div class="aquifer3d-metrics">
+            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">▧</span><span class="aquifer3d-metric-label">مساحت آبخوان</span><strong id="areaMetric">—</strong><small>بر پایهٔ مرز GeoJSON سامانه</small></article>
+            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">⌁</span><span class="aquifer3d-metric-label">پیزومترهای دارای داده</span><strong id="wellMetric">—</strong><small>پوشش دو زمان مقایسه</small></article>
+            <article class="aquifer3d-metric aquifer3d-metric-warn"><span class="aquifer3d-metric-icon">↓</span><span class="aquifer3d-metric-label">تغییر میانگین سطح آب</span><strong id="declineMetric">—</strong><small>متر؛ بین دو شهریور</small></article>
+            <article class="aquifer3d-metric aquifer3d-metric-accent"><span class="aquifer3d-metric-icon">◒</span><span class="aquifer3d-metric-label">تغییر برآوردی ذخیرهٔ آب</span><strong id="storageMetric">—</strong><small>با آبدهی ویژهٔ انتخابی</small></article>
+            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label">حجم آب قابل زهکشی در سال مبنا</span><strong id="volumeBeforeMetric">—</strong><small id="volumeBeforeHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
+            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label">حجم آب قابل زهکشی در شهریور ۱۴۰۴</span><strong id="volumeAfterMetric">—</strong><small id="volumeAfterHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
+          </div>
+        </section>
+
+        <section class="aquifer3d-scenes" aria-labelledby="aquifer3d-scenes-title">
+          <div class="aquifer3d-section-heading">
+            <div>
+              <p class="aquifer3d-kicker">۰۳ / تصویر مقایسه‌ای</p>
+              <h2 id="aquifer3d-scenes-title">دو برش از یک آبخوان</h2>
+            </div>
+            <div class="aquifer3d-legend" aria-label="راهنمای رنگ‌ها"><span><i class="aquifer3d-legend-water"></i> بخش اشباع</span><span><i class="aquifer3d-legend-bedrock"></i> <span id="bedrockLegendLabel">سنگ‌بستر / بستر شماتیک</span></span><span><i class="aquifer3d-legend-decline"></i> اختلاف با سطح مبنا در شکل دوم</span></div>
+          </div>
+          <div class="aquifer3d-scene-grid">
+            <article class="aquifer3d-scene aquifer3d-scene-before">
+              <div class="aquifer3d-scene-heading"><span class="aquifer3d-scene-step">۱ / پیش‌تر</span><h3>شهریور سال مبنا</h3><p>سطح آب و ضخامت اشباع در آغاز مقایسه</p></div>
+              <div class="aquifer3d-canvas-wrap"><canvas id="beforeCanvas" width="900" height="660" role="img" aria-label="مدل سه‌بعدی آبخوان در شهریور سال مبنا"></canvas></div>
+              <div class="aquifer3d-scene-caption">در نمای آغازین شمال بالا و شرق راست است. با کشیدن تصویر زاویه را تغییر دهید؛ دوبار کلیک جهت آغازین را برمی‌گرداند.</div>
+            </article>
+            <article class="aquifer3d-scene aquifer3d-scene-after">
+              <div class="aquifer3d-scene-heading"><span class="aquifer3d-scene-step">۲ / شهریور ۱۴۰۴</span><h3>پس از تغییر سطح آب</h3><p>همان محدوده و مقیاس برای مقایسهٔ مستقیم</p></div>
+              <div class="aquifer3d-canvas-wrap"><canvas id="afterCanvas" width="900" height="660" role="img" aria-label="مدل سه‌بعدی آبخوان در شهریور ۱۴۰۴"></canvas></div>
+              <div class="aquifer3d-scene-caption">قطب‌نمای N/E جهت را پس از چرخاندن نشان می‌دهد. نوار نارنجی فاصلهٔ سطح کنونی تا سطح مبناست.</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="aquifer3d-notes aquifer3d-card" aria-labelledby="aquifer3d-notes-title">
+          <div class="aquifer3d-section-heading"><div><p class="aquifer3d-kicker">۰۴ / منشأ و محدودیت</p><h2 id="aquifer3d-notes-title">چگونه این تصویر را بخوانیم؟</h2></div></div>
+          <div class="aquifer3d-notes-grid">
+            <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۱</span><div><h3>منابع و فرض‌ها</h3><p id="sourceNote">مرز GeoJSON آبخوان و سطح آب از داده‌های همین سامانه گرفته می‌شوند. آبدهی ویژه و سنگ‌بستر باید برای آبخوان انتخابی با منبع محلی بررسی شوند.</p><p class="aquifer3d-source-link"><a href="https://pubs.usgs.gov/of/2002/ofr02197/documentation.pdf" target="_blank" rel="noopener noreferrer">توضیح USGS دربارهٔ آبدهی ویژه در آبخوان آزاد ↗</a></p></div></div>
+            <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۲</span><div><h3>پوشش داده و روش</h3><p id="coverageNote">مدل پس از انتخاب آبخوان و دوره، تعداد پیزومترهای دارای داده و محدودیت پوشش مکانی را نشان می‌دهد. بدون دادهٔ سنگ‌بستر، نمایش عمق و شکل آبخوان شماتیک است و حجم مطلق آب قابل برآورد نیست.</p></div></div>
+          </div>
+          <p class="aquifer3d-method">سال آبی ایران از ۱ مهر تا ۳۱ شهریور است. شهریور ۱۴۰۴ پایان <span dir="ltr">WY 1403</span> محسوب می‌شود. تغییر ذخیره از اختلاف تراز و آبدهی ویژه برآورد می‌شود. حجم آب قابل زهکشی حتی با دادهٔ سنگ‌بستر، برآوردی سناریویی است و مقدار واقعی آب قابل بهره‌برداری را نشان نمی‌دهد.</p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

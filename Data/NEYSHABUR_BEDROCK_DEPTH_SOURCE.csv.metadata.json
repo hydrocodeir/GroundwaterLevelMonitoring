@@ -1,0 +1,29 @@
+{
+  "source": "https://static-content.springer.com/esm/art%3A10.1007%2Fs10040-014-1219-9/MediaObjects/10040_2014_1219_MOESM1_ESM.pdf",
+  "citation": "Izady et al., Hydrogeology Journal (2015), electronic supplementary material, Fig. S4",
+  "source_variable": "bedrock depth below land surface, metres (not bedrock MSL)",
+  "source_method": "bedrock iso-depth lines interpreted from 320 sounding and cross-section controls reported by authors",
+  "digitization": "approximate figure registration, selected checked green contour fragments, and label-guided local contour controls",
+  "georeferencing": "north-up affine approximation to project Neyshabur AQUIFER.geojson feature 33; no graticule printed on Fig. S4",
+  "georeferencing_formula": {
+    "x_pixel": "55+1221*(lon-58.277)",
+    "y_pixel": "122+1309*(36.405-lat)"
+  },
+  "quality": "approximate research reconstruction; source and project aquifer boundaries differ by several km locally; printed map omits underlying 320 point coordinates; unlabeled contours were not guessed wholesale",
+  "known_limitations": [
+    "Contour interval is about 20 m; map labels are not measurements at every output point.",
+    "Several source raster line components merge neighboring contours, so only selected checked components are traced.",
+    "Coverage is sparse away from selected labeled contours; interpolation and absolute storage are scenario estimates.",
+    "Do not interpret cyan sounding dots as measured depth values; the source does not print numeric depths at those dots."
+  ],
+  "record_count": 250,
+  "depth_min_m": 40,
+  "depth_max_m": 240,
+  "label_guided_anchor_count": 34,
+  "curated_component_count": 10,
+  "csv_columns": [
+    "lon",
+    "lat",
+    "bedrock_depth_m"
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "plan": {
+    "dataset": "USGS/SRTMGL1_003",
+    "band": "elevation",
+    "crs": "EPSG:32640",
+    "transform": [
+      30,
+      0,
+      633660,
+      0,
+      -30,
+      4097070
+    ],
+    "width": 4327,
+    "height": 3581,
+    "tiles": [
+      {
+        "id": "c0_r0",
+        "col": 0,
+        "row": 0,
+        "width": 4096,
+        "height": 2048,
+        "crs": "EPSG:32640",
+        "transform": [
+          30,
+          0,
+          633660,
+          0,
+          -30,
+          4097070
+        ]
+      },
+      {
+        "id": "c4096_r0",
+        "col": 4096,
+        "row": 0,
+        "width": 231,
+        "height": 2048,
+        "crs": "EPSG:32640",
+        "transform": [
+          30,
+          0,
+          756540,
+          0,
+          -30,
+          4097070
+        ]
+      },
+      {
+        "id": "c0_r2048",
+        "col": 0,
+        "row": 2048,
+        "width": 4096,
+        "height": 1533,
+        "crs": "EPSG:32640",
+        "transform": [
+          30,
+          0,
+          633660,
+          0,
+          -30,
+          4035630
+        ]
+      },
+      {
+        "id": "c4096_r2048",
+        "col": 4096,
+        "row": 2048,
+        "width": 231,
+        "height": 1533,
+        "crs": "EPSG:32640",
+        "transform": [
+          30,
+          0,
+          756540,
+          0,
+          -30,
+          4035630
+        ]
+      }
+    ],
+    "row_count": 14310,
+    "boundary_count": 1305
+  },
+  "retrieved_utc": "2026-11-09T16:17:22.886322+00:00",
+  "asset": "USGS/SRTMGL1_003",
+  "grid_origin": "pixel corners",
+  "formats": [
+    "NPY",
+    "GEO_TIFF"
+  ]
+}

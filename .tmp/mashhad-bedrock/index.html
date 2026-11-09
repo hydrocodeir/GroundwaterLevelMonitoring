@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>سنگ کف دشت مشهد | نمودار سه‌بعدی</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f6fa;color:#17324b;font:15px Tahoma,Arial,sans-serif}main{max-width:1500px;margin:auto;padding:24px}h1{font-size:25px;margin:0 0 10px}p{line-height:1.9;margin:6px 0}header{margin-bottom:16px}.subtitle{color:#526c81}.controls{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;background:white;padding:14px 18px;border-radius:12px}label{display:flex;align-items:center;gap:7px}button,select{font:inherit;padding:7px 12px;border:1px solid #c5d2df;border-radius:7px;background:white;color:inherit}button{cursor:pointer}button:hover{background:#e5f1fb}#plot{height:70vh;min-height:490px;background:white;border-radius:14px;margin-top:14px;direction:ltr}#summary{display:flex;flex-wrap:wrap;gap:14px 32px;margin:14px 4px;font-size:14px}.note{color:#53697d;font-size:13px}#status{color:#116984}input[type=range]{width:130px}footer{margin-top:12px}@media(max-width:600px){main{padding:12px}h1{font-size:21px}#plot{height:65vh;min-height:430px}.controls{gap:12px}#summary{gap:8px 18px}}
+</style>
+<main>
+<header><h1>سنگ کف دشت مشهد</h1><p class="subtitle">نمای سه‌بعدی خطوط هم‌مقدار و سطح برآوردی • UTM 40N / WGS 84</p></header>
+<div class="controls">
+<label>نمایش <select id="mode"><option value="both">سطح و خطوط اصلی</option><option value="lines">فقط خطوط اصلی</option><option value="surface">فقط سطح برآوردی</option></select></label>
+<label><input type="checkbox" id="depth"> نمایش مقدار به‌صورت عمق (مثبت رو به پایین)</label>
+<label>کشیدگی نمای قائم <input id="exag" type="range" min="1" max="10" step="0.5" value="4"><output id="factor">۴</output></label>
+<button id="reset">بازنشانی دید</button><button id="png">ذخیرهٔ تصویر</button>
+</div>
+<p id="status" role="status">در حال محاسبهٔ سطح در مرورگر…</p>
+<div id="summary"></div>
+<div id="plot" role="img" aria-label="نمودار سه‌بعدی سنگ کف مشهد، با امکان چرخش، بزرگ‌نمایی و مشاهده مقدار"></div>
+<footer><p class="note">خطوط تیره: داده‌های اصلی. سطح رنگی: درون‌یابی تقریبی IDW؛ صرفاً داخل پوش محدب خطوط و تا فاصلهٔ ۵ کیلومتر از نزدیک‌ترین خط. این پوش، مرز دشت یا آبخوان نیست.</p><p class="note">واحد و مبنای قائم BEDROC در فایل مشخص نشده است؛ محور قائم، مقدار خام این ستون است. برای تبدیل به ارتفاع مطلق سنگ کف، تعریف این ستون و در صورت عمق بودن، ارتفاع سطح زمین لازم است. ضریب عمودی فقط برای نمایش است و مقادیر را تغییر نمی‌دهد.</p><p class="note">برای چرخش بکشید؛ برای بزرگ‌نمایی از چرخ ماوس استفاده کنید. محاسبات با Pyodide در مرورگر انجام شده‌اند و داده‌ها به سرویس خارجی فرستاده نمی‌شوند.</p></footer>
+</main>
+<script id="plotly-library" src="plotly.min.js"></script>
+<script id="view-code" src="view.js"></script>
+</html>

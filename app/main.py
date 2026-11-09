@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import ValidationError
 
@@ -39,6 +39,7 @@ templates.env.globals["asset_version"] = max(
     (ROOT / "frontend" / "assets" / "css" / "app.css").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "app.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "comparison.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d.js").stat().st_mtime_ns,
 )
 AI_REQUEST_MAX_BYTES = 64_000
 
@@ -52,11 +53,6 @@ def _ai_error_response(message: str, provider: str | None = None, status_code: i
             "provider": provider,
         },
     )
-
-
-@app.on_event("startup")
-def warm_data_cache() -> None:
-    get_data_service()
 
 
 @app.middleware("http")
@@ -94,6 +90,28 @@ def comparison(request: Request) -> HTMLResponse:
         name="comparison.html",
         context={},
     )
+
+
+@app.get("/aquifer-3d", response_class=HTMLResponse)
+def aquifer_3d(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="aquifer3d.html",
+        context={},
+    )
+
+
+@app.get("/data/{filename}")
+def aquifer_3d_source_data(filename: str) -> FileResponse:
+    if filename not in {"AQUIFER.geojson", "LOCATION.csv", "DATA.csv", "NEYSHABUR_BEDROCK_DEPTH.csv", "NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv.metadata.json"}:
+        raise HTTPException(status_code=404, detail="فایل پیدا نشد")
+    return FileResponse(ROOT / "Data" / filename)
+
+
+@app.get("/aquifer3d-sw.js")
+def aquifer_3d_service_worker() -> FileResponse:
+    return FileResponse(ROOT / "frontend" / "assets" / "js" / "aquifer3d-sw.js",
+                        media_type="text/javascript")
 
 
 @app.get("/partials/aquifers", response_class=HTMLResponse)

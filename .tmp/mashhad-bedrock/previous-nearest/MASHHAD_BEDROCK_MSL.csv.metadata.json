@@ -1,0 +1,82 @@
+{
+  "aquifer": "مشهد",
+  "csv_columns": [
+    "lon",
+    "lat",
+    "bedrock_msl"
+  ],
+  "record_count": 14310,
+  "records_by_role": {
+    "boundary_nearest_contour": 1295,
+    "source_contour_vertex": 1480,
+    "source_contour_densified": 1431,
+    "interpolated_interior": 10104
+  },
+  "source_file": ".tmp/BedRock.geojson",
+  "source_sha256": "6d826396c92ee9f3da7f60c2da4d28f1ae4a0df7e7b6291002b61399c046a94f",
+  "source_crs": "EPSG:32640",
+  "output_crs": "EPSG:4326",
+  "source_depth_definition": "BEDROC = depth below local ground, metres; explicitly confirmed by user on 2026-11-09",
+  "source_depth_range_m": [
+    75,
+    225
+  ],
+  "original_source_vertices": 1517,
+  "original_source_vertices_inside_aquifer": 1482,
+  "original_source_vertices_outside_aquifer": 35,
+  "boundary_geometry_source": "Data/AQUIFER.geojson, feature AQUIFER=مشهد, unchanged",
+  "boundary_geometry_sha256": "ce6424cebd884602023d3b8c227f85501e1deae450ab16349a36794da4502176",
+  "boundary_method": "Depth equals BEDROC of the nearest original line segment in EPSG:32640. Preserve all ring vertices; densify to <=500m. No zero/shallow boundary assumption and no boundary taper.",
+  "interior_method": "IDW p=2 of four nearest distinct BEDROC depth groups; distance is to the closest original segment in each group. Exact source depths preserved on source controls.",
+  "interior_grid_spacing_m": 500,
+  "boundary_max_spacing_m": 500,
+  "contour_max_spacing_m": 500,
+  "dem": {
+    "gee_asset": "USGS/SRTMGL1_003",
+    "band": "elevation",
+    "nominal_native_resolution": "1 arc-second (~30m)",
+    "downloaded_grid_resolution_m": 30,
+    "download_crs": "EPSG:32640",
+    "gee_resampling": "nearest/default to UTM grid",
+    "client_sampling": "bilinear interpolation between four downloaded DEM cell centres",
+    "vertical_datum": "EGM96 orthometric height (approximate MSL), metres",
+    "epoch": "SRTM February 2000",
+    "retrieved_utc": "2026-11-09T16:17:22.886322+00:00",
+    "catalog": "https://developers.google.com/earth-engine/datasets/catalog/USGS_SRTMGL1_003",
+    "datum_reference": "https://www.usgs.gov/centers/eros/science/usgs-eros-archive-digital-elevation-shuttle-radar-topography-mission-srtm"
+  },
+  "formula": "bedrock_msl = SRTM ground orthometric elevation - BEDROC depth (m)",
+  "bedrock_msl_range_m": [
+    694.4014674985045,
+    1615.0772460680505
+  ],
+  "ground_msl_range_m": [
+    857.8211813117346,
+    1765.0772460680505
+  ],
+  "boundary_nearest_distance_range_m": [
+    1.2726354836838,
+    20725.775860762322
+  ],
+  "boundary_samples_over_5km_from_contours": 56,
+  "validation": {
+    "projection_roundtrip_max_error_m": 0.0002598061782072757,
+    "nearest_search_vs_bruteforce_max_error_m": 0,
+    "boundary_nearest_value_exact": true,
+    "no_zero_boundary_depth": true,
+    "missing_dem_samples": 0,
+    "unique_coordinates": true,
+    "all_bedrock_below_local_dem": true,
+    "csv_three_column_schema": true
+  },
+  "execution": "All coordinate transforms, spatial queries, depth interpolation, DEM sampling, subtraction, validation and CSV generation ran client-side in a Pyodide web worker. Host only authenticated, downloaded GEE DEM bytes, served static files, and saved browser outputs.",
+  "known_limitations": [
+    "Derived bedrock estimates, not measured bedrock elevations or a newly surveyed aquifer boundary.",
+    "Nearest-contour assignment on the existing aquifer boundary is a user-requested extrapolation; accuracy decreases with distance to source lines.",
+    "All source contours, including ones outside the project aquifer polygon, support interior and boundary estimation. Outside source controls are not exported as aquifer points.",
+    "Depth below ground is referenced to SRTM epoch and terrain/surface representation; buildings, vegetation and changes since 2000 can bias the inferred bedrock height.",
+    "EGM96 heights are approximate mean-sea-level heights; verify compatibility or apply a datum transformation before combining with local LEVEL_MSL surveys.",
+    "Synthetic grid and boundary samples are not independent observations. IDW and decimal precision do not imply measured resolution or accuracy.",
+    "Boundary uses nearest contour exactly; no additional transition band is imposed. Interior IDW and boundary extrapolation may differ close to the boundary."
+  ]
+}
