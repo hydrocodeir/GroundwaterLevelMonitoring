@@ -1,0 +1,54 @@
+{
+  "blocked": true,
+  "unresolved": [
+    {
+      "source_key": [
+        "گیسور",
+        "گیسورجنوبی",
+        "کنارهراهحوضکرمبهجنتآباد(شمارهچهارجنگل)"
+      ],
+      "source_study": "گیسور",
+      "source_aquifer": "گیسور جنوبی",
+      "source_well": "کناره راه حوض کرم به جنت آباد (شماره چهار جنگل)",
+      "source_ground": "967",
+      "source_x": "715684",
+      "source_y": "3844740",
+      "source_zone": "40",
+      "source_rows": 11,
+      "source_lines": [
+        5476,
+        5477,
+        5478,
+        5479,
+        5480,
+        5481,
+        5482,
+        5483,
+        5484,
+        5485,
+        5486
+      ],
+      "status": "needs_review",
+      "match_reason": null,
+      "chosen": null,
+      "candidates": [
+        {
+          "index": 857,
+          "name": "شماره چهار جنگل",
+          "study": "گیسور",
+          "aquifer": "گیسور شمالی",
+          "distance_m": 39,
+          "similarity": 0.5098,
+          "same_study": true,
+          "same_name": false,
+          "ground": "928"
+        }
+      ],
+      "canonical_group": [
+        "گیسور",
+        "گیسور شمالی"
+      ]
+    }
+  ],
+  "input_geo_sha256": "bf3f8fc9c07a977eb4e118855fa47c3ed6f214914b8be8c3d0dfc75ff15345ed"
+}

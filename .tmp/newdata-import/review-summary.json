@@ -1,0 +1,1074 @@
+{
+  "input_rows": 7637,
+  "input_wells": 598,
+  "status_counts": {
+    "already_present": 322,
+    "ready": 4443,
+    "unmatched_well": 2843,
+    "existing_conflict": 28,
+    "invalid_record": 1
+  },
+  "issue_types": {
+    "location_discrepancy": 234,
+    "unmatched_well": 222,
+    "ambiguous_existing_well": 1
+  },
+  "height_difference_wells": 206,
+  "max_abs_ground_difference_m": 168,
+  "position_difference_over100m_wells": 38,
+  "position_examples": [
+    {
+      "kind": "location_discrepancy",
+      "well": "داوطلب",
+      "study": "بردسکن",
+      "aquifer": "بردسکن",
+      "existing_level": "906",
+      "source_heights": [
+        "917"
+      ],
+      "rows": [
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179
+      ],
+      "examples": [
+        {
+          "line": 167,
+          "ground_delta_m": "11",
+          "coordinate_delta_m": 2301.565,
+          "same_zone": true
+        },
+        {
+          "line": 168,
+          "ground_delta_m": "11",
+          "coordinate_delta_m": 2301.565,
+          "same_zone": true
+        },
+        {
+          "line": 169,
+          "ground_delta_m": "11",
+          "coordinate_delta_m": 2301.565,
+          "same_zone": true
+        }
+      ]
+    },
+    {
+      "kind": "location_discrepancy",
+      "well": "رکن آباد",
+      "study": "بردسکن",
+      "aquifer": "بردسکن",
+      "existing_level": "910",
+      "source_heights": [
+        "909"
+      ],
+      "rows": [
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        190,
+        191,
+        192
+      ],
+      "examples": [
+        {
+          "line": 180,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 171.003,
+          "same_zone": true
+        },
+        {
+          "line": 181,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 171.003,
+          "same_zone": true
+        },
+        {
+          "line": 182,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 171.003,
+          "same_zone": true
+        }
+      ]
+    },
+    {
+      "kind": "location_discrepancy",
+      "well": "شرکت صبا",
+      "study": "بردسکن",
+      "aquifer": "بردسکن",
+      "existing_level": "840",
+      "source_heights": [
+        "844"
+      ],
+      "rows": [
+        206,
+        207,
+        208,
+        209,
+        210,
+        211,
+        212,
+        213,
+        214,
+        215,
+        216,
+        217,
+        218
+      ],
+      "examples": [
+        {
+          "line": 206,
+          "ground_delta_m": "4",
+          "coordinate_delta_m": 2935.417,
+          "same_zone": true
+        },
+        {
+          "line": 207,
+          "ground_delta_m": "4",
+          "coordinate_delta_m": 2935.417,
+          "same_zone": true
+        },
+        {
+          "line": 208,
+          "ground_delta_m": "4",
+          "coordinate_delta_m": 2935.417,
+          "same_zone": true
+        }
+      ]
+    },
+    {
+      "kind": "location_discrepancy",
+      "well": "یحیی آباد",
+      "study": "بردسکن",
+      "aquifer": "بردسکن",
+      "existing_level": "855",
+      "source_heights": [
+        "855"
+      ],
+      "rows": [
+        271,
+        272,
+        273,
+        274,
+        275,
+        276,
+        277,
+        278,
+        279,
+        280,
+        281,
+        282,
+        283
+      ],
+      "examples": [
+        {
+          "line": 271,
+          "ground_delta_m": "0",
+          "coordinate_delta_m": 719.083,
+          "same_zone": true
+        },
+        {
+          "line": 272,
+          "ground_delta_m": "0",
+          "coordinate_delta_m": 719.083,
+          "same_zone": true
+        },
+        {
+          "line": 273,
+          "ground_delta_m": "0",
+          "coordinate_delta_m": 719.083,
+          "same_zone": true
+        }
+      ]
+    },
+    {
+      "kind": "location_discrepancy",
+      "well": "تقاطع راه آهن و جاده",
+      "study": "بجستان یونسی",
+      "aquifer": "بجستان",
+      "existing_level": "1065",
+      "source_heights": [
+        "1064"
+      ],
+      "rows": [
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329,
+        330,
+        331,
+        332,
+        333,
+        334,
+        335
+      ],
+      "examples": [
+        {
+          "line": 323,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 104.235,
+          "same_zone": true
+        },
+        {
+          "line": 324,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 104.235,
+          "same_zone": true
+        },
+        {
+          "line": 325,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 104.235,
+          "same_zone": true
+        }
+      ]
+    },
+    {
+      "kind": "location_discrepancy",
+      "well": "اراضی مهنه تپه خاک",
+      "study": "محولات - فیض آباد",
+      "aquifer": "محولات",
+      "existing_level": "936",
+      "source_heights": [
+        "925"
+      ],
+      "rows": [
+        700,
+        701,
+        702,
+        703,
+        704,
+        705,
+        706,
+        707,
+        708,
+        709,
+        710,
+        711,
+        712
+      ],
+      "examples": [
+        {
+          "line": 700,
+          "ground_delta_m": "-11",
+          "coordinate_delta_m": 1996,
+          "same_zone": true
+        },
+        {
+          "line": 701,
+          "ground_delta_m": "-11",
+          "coordinate_delta_m": 1996,
+          "same_zone": true
+        },
+        {
+          "line": 702,
+          "ground_delta_m": "-11",
+          "coordinate_delta_m": 1996,
+          "same_zone": true
+        }
+      ]
+    },
+    {
+      "kind": "location_discrepancy",
+      "well": "شمس آباد",
+      "study": "محولات - فیض آباد",
+      "aquifer": "محولات",
+      "existing_level": "850",
+      "source_heights": [
+        "849"
+      ],
+      "rows": [
+        882,
+        883,
+        884,
+        885,
+        886,
+        887,
+        888,
+        889,
+        890,
+        891,
+        892,
+        893,
+        894
+      ],
+      "examples": [
+        {
+          "line": 882,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 137.674,
+          "same_zone": true
+        },
+        {
+          "line": 883,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 137.674,
+          "same_zone": true
+        },
+        {
+          "line": 884,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 137.674,
+          "same_zone": true
+        }
+      ]
+    },
+    {
+      "kind": "location_discrepancy",
+      "well": "نصر آباد دوغ آباد",
+      "study": "محولات - فیض آباد",
+      "aquifer": "محولات",
+      "existing_level": "1022",
+      "source_heights": [
+        "1021"
+      ],
+      "rows": [
+        960,
+        961,
+        962,
+        963,
+        964,
+        965,
+        966,
+        967,
+        968,
+        969,
+        970,
+        971,
+        972
+      ],
+      "examples": [
+        {
+          "line": 960,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 116.4,
+          "same_zone": true
+        },
+        {
+          "line": 961,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 116.4,
+          "same_zone": true
+        },
+        {
+          "line": 962,
+          "ground_delta_m": "-1",
+          "coordinate_delta_m": 116.4,
+          "same_zone": true
+        }
+      ]
+    }
+  ],
+  "unmatched_with_nearby": 204,
+  "unmatched_without_nearby": 18,
+  "unmatched_examples": [
+    {
+      "kind": "unmatched_well",
+      "well": "بین سردق و مرندیز",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        297,
+        298,
+        299,
+        300,
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        308,
+        309
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "608033",
+        "Y_UTM": "3849840",
+        "Well_level": "816"
+      },
+      "nearby": [
+        {
+          "index": 15,
+          "well": "بین سردق و مرندیز",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 0,
+          "level": "816"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "بین فخرآباد و سردق",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        310,
+        311,
+        312,
+        313,
+        314,
+        315,
+        316,
+        317,
+        318,
+        319,
+        320,
+        321,
+        322
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "598395",
+        "Y_UTM": "3847735",
+        "Well_level": "813"
+      },
+      "nearby": [
+        {
+          "index": 16,
+          "well": "بین فخرآباد و سردق",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 0,
+          "level": "812"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "جاده سردق",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        336,
+        337,
+        338,
+        339,
+        340,
+        341,
+        342,
+        343,
+        344,
+        345,
+        346,
+        347,
+        348
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "605359",
+        "Y_UTM": "3844173",
+        "Well_level": "850"
+      },
+      "nearby": [
+        {
+          "index": 17,
+          "well": "جاده سردق",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 8.25,
+          "level": "849"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "جاده فخرآباد - شماره 2",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        362,
+        363,
+        364,
+        365,
+        366,
+        367,
+        368,
+        369,
+        370,
+        371,
+        372,
+        373,
+        374
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "603938",
+        "Y_UTM": "3833455",
+        "Well_level": "983"
+      },
+      "nearby": [
+        {
+          "index": 18,
+          "well": "جاده فخرآباد - شماره 2",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 27.29,
+          "level": "983"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "جاده فخرآباد - شماره 3",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        375,
+        376,
+        377,
+        378,
+        379,
+        380,
+        381,
+        382,
+        383,
+        384,
+        385,
+        386,
+        387
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "598043",
+        "Y_UTM": "3841108",
+        "Well_level": "842"
+      },
+      "nearby": []
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "جنوب غربی یونسی",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        388,
+        389,
+        390,
+        391,
+        392,
+        393,
+        394,
+        395,
+        396,
+        397,
+        398,
+        399,
+        400
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "628099",
+        "Y_UTM": "3851190",
+        "Well_level": "825"
+      },
+      "nearby": []
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "جنوب قاسم آباد 1",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        401,
+        402,
+        403,
+        404,
+        405,
+        406,
+        407,
+        408,
+        409,
+        410,
+        411,
+        412,
+        413
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "572797",
+        "Y_UTM": "3816382",
+        "Well_level": "876"
+      },
+      "nearby": [
+        {
+          "index": 21,
+          "well": "جنوب قاسم آباد 1",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 0,
+          "level": "877"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "جنوب قاسم آباد 2",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        414,
+        415,
+        416,
+        417,
+        418,
+        419,
+        420,
+        421,
+        422,
+        423,
+        424,
+        425,
+        426
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "567850",
+        "Y_UTM": "3812200",
+        "Well_level": "843"
+      },
+      "nearby": [
+        {
+          "index": 22,
+          "well": "جنوب قاسم آباد 2",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 0,
+          "level": "842"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "چاه پالیز",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        427,
+        428,
+        429,
+        430,
+        431,
+        432,
+        433,
+        434,
+        435,
+        436,
+        437,
+        438,
+        439
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "610286",
+        "Y_UTM": "3839054",
+        "Well_level": "918"
+      },
+      "nearby": []
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "چاه سرخ",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        440,
+        441,
+        442,
+        443,
+        444,
+        445,
+        446,
+        447,
+        448,
+        449,
+        450,
+        451,
+        452
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "579260",
+        "Y_UTM": "3835285",
+        "Well_level": "845"
+      },
+      "nearby": [
+        {
+          "index": 35,
+          "well": "چاه سرخ",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 0,
+          "level": "844"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "چاه سوراخ",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        453,
+        454,
+        455,
+        456,
+        457,
+        458,
+        459,
+        460,
+        461,
+        462,
+        463,
+        464,
+        465
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "583882",
+        "Y_UTM": "3831398",
+        "Well_level": "931"
+      },
+      "nearby": [
+        {
+          "index": 36,
+          "well": "چاه سوراخ",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 0,
+          "level": "933"
+        }
+      ]
+    },
+    {
+      "kind": "unmatched_well",
+      "well": "چاه قدیم رضایی",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "rows": [
+        466,
+        467,
+        468,
+        469,
+        470,
+        471,
+        472,
+        473,
+        474,
+        475,
+        476,
+        477,
+        478
+      ],
+      "source_location": {
+        "UTM_Zone": "40",
+        "X_UTM": "582590",
+        "Y_UTM": "3794662",
+        "Well_level": "1071"
+      },
+      "nearby": [
+        {
+          "index": 37,
+          "well": "چاه قدیم رضایی",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 62.8,
+          "level": "1073"
+        }
+      ]
+    }
+  ],
+  "conflicting_wells": [
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "احمدیه",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "اراضی چهل مرغیان",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "اراضی سعدآباد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "اراضی محمد آباد خرابه",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "اردمه",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "اقبالیه",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "امیر آباد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "جنوب غرب نورآباد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "جنوب مسک آباد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "چاه قرق",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "دستجرد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "دهنو شاه بخش",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "راه درخت سنجد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "راه سلطان آباد نمک",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "راه عصمت آباد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "صالح آباد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "صمان",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "غرب سلطان آباد نمک",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "فیلخانه",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "قبرستان سالاری",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "قلعه آقا حسن",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "کاظم آباد اردوغش",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "کلاته حسن",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "کوشکک راه شهرک",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "گرماب",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "نوآباد",
+      "count": 1
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "well": "هشت کیلومتری شهرک",
+      "count": 1
+    },
+    {
+      "study": "مشهد - چناران",
+      "aquifer": "مشهد",
+      "well": "کنه بیست",
+      "count": 1
+    }
+  ],
+  "conflict_examples": [
+    {
+      "source_line": 3161,
+      "well": "احمدیه",
+      "date": "1404-07-15",
+      "new_depth": "51.18",
+      "old": [
+        "51.43"
+      ]
+    },
+    {
+      "source_line": 3187,
+      "well": "اراضی چهل مرغیان",
+      "date": "1404-07-15",
+      "new_depth": "50.9",
+      "old": [
+        "51.3"
+      ]
+    },
+    {
+      "source_line": 3213,
+      "well": "اراضی سعدآباد",
+      "date": "1404-07-15",
+      "new_depth": "111.25",
+      "old": [
+        "111.4"
+      ]
+    },
+    {
+      "source_line": 3226,
+      "well": "اراضی محمد آباد خرابه",
+      "date": "1404-07-15",
+      "new_depth": "25.3",
+      "old": [
+        "25.2"
+      ]
+    },
+    {
+      "source_line": 3252,
+      "well": "اردمه",
+      "date": "1404-07-15",
+      "new_depth": "44.4",
+      "old": [
+        "44.5"
+      ]
+    },
+    {
+      "source_line": 3265,
+      "well": "اقبالیه",
+      "date": "1404-07-15",
+      "new_depth": "42.58",
+      "old": [
+        "42.93"
+      ]
+    },
+    {
+      "source_line": 3278,
+      "well": "امیر آباد",
+      "date": "1404-07-15",
+      "new_depth": "25.6",
+      "old": [
+        "25.4"
+      ]
+    },
+    {
+      "source_line": 3346,
+      "well": "جنوب غرب نورآباد",
+      "date": "1404-07-15",
+      "new_depth": "42.35",
+      "old": [
+        "42.55"
+      ]
+    }
+  ],
+  "invalid_records": [
+    {
+      "source_line": 5013,
+      "well": "بیاس آباد",
+      "study": "زوزن",
+      "aquifer": "زوزن",
+      "status": "invalid_record",
+      "reason": "[<class 'decimal.ConversionSyntax'>]",
+      "source_row": {
+        "Study_name": "زوزن",
+        "Study_code": "5102",
+        "Aquifer_name": "زوزن",
+        "Aquifer_code": "28",
+        "Well_name": "بیاس آباد",
+        "UTM_Zone": "41",
+        "X_UTM": "228702",
+        "Y_UTM": "3799661",
+        "Well_level": "725",
+        "Year": "1404",
+        "Month": "11",
+        "Day": "15",
+        "Date": "1404-11-15",
+        "DTW": "#REF!",
+        "GDate": "2026-02-04"
+      }
+    }
+  ],
+  "date_issues": []
+}

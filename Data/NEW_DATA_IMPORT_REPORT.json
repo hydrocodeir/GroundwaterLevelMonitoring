@@ -1,0 +1,426 @@
+{
+  "source": "Data/NewData.csv",
+  "input_records": 7637,
+  "status_counts": {
+    "already_present": 530,
+    "added": 7075,
+    "updated_existing": 30,
+    "invalid_missing_measurement": 1,
+    "filled_missing_existing": 1
+  },
+  "before_records": 208890,
+  "after_records": 215965,
+  "existing_rows_with_depth_replaced": 31,
+  "historical_rows_with_revised_ground": 96926,
+  "old_records_preserved_except_authorized_updates": true,
+  "new_valid_records_verified": true,
+  "wells_before": 863,
+  "wells_after": 864,
+  "new_wells": 2,
+  "duplicated_location_rows_consolidated": 1,
+  "matched_source_wells": 596,
+  "held_source_wells": 0,
+  "location_ground_changes": 352,
+  "missing_historical_level_count": 4,
+  "water_year_summary": {
+    "1404": {
+      "already_present": 530,
+      "added": 6498,
+      "updated_existing": 30,
+      "filled_missing_existing": 1
+    },
+    "1405": {
+      "added": 577
+    },
+    "unknown": {
+      "invalid_missing_measurement": 1
+    }
+  },
+  "aquifer_summary": [
+    {
+      "study": "درونه",
+      "aquifer": "درونه",
+      "counts": {
+        "already_present": 8,
+        "added": 92
+      }
+    },
+    {
+      "study": "بردسکن",
+      "aquifer": "بردسکن",
+      "counts": {
+        "already_present": 13,
+        "added": 169
+      }
+    },
+    {
+      "study": "بجستان یونسی",
+      "aquifer": "بجستان",
+      "counts": {
+        "already_present": 5,
+        "added": 73
+      }
+    },
+    {
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "counts": {
+        "already_present": 25,
+        "added": 300
+      }
+    },
+    {
+      "study": "محولات - فیض آباد",
+      "aquifer": "محولات",
+      "counts": {
+        "already_present": 22,
+        "added": 277
+      }
+    },
+    {
+      "study": "ازغند",
+      "aquifer": "ازغند",
+      "counts": {
+        "already_present": 7,
+        "added": 84
+      }
+    },
+    {
+      "study": "عمرانی",
+      "aquifer": "بيمرغ غربی",
+      "counts": {
+        "already_present": 10,
+        "added": 131
+      }
+    },
+    {
+      "study": "عمرانی",
+      "aquifer": "بيمرغ شرقی",
+      "counts": {
+        "already_present": 7,
+        "added": 84
+      }
+    },
+    {
+      "study": "عمرانی",
+      "aquifer": "عمراني جنوبي",
+      "counts": {
+        "already_present": 3,
+        "added": 36
+      }
+    },
+    {
+      "study": "گناباد",
+      "aquifer": "گناباد",
+      "counts": {
+        "already_present": 14,
+        "added": 168
+      }
+    },
+    {
+      "study": "جنگل",
+      "aquifer": "جنگل",
+      "counts": {
+        "already_present": 5,
+        "added": 60
+      }
+    },
+    {
+      "study": "رشتخوار",
+      "aquifer": "رشتخوار",
+      "counts": {
+        "already_present": 8,
+        "added": 96
+      }
+    },
+    {
+      "study": "تربت حیدریه",
+      "aquifer": "تربت حيدريه",
+      "counts": {
+        "already_present": 13,
+        "added": 167
+      }
+    },
+    {
+      "study": "كاشمر",
+      "aquifer": "كاشمر",
+      "counts": {
+        "already_present": 8,
+        "added": 96
+      }
+    },
+    {
+      "study": "كاشمر",
+      "aquifer": "سعدالدين",
+      "counts": {
+        "already_present": 6,
+        "added": 72
+      }
+    },
+    {
+      "study": "ریوش",
+      "aquifer": "ريوش",
+      "counts": {
+        "already_present": 4,
+        "added": 48
+      }
+    },
+    {
+      "study": "داورزن",
+      "aquifer": "داورزن",
+      "counts": {
+        "already_present": 13,
+        "added": 156
+      }
+    },
+    {
+      "study": "سبزوار",
+      "aquifer": "سبزوار",
+      "counts": {
+        "already_present": 43,
+        "added": 512
+      }
+    },
+    {
+      "study": "عطاییه",
+      "aquifer": "عطائيه",
+      "counts": {
+        "already_present": 23,
+        "added": 275
+      }
+    },
+    {
+      "study": "قلعه میدان",
+      "aquifer": "توندر - چهل دختر",
+      "counts": {
+        "already_present": 1,
+        "added": 12
+      }
+    },
+    {
+      "study": "قلعه میدان",
+      "aquifer": "چاه شيرين",
+      "counts": {
+        "already_present": 1,
+        "added": 12
+      }
+    },
+    {
+      "study": "نيشابور",
+      "aquifer": "نيشابور",
+      "counts": {
+        "updated_existing": 28,
+        "added": 471,
+        "already_present": 11
+      }
+    },
+    {
+      "study": "دشت رخ",
+      "aquifer": "دشت رخ",
+      "counts": {
+        "already_present": 28,
+        "added": 323
+      }
+    },
+    {
+      "study": "جوين - سلطان‌آباد",
+      "aquifer": "جوين",
+      "counts": {
+        "already_present": 48,
+        "added": 603
+      }
+    },
+    {
+      "study": "ینگجه",
+      "aquifer": "ينگجه",
+      "counts": {
+        "already_present": 2,
+        "added": 37
+      }
+    },
+    {
+      "study": "خواف",
+      "aquifer": "خواف",
+      "counts": {
+        "already_present": 14,
+        "added": 182
+      }
+    },
+    {
+      "study": "زوزن",
+      "aquifer": "زوزن",
+      "counts": {
+        "already_present": 21,
+        "added": 289,
+        "invalid_missing_measurement": 1,
+        "filled_missing_existing": 1
+      }
+    },
+    {
+      "study": "گیسور",
+      "aquifer": "گیسور شمالی",
+      "counts": {
+        "already_present": 16,
+        "added": 203
+      }
+    },
+    {
+      "study": "گیسور",
+      "aquifer": "گیسور جنوبی",
+      "counts": {
+        "added": 71,
+        "already_present": 3
+      }
+    },
+    {
+      "study": "درگز",
+      "aquifer": "درگز شمالی",
+      "counts": {
+        "added": 141,
+        "already_present": 11
+      }
+    },
+    {
+      "study": "درگز",
+      "aquifer": "درگز جنوبی",
+      "counts": {
+        "already_present": 8,
+        "added": 96
+      }
+    },
+    {
+      "study": "كلات نادري",
+      "aquifer": "کلات نادري",
+      "counts": {
+        "already_present": 4,
+        "added": 48
+      }
+    },
+    {
+      "study": "سرخس",
+      "aquifer": "سرخس",
+      "counts": {
+        "already_present": 26,
+        "added": 339,
+        "updated_existing": 1
+      }
+    },
+    {
+      "study": "نریمانی",
+      "aquifer": "نریمانی",
+      "counts": {
+        "already_present": 9,
+        "added": 108
+      }
+    },
+    {
+      "study": "مشهد - چناران",
+      "aquifer": "مشهد",
+      "counts": {
+        "already_present": 43,
+        "added": 633,
+        "updated_existing": 1
+      }
+    },
+    {
+      "study": "سنگ بست",
+      "aquifer": "سنگ بست",
+      "counts": {
+        "already_present": 2,
+        "added": 24
+      }
+    },
+    {
+      "study": "جنت آباد - صالح آباد",
+      "aquifer": "صالح آباد شرقی",
+      "counts": {
+        "already_present": 4,
+        "added": 48
+      }
+    },
+    {
+      "study": "جنت آباد - صالح آباد",
+      "aquifer": "صالح آباد غربی",
+      "counts": {
+        "already_present": 3,
+        "added": 36
+      }
+    },
+    {
+      "study": "فریمان - تربت جام",
+      "aquifer": "تربت جام",
+      "counts": {
+        "already_present": 18,
+        "added": 229
+      }
+    },
+    {
+      "study": "تایباد",
+      "aquifer": "تایباد",
+      "counts": {
+        "already_present": 13,
+        "added": 182
+      }
+    },
+    {
+      "study": "شهرنو - باخرز",
+      "aquifer": "شهرنو",
+      "counts": {
+        "already_present": 3,
+        "added": 36
+      }
+    },
+    {
+      "study": "کرات",
+      "aquifer": "کرات",
+      "counts": {
+        "already_present": 4,
+        "added": 56
+      }
+    }
+  ],
+  "unresolved_records": [
+    {
+      "source_line": 5013,
+      "source_study": "زوزن",
+      "source_aquifer": "زوزن",
+      "source_well": "بیاس آباد",
+      "date_persian": "1404-11-15",
+      "source_dtw": "#REF!",
+      "status": "invalid_missing_measurement",
+      "reason": "#REF!; [<class 'decimal.ConversionSyntax'>]"
+    }
+  ],
+  "policies": {
+    "elevation": "new_for_all_history",
+    "conflicts": "replace_with_new",
+    "coordinates": "new",
+    "two_uncertain_wells": "independent",
+    "duplicate_well": "one",
+    "invalid_measurement": "leave_unknown_and_report",
+    "confirmed_by_user_on": "2026-11-09"
+  },
+  "source_sha256": "2bfb84d2d2eea5a06bad4499325a85243532040060646a2bb9d6c91b95c51b38",
+  "input_data_sha256": "2b3e4faa600e01b8b23172b9c54985db261442d636f2390f41b02a83f616174f",
+  "input_location_sha256": "befdbcc89a60e456059ba134278190cb0b38dbf66f14f4df0703ebad877c6a07",
+  "columns": [
+    "MAHDOUDE",
+    "AQUIFER",
+    "LOCATION",
+    "WATER_TABLE",
+    "YEAR_PERSIAN",
+    "MONTH_PERSIAN",
+    "DAY_PERSIAN",
+    "DATE_PERSIAN",
+    "YEAR_GREGORIAN",
+    "MONTH_GREGORIAN",
+    "DAY_GREGORIAN",
+    "DATE_GREGORIAN",
+    "DESCRIPTION",
+    "WATER_LEVEL_MSL",
+    "WATER_YEAR"
+  ],
+  "formula": "WATER_LEVEL_MSL = revised LOCATION.LEVEL_MSL - WATER_TABLE; same revised ground applied to all history",
+  "execution": "Matching, calendar checks, conversions, merging, full-record verification and report generation ran client-side in a Pyodide worker. Host only serves and saves files.",
+  "idempotency_verified": true
+}

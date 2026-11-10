@@ -1,0 +1,989 @@
+{
+  "unresolved": [
+    {
+      "well": "جاده فخرآباد - شماره 3",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "candidates": [
+        {
+          "index": 19,
+          "name": "جاده فخرآباد - شماره 3",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 155.589,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "840"
+        },
+        {
+          "index": 18,
+          "name": "جاده فخرآباد - شماره 2",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 9633.253,
+          "similarity": 0.9412,
+          "same_study": true,
+          "same_name": false,
+          "ground": "983"
+        },
+        {
+          "index": 10,
+          "name": "جاده فخرآباد - شماره 1",
+          "study": "بجستان یونسی",
+          "aquifer": "بجستان",
+          "distance_m": 16494.011,
+          "similarity": 0.9412,
+          "same_study": true,
+          "same_name": false,
+          "ground": "1104"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 19,
+          "well": "جاده فخرآباد - شماره 3",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 155.59
+        },
+        {
+          "index": 27,
+          "well": "شمال چاه مرادی",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 6298.81
+        }
+      ]
+    },
+    {
+      "well": "جنوب غربی یونسی",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "candidates": [
+        {
+          "index": 20,
+          "name": "جنوب غربی یونسی",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 111.629,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "824"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 20,
+          "well": "جنوب غربی یونسی",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 111.63
+        },
+        {
+          "index": 14,
+          "well": "غرب مرندیز جدید",
+          "study": "بجستان یونسی",
+          "aquifer": "قاسم آباد",
+          "distance_m": 9439.92
+        }
+      ]
+    },
+    {
+      "well": "چاه پالیز",
+      "study": "بجستان یونسی",
+      "aquifer": "قاسم آباد",
+      "candidates": [
+        {
+          "index": 38,
+          "name": "چاه پالیز",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 126.752,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "921"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 38,
+          "well": "چاه پالیز",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 126.75
+        },
+        {
+          "index": 17,
+          "well": "جاده سردق",
+          "study": "بجستان یونسی",
+          "aquifer": "یونسی",
+          "distance_m": 7097.74
+        }
+      ]
+    },
+    {
+      "well": "راه اسو - اروک",
+      "study": "عمرانی",
+      "aquifer": "بيمرغ شرقی",
+      "candidates": [
+        {
+          "index": 502,
+          "name": "راه اسو - اروک",
+          "study": "عمرانی - بیمرغ",
+          "aquifer": "آبخوان شرقی",
+          "distance_m": 190.394,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "904"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 502,
+          "well": "راه اسو - اروک",
+          "study": "عمرانی - بیمرغ",
+          "aquifer": "آبخوان شرقی",
+          "distance_m": 190.39
+        },
+        {
+          "index": 510,
+          "well": "نوده پشنگ",
+          "study": "عمرانی - بیمرغ",
+          "aquifer": "آبخوان شرقی",
+          "distance_m": 4645.01
+        }
+      ]
+    },
+    {
+      "well": "کال شور",
+      "study": "عمرانی",
+      "aquifer": "بيمرغ غربی",
+      "candidates": [
+        {
+          "index": 519,
+          "name": "کال شور",
+          "study": "عمرانی - بیمرغ",
+          "aquifer": "آبخوان غربی",
+          "distance_m": 109.202,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "852"
+        },
+        {
+          "index": 344,
+          "name": "کالشور",
+          "study": "زوزن",
+          "aquifer": "زوزن",
+          "distance_m": 118159.634,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "859"
+        },
+        {
+          "index": 213,
+          "name": "کالشور",
+          "study": "درونه",
+          "aquifer": "درونه",
+          "distance_m": 133819.885,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "823"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 519,
+          "well": "کال شور",
+          "study": "عمرانی - بیمرغ",
+          "aquifer": "آبخوان غربی",
+          "distance_m": 109.2
+        },
+        {
+          "index": 520,
+          "well": "کنار پارکینگ",
+          "study": "عمرانی - بیمرغ",
+          "aquifer": "آبخوان غربی",
+          "distance_m": 7182.13
+        }
+      ]
+    },
+    {
+      "well": "امور آب تربت حیدریه",
+      "study": "تربت حیدریه",
+      "aquifer": "تربت حيدريه",
+      "candidates": [
+        {
+          "index": 293,
+          "name": "امور آب تربت حیدریه (داخل محوطه اداره)",
+          "study": "زاوه - تربت حیدریه",
+          "aquifer": "تربت حیدریه",
+          "distance_m": 0,
+          "similarity": 0.6667,
+          "same_study": false,
+          "same_name": false,
+          "ground": "1385"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 293,
+          "well": "امور آب تربت حیدریه (داخل محوطه اداره)",
+          "study": "زاوه - تربت حیدریه",
+          "aquifer": "تربت حیدریه",
+          "distance_m": 0
+        },
+        {
+          "index": 300,
+          "well": "دامسک",
+          "study": "زاوه - تربت حیدریه",
+          "aquifer": "تربت حیدریه",
+          "distance_m": 4832.81
+        }
+      ]
+    },
+    {
+      "well": "جنوب ده حسینی",
+      "study": "عطاییه",
+      "aquifer": "عطائيه",
+      "candidates": [
+        {
+          "index": 468,
+          "name": "جنوب ده حسینی",
+          "study": "عطاییه",
+          "aquifer": "عطاییه",
+          "distance_m": 692.988,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "1165"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 468,
+          "well": "جنوب ده حسینی",
+          "study": "عطاییه",
+          "aquifer": "عطاییه",
+          "distance_m": 692.99
+        },
+        {
+          "index": 492,
+          "well": "قلعه بادام",
+          "study": "عطاییه",
+          "aquifer": "عطاییه",
+          "distance_m": 5930.48
+        }
+      ]
+    },
+    {
+      "well": "برس",
+      "study": "دشت رخ",
+      "aquifer": "دشت رخ",
+      "candidates": [
+        {
+          "index": 248,
+          "name": "برس",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 340.619,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "1703"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 248,
+          "well": "برس",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 340.62
+        },
+        {
+          "index": 257,
+          "well": "رقیچه",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 3776.01
+        }
+      ]
+    },
+    {
+      "well": "رقیچه",
+      "study": "دشت رخ",
+      "aquifer": "دشت رخ",
+      "candidates": [
+        {
+          "index": 257,
+          "name": "رقیچه",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 745.268,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "1674"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 257,
+          "well": "رقیچه",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 745.27
+        },
+        {
+          "index": 272,
+          "well": "نصرت آباد",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 3698.98
+        }
+      ]
+    },
+    {
+      "well": "سلطان آباد",
+      "study": "دشت رخ",
+      "aquifer": "دشت رخ",
+      "candidates": [
+        {
+          "index": 261,
+          "name": "سلطان آباد",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 3629.051,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "1627"
+        },
+        {
+          "index": 6,
+          "name": "سلطان آباد",
+          "study": "ازغند",
+          "aquifer": "ازغند",
+          "distance_m": 55470.492,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "1260"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 261,
+          "well": "سلطان آباد",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 3629.05
+        },
+        {
+          "index": 268,
+          "well": "شیر آباد",
+          "study": "رخ",
+          "aquifer": "دشت رخ",
+          "distance_m": 3953.12
+        }
+      ]
+    },
+    {
+      "well": "سید آباد (اراضی سلطان آباد)",
+      "study": "جوين - سلطان‌آباد",
+      "aquifer": "جوين",
+      "candidates": [],
+      "nearest": [
+        {
+          "index": 140,
+          "well": "شمال سیدآباد",
+          "study": "جوین - سلطان آباد",
+          "aquifer": "جوین",
+          "distance_m": 628
+        },
+        {
+          "index": 133,
+          "well": "شمال ایستگاه سبزوار",
+          "study": "جوین - سلطان آباد",
+          "aquifer": "جوین",
+          "distance_m": 6921.15
+        }
+      ]
+    },
+    {
+      "well": "مژن آباد 2",
+      "study": "زوزن",
+      "aquifer": "زوزن",
+      "candidates": [
+        {
+          "index": 342,
+          "name": "مژن آباد 1",
+          "study": "زوزن",
+          "aquifer": "زوزن",
+          "distance_m": 112.207,
+          "similarity": 0.875,
+          "same_study": true,
+          "same_name": false,
+          "ground": "760"
+        },
+        {
+          "index": 340,
+          "name": "مجن آباد",
+          "study": "زوزن",
+          "aquifer": "زوزن",
+          "distance_m": 8858.782,
+          "similarity": 0.8,
+          "same_study": true,
+          "same_name": false,
+          "ground": "702"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 342,
+          "well": "مژن آباد 1",
+          "study": "زوزن",
+          "aquifer": "زوزن",
+          "distance_m": 112.21
+        },
+        {
+          "index": 340,
+          "well": "مجن آباد",
+          "study": "زوزن",
+          "aquifer": "زوزن",
+          "distance_m": 8858.78
+        }
+      ]
+    },
+    {
+      "well": "اکتشافی چاه گچی",
+      "study": "گیسور",
+      "aquifer": "گیسور شمالی",
+      "candidates": [
+        {
+          "index": 833,
+          "name": "اکتشافی چاه گچی",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 176.641,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "885"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 833,
+          "well": "اکتشافی چاه گچی",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 176.64
+        },
+        {
+          "index": 849,
+          "well": "چاه گچی - اول راه قطار گز",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 1027.53
+        }
+      ]
+    },
+    {
+      "well": "چاه گچی - اول راه قطار گز",
+      "study": "گیسور",
+      "aquifer": "گیسور شمالی",
+      "candidates": [
+        {
+          "index": 849,
+          "name": "چاه گچی - اول راه قطار گز",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 122.413,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "882"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 849,
+          "well": "چاه گچی - اول راه قطار گز",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 122.41
+        },
+        {
+          "index": 833,
+          "well": "اکتشافی چاه گچی",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 1080.29
+        }
+      ]
+    },
+    {
+      "well": "راه چاه مسیله به چاه گچی",
+      "study": "گیسور",
+      "aquifer": "گیسور شمالی",
+      "candidates": [
+        {
+          "index": 840,
+          "name": "راه چاه مسیله به چاه گچی",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 199.685,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "871"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 840,
+          "well": "راه چاه مسیله به چاه گچی",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 199.68
+        },
+        {
+          "index": 843,
+          "well": "شرق چاه مسیله",
+          "study": "گیسور",
+          "aquifer": "گیسور جنوبی",
+          "distance_m": 6194.46
+        }
+      ]
+    },
+    {
+      "well": "کنار راه حوض کرم (خانه دامداری)",
+      "study": "گیسور",
+      "aquifer": "گیسور جنوبی",
+      "candidates": [
+        {
+          "index": 858,
+          "name": "کنار راه حوض کرم",
+          "study": "گیسور",
+          "aquifer": "گیسور شمالی",
+          "distance_m": 0,
+          "similarity": 0.6667,
+          "same_study": true,
+          "same_name": false,
+          "ground": "893"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 858,
+          "well": "کنار راه حوض کرم",
+          "study": "گیسور",
+          "aquifer": "گیسور شمالی",
+          "distance_m": 0
+        },
+        {
+          "index": 853,
+          "well": "حوض آجری",
+          "study": "گیسور",
+          "aquifer": "گیسور شمالی",
+          "distance_m": 3253.75
+        }
+      ]
+    },
+    {
+      "well": "کناره راه حوض کرم به جنت آباد (شماره چهار جنگل)",
+      "study": "گیسور",
+      "aquifer": "گیسور جنوبی",
+      "candidates": [
+        {
+          "index": 857,
+          "name": "شماره چهار جنگل",
+          "study": "گیسور",
+          "aquifer": "گیسور شمالی",
+          "distance_m": 39,
+          "similarity": 0.5098,
+          "same_study": true,
+          "same_name": false,
+          "ground": "928"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 857,
+          "well": "شماره چهار جنگل",
+          "study": "گیسور",
+          "aquifer": "گیسور شمالی",
+          "distance_m": 39
+        },
+        {
+          "index": 88,
+          "well": "قبرستان جنت آباد",
+          "study": "جنگل",
+          "aquifer": "جنگل",
+          "distance_m": 6526.7
+        }
+      ]
+    },
+    {
+      "well": "تقی آباد 2 - راه آهن",
+      "study": "نریمانی",
+      "aquifer": "نریمانی",
+      "candidates": [
+        {
+          "index": 711,
+          "name": "تقی آباد 2 - راه آهن",
+          "study": "نریمانی - میامی",
+          "aquifer": "نریمانی",
+          "distance_m": 316.014,
+          "similarity": 1,
+          "same_study": false,
+          "same_name": true,
+          "ground": "1040"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 711,
+          "well": "تقی آباد 2 - راه آهن",
+          "study": "نریمانی - میامی",
+          "aquifer": "نریمانی",
+          "distance_m": 316.01
+        },
+        {
+          "index": 710,
+          "well": "تقی آباد 1 - شن شویی",
+          "study": "نریمانی - میامی",
+          "aquifer": "نریمانی",
+          "distance_m": 3752.7
+        }
+      ]
+    },
+    {
+      "well": "جمع آب (اکتشافی)",
+      "study": "مشهد - چناران",
+      "aquifer": "مشهد",
+      "candidates": [],
+      "nearest": [
+        {
+          "index": 629,
+          "well": "جمع آب",
+          "study": "مشهد - چناران",
+          "aquifer": "مشهد",
+          "distance_m": 100.69
+        },
+        {
+          "index": 693,
+          "well": "کبیر",
+          "study": "مشهد - چناران",
+          "aquifer": "مشهد",
+          "distance_m": 5600.4
+        }
+      ]
+    },
+    {
+      "well": "مقابل میش مست",
+      "study": "فریمان - تربت جام",
+      "aquifer": "تربت جام",
+      "candidates": [
+        {
+          "index": 558,
+          "name": "مقابل میش مست",
+          "study": "فریمان - تربت جام",
+          "aquifer": "فریمان - تربت جام",
+          "distance_m": 678.708,
+          "similarity": 1,
+          "same_study": true,
+          "same_name": true,
+          "ground": "799"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 558,
+          "well": "مقابل میش مست",
+          "study": "فریمان - تربت جام",
+          "aquifer": "فریمان - تربت جام",
+          "distance_m": 678.71
+        },
+        {
+          "index": 556,
+          "well": "محمد آباد",
+          "study": "فریمان - تربت جام",
+          "aquifer": "فریمان - تربت جام",
+          "distance_m": 7170.26
+        }
+      ]
+    },
+    {
+      "well": "سه راهی بائی",
+      "study": "شهرنو - باخرز",
+      "aquifer": "شهرنو",
+      "candidates": [
+        {
+          "index": 453,
+          "name": "سه راهی بایی",
+          "study": "شهر نو - باخرز",
+          "aquifer": "شهر نو - باخرز",
+          "distance_m": 503.004,
+          "similarity": 0.9,
+          "same_study": true,
+          "same_name": false,
+          "ground": "1544"
+        }
+      ],
+      "nearest": [
+        {
+          "index": 453,
+          "well": "سه راهی بایی",
+          "study": "شهر نو - باخرز",
+          "aquifer": "شهر نو - باخرز",
+          "distance_m": 503
+        },
+        {
+          "index": 455,
+          "well": "قلعه سرخ - 2",
+          "study": "شهر نو - باخرز",
+          "aquifer": "شهر نو - باخرز",
+          "distance_m": 7763.07
+        }
+      ]
+    }
+  ],
+  "fuzzy_matches": [
+    {
+      "source": "شمال غربی رضائیه",
+      "target": "شمال غربی رضاییه",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "بجستان یونسی"
+    },
+    {
+      "source": "اراضی رئیسی",
+      "target": "اراضی رییسی",
+      "distance": 19.799,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "نيشابور"
+    },
+    {
+      "source": "جاورتن - 1",
+      "target": "جاورتن",
+      "distance": 47.17,
+      "source_digits": [
+        "1"
+      ],
+      "target_digits": [],
+      "study": "جوين - سلطان‌آباد"
+    },
+    {
+      "source": "جبله - چاه جدید",
+      "target": "جبله (چاه جدید )",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "جوين - سلطان‌آباد"
+    },
+    {
+      "source": "جنوب راه چمن - چاه جدید",
+      "target": "جنوب راه چمن (چاه جدید)",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "جوين - سلطان‌آباد"
+    },
+    {
+      "source": "ارگ قلندر 3",
+      "target": "ارگ قلندر",
+      "distance": 2,
+      "source_digits": [
+        "3"
+      ],
+      "target_digits": [],
+      "study": "زوزن"
+    },
+    {
+      "source": "مژن آباد",
+      "target": "مجن آباد",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "زوزن"
+    },
+    {
+      "source": "باغ بخشی",
+      "target": "بــــاغ بخشی",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "گیسور"
+    },
+    {
+      "source": "جنوب چاه مسیله",
+      "target": "جنوب غربی چاه مسیله",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "گیسور"
+    },
+    {
+      "source": "زیر جاده مهاباد به باغ بخشی",
+      "target": "زیر جاده مهاباد به باغ یخشی",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "گیسور"
+    },
+    {
+      "source": "شرق آهنگران",
+      "target": "شرق روستای آهنگران",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "گیسور"
+    },
+    {
+      "source": "حضرت سلطان",
+      "target": "حضرت سلطان -1",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [
+        "1"
+      ],
+      "study": "درگز"
+    },
+    {
+      "source": "دو راهی چاپشلو",
+      "target": "دو راهی چاپشلو -1",
+      "distance": 4,
+      "source_digits": [],
+      "target_digits": [
+        "1"
+      ],
+      "study": "درگز"
+    },
+    {
+      "source": "اراضی حسن آباد جر -wb",
+      "target": "اراضی حسن اباد جر-wb",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "سرخس"
+    },
+    {
+      "source": "پشت فرودگاه قدیم - 7",
+      "target": "7-پشت فروردگاه قدیم",
+      "distance": 9.899,
+      "source_digits": [
+        "7"
+      ],
+      "target_digits": [
+        "7"
+      ],
+      "study": "سرخس"
+    },
+    {
+      "source": "صمد آباد",
+      "target": "صمداباد",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "سرخس"
+    },
+    {
+      "source": "نوار مرزی-14",
+      "target": "14-نوارمرزی",
+      "distance": 0,
+      "source_digits": [
+        "14"
+      ],
+      "target_digits": [
+        "14"
+      ],
+      "study": "سرخس"
+    },
+    {
+      "source": "بین چهاربرجی و مشهدریز",
+      "target": "بین چهاربرجی ومشهدریزه",
+      "distance": 0,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "تایباد"
+    },
+    {
+      "source": "یک مرزی دوغارون",
+      "target": "یک مرزی دوقارون",
+      "distance": 3.606,
+      "source_digits": [],
+      "target_digits": [],
+      "study": "تایباد"
+    },
+    {
+      "source": "قلعه سرخ",
+      "target": "قلعه سرخ - 2",
+      "distance": 10.046,
+      "source_digits": [],
+      "target_digits": [
+        "2"
+      ],
+      "study": "شهرنو - باخرز"
+    }
+  ],
+  "ambiguous_existing": [
+    {
+      "kind": "ambiguous_existing_well",
+      "well": "بین بنی آباد و چاه پایاب",
+      "study": "زوزن",
+      "aquifer": "زوزن",
+      "rows": [
+        5040,
+        5041,
+        5042,
+        5043,
+        5044,
+        5045,
+        5046,
+        5047,
+        5048,
+        5049,
+        5050,
+        5051,
+        5052
+      ],
+      "candidates": [
+        {
+          "MAHDOUDE": "زوزن",
+          "AQUIFER": "زوزن",
+          "LOCATION": "بین بنی آباد و چاه پایاب",
+          "XUTM": "768855",
+          "YUTM": "3796597",
+          "ZONEUTM": "40",
+          "X": "59.92",
+          "Y": "34.28",
+          "LEVEL_MSL": "754",
+          "LEVEL_SRTM": "754"
+        },
+        {
+          "MAHDOUDE": "زوزن",
+          "AQUIFER": "زوزن",
+          "LOCATION": "بین بنی آباد و چاه پایاب",
+          "XUTM": "768856",
+          "YUTM": "3769597",
+          "ZONEUTM": "40",
+          "X": "59.91",
+          "Y": "34.03",
+          "LEVEL_MSL": "794",
+          "LEVEL_SRTM": "794"
+        }
+      ]
+    }
+  ]
+}

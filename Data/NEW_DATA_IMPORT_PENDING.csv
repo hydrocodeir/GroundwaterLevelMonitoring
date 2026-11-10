@@ -1,0 +1,2 @@
+source_line,source_study,source_aquifer,source_well,date_persian,source_dtw,status,target_study,target_aquifer,target_well,ground_msl,water_level_msl,water_year,match_reason,previous_depths,reason
+5013,زوزن,زوزن,بیاس آباد,1404-11-15,#REF!,invalid_missing_measurement,,,,,,,,,#REF!; [<class 'decimal.ConversionSyntax'>]

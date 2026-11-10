@@ -1,0 +1,9 @@
+{
+  "elevation": "new_for_all_history",
+  "conflicts": "replace_with_new",
+  "coordinates": "new",
+  "two_uncertain_wells": "independent",
+  "duplicate_well": "one",
+  "invalid_measurement": "leave_unknown_and_report",
+  "confirmed_by_user_on": "2026-11-09"
+}

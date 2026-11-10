@@ -1,0 +1,12 @@
+{
+  "saved_files_verified": true,
+  "records": 215965,
+  "valid_source_records_covered": 7636,
+  "missing_valid_source_records": 0,
+  "converted_level_records": 215961,
+  "old_records_without_level": 4,
+  "wells": 864,
+  "coordinate_and_ground_checks": true,
+  "source_hash_unchanged": true,
+  "repeat_import_new_observation_count": 0
+}
