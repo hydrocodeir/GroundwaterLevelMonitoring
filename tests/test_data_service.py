@@ -1,4 +1,8 @@
 import unittest
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
 
 from app.data_service import (
     DEFAULT_ANALYSIS_YEARS,
@@ -153,7 +157,7 @@ class GroundwaterDataTests(unittest.TestCase):
         self.assertIn("network_transitions", payload)
         self.assertIn("corrected_thiessen", payload["corrected"]["hydrographs"])
         self.assertIn("corrected_thiessen", payload["corrected"]["annual_decline"])
-        self.assertIn("corrected_arithmetic", payload["corrected"]["annual_decline"])
+        self.assertNotIn("corrected_arithmetic", payload["corrected"]["annual_decline"])
         self.assertIn("corrected_idw", payload["corrected"]["annual_decline"])
         self.assertEqual(
             payload["corrected"]["validation"]["head_limit_violations"],
@@ -187,6 +191,96 @@ class GroundwaterDataTests(unittest.TestCase):
             payload["corrected_hydrograph"][0]["method"],
             "corrected_idw",
         )
+
+    def test_only_selected_surface_methods_are_executed(self) -> None:
+        group_id = next(iter(self.service.groups))
+        with patch.object(self.service, "_piezometric_surface_value_map",
+                          wraps=self.service._piezometric_surface_value_map) as compute:
+            payload = self.service.dashboard(
+                group_id, surface_interpolation_methods=["spline"],
+                base_hydrograph_methods=[], corrected_support_method="fixed_median",
+            )
+        self.assertEqual([call.args[3] for call in compute.call_args_list], ["spline", "spline"])
+        self.assertEqual(payload["filters"]["surface_interpolation_methods"], ["spline"])
+        self.assertEqual(set(payload["surface_methods"]), {"spline"})
+        self.assertEqual(set(payload["corrected"]["surface_methods"]), {"spline"})
+        self.assertEqual(set(payload["corrected"]["annual_decline"]), {"corrected_median", "corrected_spline"})
+        self.assertTrue(all(value is None for _, value in payload["hydrographs"]["arithmetic"]))
+        self.assertTrue(all(value is None for _, value in payload["hydrographs"]["thiessen"]))
+        self.assertIsNotNone(payload["stats"]["change"])
+
+    def test_base_only_selection_does_not_execute_surface_methods(self) -> None:
+        with patch.object(self.service, "_piezometric_surface_value_map") as compute:
+            payload = self.service.dashboard(
+                next(iter(self.service.groups)), surface_interpolation_methods=[],
+                base_hydrograph_methods=["thiessen"], corrected_support_method="none",
+            )
+        compute.assert_not_called()
+        self.assertEqual(payload["surface_methods"], {})
+        self.assertEqual(payload["corrected"]["annual_decline"], {})
+        self.assertGreater(payload["storage"]["area_m2"], 0)
+        self.assertTrue(any(value is not None for _, value in payload["hydrographs"]["thiessen"]))
+
+    def test_empty_method_selection_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "حداقل یک روش"):
+            self.service.dashboard(next(iter(self.service.groups)), surface_interpolation_methods=[],
+                                   base_hydrograph_methods=[], corrected_support_method="none")
+
+    def test_tail_estimates_enter_selected_hydrographs_and_remain_identifiable(self) -> None:
+        candidate = None
+        for group_id, group in self.service.monthly.groupby("_aquifer_id", sort=False):
+            maximum = int(group["_month_index"].max())
+            for well_id, history in group.groupby("_well_id", sort=False):
+                last = int(history["_month_index"].max())
+                if last + 12 <= maximum and last - int(history["_month_index"].min()) >= 24:
+                    candidate = (group_id, well_id, last)
+                    break
+            if candidate:
+                break
+        self.assertIsNotNone(candidate, "Expected a retired well in the source dataset")
+        group_id, well_id, last = candidate
+        start_year, start_month = self.year_month(last - 12)
+        end_year, end_month = self.year_month(last + 12)
+        payload = self.service.dashboard(
+            group_id, start_year=start_year, start_month=start_month,
+            end_year=end_year, end_month=end_month,
+            manual_selection=True, selected_well_ids=[well_id],
+            surface_interpolation_methods=[], base_hydrograph_methods=["arithmetic"],
+            corrected_support_method="fixed_arithmetic",
+            well_tail_settings={well_id: {"mode": "hold_last"}},
+        )
+        well = next(well for well in payload["wells"] if well["id"] == well_id)
+        self.assertEqual(well["tail_estimation"]["mode"], "hold_last")
+        self.assertEqual(len(well["tail_estimation"]["estimated_month_indexes"]), 12)
+        self.assertEqual(well["series"], payload["hydrographs"]["arithmetic"])
+        self.assertIsNone(well["observed_series"][-1][1])
+        self.assertIsNotNone(well["estimated_series"][-1][1])
+        self.assertEqual(well["series"][-1][1], well["series"][12][1])
+        last_status = next(row for row in reversed(payload["corrected_well_month"]) if row["well_id"] == well_id)
+        self.assertEqual(last_status["status"], "imputed")
+        self.assertIsNone(last_status["observed_value"])
+        self.assertEqual(last_status["corrected_value"], well["series"][-1][1])
+
+    def test_comparison_retains_all_explicitly_requested_method_keys(self) -> None:
+        group_id = next(iter(self.service.groups))
+        group = self.service.monthly[self.service.monthly["_aquifer_id"] == group_id]
+        maximum = int(group["_month_index"].max())
+        start_year, start_month = self.year_month(maximum - 12)
+        end_year, end_month = self.year_month(maximum)
+        with patch.object(self.service, "groups", {group_id: self.service.groups[group_id]}):
+            payload = self.service.comparison(start_year=start_year, start_month=start_month,
+                                              end_year=end_year, end_month=end_month)
+        self.assertEqual(set(payload["aquifers"][0]["methods"]), set(payload["method_order"]))
+        self.assertIn("corrected_arithmetic", payload["stats"]["available_aquifers"])
+        dashboard = self.service.dashboard(
+            group_id, start_year=start_year, start_month=start_month,
+            end_year=end_year, end_month=end_month,
+            surface_interpolation_methods=[], corrected_support_method="none",
+        )
+        for method in ("arithmetic", "thiessen"):
+            series = dashboard["hydrographs"][method]
+            expected = round(series[0][1] - series[-1][1], 2)
+            self.assertAlmostEqual(payload["aquifers"][0]["methods"][method]["observed_decline"], expected)
 
     def test_corrected_support_method_can_select_fixed_median(self) -> None:
         group_id = next(iter(self.service.groups))
@@ -449,6 +543,7 @@ class GroundwaterDataTests(unittest.TestCase):
         rows = self.service._annual_change_rows(
             months,
             [],
+            {},
             {"series": []},
             {"series": []},
             {
@@ -1133,6 +1228,88 @@ class GroundwaterDataTests(unittest.TestCase):
             & (self.service.monthly["_month"] == first_measurement["_month"])
         ].iloc[0]["level"]
         self.assertAlmostEqual(float(actual), expected, places=6)
+
+
+class TailEstimationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.service = GroundwaterData.__new__(GroundwaterData)
+        self.start = 1397 * 12 + 7
+        self.last = self.start + 47
+        self.end = self.last + 12
+        self.service.locations = pd.DataFrame([
+            {"_aquifer_id": "a", "_well_id": well, "_join_key": well, "LOCATION": well}
+            for well in ["one", "two"]
+        ])
+        self.service.monthly = pd.DataFrame([
+            {"_aquifer_id": "a", "_join_key": well, "_month_index": index,
+             "_month": f"{(index - 1) // 12}-{(index - 1) % 12 + 1:02d}",
+             "level": 200 - 0.1 * (index - self.start)}
+            for well in ["one", "two"]
+            for index in range(self.start, self.last + 1)
+            if index != self.last - 15  # An internal gap must remain missing.
+        ])
+        self.months = GroundwaterData._period_months(1397, 7, 1402, 6)
+
+    def estimate(self, mode="hold_last", years=3, months=None):
+        return self.service._tail_estimates(
+            "a", months or self.months, ["one"], {"one": {"mode": mode, "years": years}}
+        )
+
+    def test_hold_repeats_last_value_only_after_last_observation(self):
+        original = self.service.monthly.copy(deep=True)
+        frame, metadata = self.estimate()
+        self.assertEqual(frame["_month_index"].tolist(), list(range(self.last + 1, self.end + 1)))
+        self.assertTrue(np.allclose(frame["level"], 195.3))
+        self.assertEqual(set(frame["_join_key"]), {"one"})
+        self.assertNotIn(self.last - 15, frame["_month_index"].tolist())
+        self.assertEqual(metadata["one"]["mode"], "hold_last")
+        pd.testing.assert_frame_equal(original, self.service.monthly)
+
+    def test_trend_uses_requested_observed_window_and_anchors_to_last_point(self):
+        # Nonlinear history makes the 2/3/4-year choices meaningfully different.
+        frame = self.service.monthly
+        frame.loc[frame["_join_key"] == "one", "level"] += (
+            (frame.loc[frame["_join_key"] == "one", "_month_index"] - self.start) ** 2 * 0.002
+        )
+        slopes = []
+        for years in (2, 3, 4):
+            estimates, metadata = self.estimate("trend", years)
+            history = frame[(frame["_join_key"] == "one") & (frame["_month_index"] > self.last - years * 12)]
+            slope = np.polyfit(history["_month_index"] - self.last, history["level"], 1)[0]
+            last_value = history.iloc[-1]["level"]
+            np.testing.assert_allclose(estimates["level"], last_value + slope * (estimates["_month_index"] - self.last))
+            self.assertAlmostEqual(metadata["one"]["slope_per_year"], slope * 12, places=3)
+            slopes.append(metadata["one"]["slope_per_year"])
+        self.assertEqual(len(set(slopes)), 3)
+
+    def test_last_observation_before_selected_range_can_be_extended(self):
+        months = [(i, label) for i, label in self.months if i > self.last + 3]
+        estimates, _ = self.estimate(months=months)
+        self.assertEqual(len(estimates), len(months))
+        self.assertTrue(np.allclose(estimates["level"], 195.3))
+
+    def test_disabled_and_complete_ranges_produce_no_estimates(self):
+        estimates, metadata = self.estimate("none")
+        self.assertTrue(estimates.empty)
+        self.assertEqual(metadata, {})
+        estimates, _ = self.estimate(months=[item for item in self.months if item[0] <= self.last])
+        self.assertTrue(estimates.empty)
+
+    def test_insufficient_history_and_invalid_settings_are_rejected(self):
+        with self.assertRaises(ValueError):
+            self.estimate("trend", 5)
+        with self.assertRaises(ValueError):
+            self.estimate("unknown")
+        self.service.monthly = self.service.monthly[self.service.monthly["_month_index"] > self.last - 5]
+        with self.assertRaisesRegex(ValueError, "حداقل یک سال"):
+            self.estimate("trend")
+
+    def test_duplicate_well_records_require_consistent_settings(self):
+        self.service.locations.loc[1, "_join_key"] = "one"
+        with self.assertRaisesRegex(ValueError, "تکراری"):
+            self.service._tail_estimates("a", self.months, ["one", "two"], {
+                "one": {"mode": "hold_last"}, "two": {"mode": "trend", "years": 3},
+            })
 
 
 if __name__ == "__main__":

@@ -1,0 +1,25 @@
+<header class="site-header">
+  <div class="site-header-inner">
+    <a href="/" class="site-brand">
+      <img src="{{ url_for('assets', path='img/HydroCode.png') }}" alt="" width="36" height="36">
+      <strong>سامانه پایش آب زیرزمینی</strong>
+    </a>
+    <span class="site-region">خراسان رضوی</span>
+    {% if active_page == 'analysis' %}
+    <button id="workspaceChatTrigger" class="site-chat-button" type="button" aria-label="گفت‌وگو درباره آبخوان" aria-controls="aquiferChatPanel" aria-expanded="false" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-9l-5 4v-4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 9h8M8 13h5"/></svg><span>گفت‌وگو درباره آبخوان</span>
+    </button>
+    {% endif %}
+  </div>
+  <nav class="site-navigation" aria-label="بخش‌های سامانه">
+    <a href="/" {% if active_page == 'analysis' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h17M7 15l4-5 4 2 5-6"/></svg><span>تحلیل آبخوان</span>
+    </a>
+    <a href="/comparison" {% if active_page == 'comparison' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M6 16V8h4v8M14 16V4h4v12"/></svg><span>مقایسه آبخوان‌ها</span>
+    </a>
+    <a href="/aquifer-3d" {% if active_page == '3d' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v9l-9 5-9-5V8Zm0 10v9M3 8l9 5 9-5M12 3v10"/></svg><span>نمای سه‌بعدی</span>
+    </a>
+  </nav>
+</header>

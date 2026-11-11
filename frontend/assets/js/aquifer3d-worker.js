@@ -1,4 +1,4 @@
-import { loadPyodide } from "../pyodide/pyodide.mjs";
+import { loadBrowserPython } from "./pyodide-runtime.js";
 
 let readyPromise;
 
@@ -8,9 +8,7 @@ function progress(message) {
 
 async function initialize() {
   progress("در حال راه‌اندازی پایتون در مرورگر…");
-  const pyodide = await loadPyodide({
-    indexURL: new URL("../pyodide/", import.meta.url).href
-  });
+  const pyodide = await loadBrowserPython();
   progress("در حال خواندن مرز آبخوان و داده‌های پیزومتر…");
   const paths = [
     "/data/AQUIFER.geojson",

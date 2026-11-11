@@ -16,113 +16,51 @@
     <script defer src="{{ url_for('assets', path='js/echarts-extension-leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/app.js') }}?v={{ asset_version }}"></script>
   </head>
-  <body class="dashboard-page relative isolate min-h-screen">
-    <div class="app-backdrop" aria-hidden="true"></div>
-    <header class="dashboard-shell mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 px-3 py-3 md:px-6 md:py-5">
-      <div class="app-topbar">
-        <div class="flex items-center gap-3">
-          <div class="brand-mark">
-            <img src="{{ url_for('assets', path='img/HydroCode.png') }}" alt="HydroCode" class="h-full w-full object-contain">
-          </div>
-          <div>
-            <div class="text-sm font-bold text-white">سامانه پایش آب زیرزمینی</div>
-            <div class="mt-0.5 text-[10px] text-slate-300">داشبورد تحلیلی پیزومترهای استان خراسان رضوی</div>
-            <h1 class="mt-1 text-2xl font-bold leading-tight text-white md:text-3xl">پایش تراز آب زیرزمینی</h1>
-          </div>
-        </div>
-        <div class="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-200">
-          <div class="hidden items-center gap-3 text-[11px] font-medium text-sky-200 sm:flex">
-            <span class="h-px w-8 bg-sky-200"></span>
-            تحلیل زمانی و مکانی آبخوان‌ها
-          </div>
-          <a class="topbar-link" href="/comparison">مقایسه همه آبخوان‌ها</a>
-          <a class="topbar-link" href="/aquifer-3d">نمای سه‌بعدی آبخوان</a>
-        </div>
-      </div>
-
-      <form
-        id="aquiferSelectionForm"
-        class="selection-workspace flex min-h-0 flex-1 flex-col overflow-hidden"
-        hx-get="/partials/dashboard"
-        hx-target="#dashboardContent"
-        hx-swap="innerHTML"
-        hx-indicator="#loadingIndicator"
-      >
-        <div class="selection-workspace-header">
-          <div class="min-w-0">
-            <h2 class="text-base font-bold text-slate-950">انتخاب محدوده گزارش</h2>
-            <p class="mt-1 text-[11px] leading-5 text-slate-500">از نقشه یا فهرست، آبخوان مورد تحلیل را انتخاب کنید.</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="metric-pill">تعداد کل آبخوان‌ها: {{ group_count }}</span>
-            <div class="selection-tab-list" role="tablist" aria-label="روش انتخاب آبخوان">
-              <button class="selection-tab-button is-active" type="button" data-selection-tab="map">انتخاب از روی نقشه</button>
-              <button class="selection-tab-button" type="button" data-selection-tab="dropdown">انتخاب از فهرست</button>
-            </div>
-            <div id="selectedAquiferBadge" class="selection-badge">هنوز آبخوانی انتخاب نشده است</div>
-            <button
-              id="showDashboardButton"
-              type="submit"
-              disabled
-              class="flex h-9 items-center justify-center gap-2 rounded-lg bg-coral px-4 text-xs font-bold text-white shadow-lg shadow-coral/20 transition hover:-translate-y-0.5 hover:bg-[#d95e41] focus:outline-none focus:ring-4 focus:ring-coral/20 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              نمایش داشبورد
-              <span aria-hidden="true">←</span>
-            </button>
+  <body class="dashboard-page workspace-page">
+    <a class="skip-link" href="#dashboardContent">رفتن به فضای تحلیل</a>
+    {% set active_page = 'analysis' %}
+    {% include 'partials/site_header.html' %}
+    <div class="workspace-container">
+      <form id="aquiferSelectionForm" class="aquifer-picker" hx-get="/partials/dashboard"
+        hx-target="#dashboardContent" hx-swap="innerHTML" hx-indicator="#loadingIndicator">
+        <div class="picker-heading">
+          <h1>انتخاب آبخوان</h1>
+          <div class="selection-tab-list" role="tablist" aria-label="روش انتخاب آبخوان">
+            <button class="selection-tab-button is-active" type="button" data-selection-tab="dropdown" role="tab" aria-selected="true" id="picker-tab-dropdown" aria-controls="picker-panel-dropdown" tabindex="0">از فهرست</button>
+            <button class="selection-tab-button" type="button" data-selection-tab="map" role="tab" aria-selected="false" id="picker-tab-map" aria-controls="picker-panel-map" tabindex="-1">از نقشه</button>
           </div>
         </div>
         <input id="selectedAquiferId" type="hidden" name="aquifer_id">
-        <div data-selection-panel="map" class="flex min-h-0 flex-1 flex-col p-3 md:p-4">
-          <div class="selection-map-shell">
-            <div class="selection-map-toolbar">
-              <div>
-                <div class="text-xs font-bold text-slate-950">روی پلیگون آبخوان کلیک کنید</div>
-                <div class="mt-1 text-[10px] leading-5 text-slate-500">محدوده‌های مطالعاتی در لایه زیرین و آبخوان‌ها در لایه انتخابی نمایش داده شده‌اند.</div>
-              </div>
-            </div>
-            <div id="aquiferSelectionMap" class="selection-map-canvas"></div>
-          </div>
+        <div class="picker-fields" data-selection-panel="dropdown" id="picker-panel-dropdown" role="tabpanel" aria-labelledby="picker-tab-dropdown">
+          <label for="mahdoudeSelect">محدوده مطالعاتی
+            <select class="field" id="mahdoudeSelect" name="mahdoude" hx-get="/partials/aquifers"
+              hx-target="#aquiferSelect" hx-trigger="change" hx-swap="innerHTML">
+              {% for item in navigation %}<option value="{{ item.key }}">{{ item.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label for="aquiferSelect">آبخوان
+            <select class="field" id="aquiferSelect">
+              {% if navigation %}{% for aquifer in navigation[0].aquifers %}
+                <option value="{{ aquifer.id }}">{{ aquifer.name }} · {{ aquifer.well_count }} پیزومتر</option>
+              {% endfor %}{% endif %}
+            </select>
+          </label>
+          <button id="showDashboardButton" type="submit" class="primary-button" disabled>انتخاب و ادامه <span aria-hidden="true">←</span></button>
         </div>
-        <div data-selection-panel="dropdown" class="hidden min-h-0 flex-1 p-3">
-          <div class="grid gap-4 md:grid-cols-2">
-            <label class="block">
-              <span class="mb-2 block text-xs font-medium text-slate-500">محدوده مطالعاتی</span>
-              <select
-                class="field"
-                id="mahdoudeSelect"
-                name="mahdoude"
-                hx-get="/partials/aquifers"
-                hx-target="#aquiferSelect"
-                hx-trigger="change"
-                hx-swap="innerHTML"
-              >
-                {% for item in navigation %}
-                  <option value="{{ item.key }}">{{ item.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="block">
-              <span class="mb-2 block text-xs font-medium text-slate-500">آبخوان</span>
-              <select class="field" id="aquiferSelect">
-                {% if navigation %}
-                  {% for aquifer in navigation[0].aquifers %}
-                    <option value="{{ aquifer.id }}">{{ aquifer.name }} · {{ aquifer.well_count }} چاه</option>
-                  {% endfor %}
-                {% endif %}
-              </select>
-            </label>
-          </div>
+        <div data-selection-panel="map" id="picker-panel-map" role="tabpanel" aria-labelledby="picker-tab-map" class="hidden picker-map">
+          <p>روی آبخوان کلیک کنید، سپس «انتخاب و ادامه» را بزنید.</p>
+          <div class="selection-map-shell"><div id="aquiferSelectionMap" class="selection-map-canvas"></div></div>
+          <button type="submit" class="primary-button">انتخاب و ادامه <span aria-hidden="true">←</span></button>
         </div>
+        <div id="selectedAquiferBadge" class="picker-selection-note" aria-live="polite"></div>
       </form>
-    </header>
-
-    <main class="dashboard-shell mx-auto max-w-[1600px] px-3 pb-12 md:px-6">
-      <div id="loadingIndicator" class="htmx-indicator fixed bottom-4 left-4 z-[1000] flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-teal shadow-card">
-        <span class="h-3 w-3 animate-pulse rounded-full bg-teal"></span>
-        در حال آماده‌سازی داده‌های آبخوان...
-      </div>
-      <section id="dashboardContent"></section>
-    </main>
+      <main id="dashboardContent" tabindex="-1">
+        <section class="workspace-welcome">
+          <p>برای نمایش پیزومترها، آبخوان را انتخاب کنید.</p>
+        </section>
+      </main>
+      <div id="loadingIndicator" class="htmx-indicator picker-loading" role="status">در حال دریافت اطلاعات…</div>
+    </div>
 
     <aside id="aquiferChatWidget" class="aquifer-chat-widget hidden" aria-live="polite">
       <section id="aquiferChatPanel" class="aquifer-chat-panel hidden" aria-label="گفتگو درباره آبخوان">

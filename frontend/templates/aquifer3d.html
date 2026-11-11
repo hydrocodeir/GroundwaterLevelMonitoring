@@ -11,29 +11,12 @@
     <script type="module" src="{{ url_for('assets', path='js/aquifer3d.js') }}?v={{ asset_version }}"></script>
   </head>
   <body class="aquifer3d-page">
-    <div class="aquifer3d-backdrop" aria-hidden="true"></div>
+    {% set active_page = '3d' %}
+    {% include 'partials/site_header.html' %}
     <div class="aquifer3d-shell">
-      <header class="aquifer3d-header">
-        <nav class="aquifer3d-nav" aria-label="ناوبری صفحه">
-          <a class="aquifer3d-brand" href="/" aria-label="بازگشت به داشبورد پایش آب زیرزمینی">
-            <span class="aquifer3d-brand-mark"><img src="{{ url_for('assets', path='img/HydroCode.png') }}" alt=""></span>
-            <span><strong>پایش آب زیرزمینی</strong><small>HydroCodeIR</small></span>
-          </a>
-          <a class="aquifer3d-back" href="/"><span aria-hidden="true">→</span> بازگشت به داشبورد</a>
-        </nav>
-
-        <div class="aquifer3d-intro">
-          <div>
-            <p class="aquifer3d-eyebrow"><span></span> نمای حجمی و تغییرات زمانی آبخوان</p>
-            <h1>آبِ آبخوان، پیش و پس از افت</h1>
-            <p class="aquifer3d-lede">یک آبخوان را انتخاب کنید تا سطح آب در شهریور سال مبنا با شهریور ۱۴۰۴ مقایسه شود. ارتفاع سطح آب از داده‌های پیزومترها برآورد می‌شود؛ حجم آب قابل زهکشی با کف مدل و آبدهی ویژه، به‌صورت سناریویی، برآورد می‌شود.</p>
-          </div>
-          <div class="aquifer3d-date-card" aria-label="تاریخ انتهای مقایسه">
-            <span>انتهای مقایسه</span>
-            <strong>شهریور ۱۴۰۴</strong>
-            <small>پایان سال آبی WY ۱۴۰۳</small>
-          </div>
-        </div>
+      <header class="page-heading">
+        <div><h1>نمای سه‌بعدی آبخوان</h1><p>مقایسه سطح آب و تغییر ذخیره بین شهریور سال مبنا و شهریور ۱۴۰۴</p></div>
+        <span class="page-period">انتهای مقایسه: شهریور ۱۴۰۴</span>
       </header>
 
       <main>
@@ -43,7 +26,6 @@
               <p class="aquifer3d-kicker">۰۱ / ورودی‌های تحلیل</p>
               <h2 id="aquifer3d-config-title">محدوده و فرض‌های محاسبه</h2>
             </div>
-            <span class="aquifer3d-local-badge"><span aria-hidden="true">●</span> محاسبه در مرورگر شما</span>
           </div>
 
           <div class="aquifer3d-form-grid">
@@ -98,7 +80,7 @@
           <div class="aquifer3d-section-heading aquifer3d-summary-heading">
             <div>
               <p class="aquifer3d-kicker">۰۲ / برآوردها</p>
-              <h2 id="aquifer3d-summary-title">آنچه از داده‌ها می‌دانیم</h2>
+              <h2 id="aquifer3d-summary-title">نتایج محاسبه</h2>
             </div>
             <p>اعداد پس از اجرای تحلیل ظاهر می‌شوند.</p>
           </div>
@@ -135,7 +117,7 @@
         </section>
 
         <section class="aquifer3d-notes aquifer3d-card" aria-labelledby="aquifer3d-notes-title">
-          <div class="aquifer3d-section-heading"><div><p class="aquifer3d-kicker">۰۴ / منشأ و محدودیت</p><h2 id="aquifer3d-notes-title">چگونه این تصویر را بخوانیم؟</h2></div></div>
+          <div class="aquifer3d-section-heading"><div><p class="aquifer3d-kicker">۰۴ / منشأ و محدودیت</p><h2 id="aquifer3d-notes-title">منابع و روش محاسبه</h2></div></div>
           <div class="aquifer3d-notes-grid">
             <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۱</span><div><h3>منابع و فرض‌ها</h3><p id="sourceNote">مرز GeoJSON آبخوان و سطح آب از داده‌های همین سامانه گرفته می‌شوند. آبدهی ویژه و سنگ‌بستر باید برای آبخوان انتخابی با منبع محلی بررسی شوند.</p><p class="aquifer3d-source-link"><a href="https://pubs.usgs.gov/of/2002/ofr02197/documentation.pdf" target="_blank" rel="noopener noreferrer">توضیح USGS دربارهٔ آبدهی ویژه در آبخوان آزاد ↗</a></p></div></div>
             <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۲</span><div><h3>پوشش داده و روش</h3><p id="coverageNote">مدل پس از انتخاب آبخوان و دوره، تعداد پیزومترهای دارای داده و محدودیت پوشش مکانی را نشان می‌دهد. بدون دادهٔ سنگ‌بستر، نمایش عمق و شکل آبخوان شماتیک است و حجم مطلق آب قابل برآورد نیست.</p></div></div>

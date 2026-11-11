@@ -33,14 +33,84 @@
     chatAquiferId: null,
     chatContextKey: null,
     chatRequestToken: 0,
-    wizardStep: 0,
-    wizardCollapsed: {},
+    editorCollapsed: {},
     manualWellSelections: {},
+    wellTailSettings: {},
     dashboardStage: {},
     timelineSyncLock: false
   };
 
+  const dialogFocusTargets = new WeakMap();
+  function captureDialogFocus(modal) {
+    if (!modal.contains(document.activeElement)) dialogFocusTargets.set(modal, document.activeElement);
+    window.requestAnimationFrame(() => modal.querySelector('.modal-close-button')?.focus({ preventScroll: true }));
+  }
+  function releaseDialogFocus(modal) {
+    if (modal.classList.contains('hidden')) return;
+    const target = dialogFocusTargets.get(modal);
+    window.requestAnimationFrame(() => {
+      if (target?.isConnected) target.focus({ preventScroll: true });
+      else document.querySelector('[data-results-view].is-active')?.focus({ preventScroll: true });
+    });
+  }
+
   const CHAT_HISTORY_STORAGE_PREFIX = "hydrocodeir.aquifer-chat-history.v1";
+  const dashboardScriptUrl = document.currentScript?.src || `${location.origin}/assets/js/app.js`;
+  let dashboardWorker;
+  let dashboardWorkerReady;
+  let dashboardWorkerGeneration = 0;
+  let dashboardCallId = 0;
+  const dashboardCalls = new Map();
+
+  async function calculateDashboard(args, onProgress, command = "dashboard") {
+    const generation = dashboardWorkerGeneration;
+    dashboardWorkerReady ||= (async () => {
+      if ("serviceWorker" in navigator) {
+        // The shared service worker caches static data and Python dependencies.
+        const registration = await navigator.serviceWorker.register("/aquifer3d-sw.js").catch(() => null);
+        if (registration && !navigator.serviceWorker.controller) {
+          await Promise.race([
+            new Promise(resolve => navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true })),
+            new Promise(resolve => setTimeout(resolve, 8000))
+          ]);
+        }
+      }
+      if (generation !== dashboardWorkerGeneration) throw new DOMException('Cancelled', 'AbortError');
+      const url = new URL("dashboard-worker.js", dashboardScriptUrl);
+      url.search = new URL(dashboardScriptUrl).search;
+      dashboardWorker = new Worker(url, { type: "module" });
+      dashboardWorker.onmessage = ({ data }) => {
+        if (generation !== dashboardWorkerGeneration) return;
+        if (data.type === "progress") {
+          dashboardCalls.forEach(call => call.onProgress?.(data.message));
+          return;
+        }
+        const call = dashboardCalls.get(data.id);
+        if (!call) return;
+        dashboardCalls.delete(data.id);
+        if (data.error) call.reject(new Error(data.error));
+        else call.resolve(data.result);
+      };
+      dashboardWorker.onerror = () => {
+        if (generation !== dashboardWorkerGeneration) return;
+        dashboardCalls.forEach(call => call.reject(new Error("راه‌اندازی محاسبات مرورگر ناموفق بود. صفحه را دوباره بارگذاری کنید.")));
+        dashboardCalls.clear();
+        dashboardWorker.terminate();
+        dashboardWorker = null;
+        dashboardWorkerReady = null;
+      };
+    })().catch(error => {
+      if (generation === dashboardWorkerGeneration) dashboardWorkerReady = null;
+      throw error;
+    });
+    await dashboardWorkerReady;
+    if (generation !== dashboardWorkerGeneration) throw new DOMException('Cancelled', 'AbortError');
+    return new Promise((resolve, reject) => {
+      const id = ++dashboardCallId;
+      dashboardCalls.set(id, { resolve, reject, onProgress });
+      dashboardWorker.postMessage({ id, command, arguments: args });
+    });
+  }
 
   const faNumber = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 });
   const LEAFLET_MAX_ZOOM = 14;
@@ -70,7 +140,7 @@
     ordinary_kriging: "#7C3AED",
     universal_kriging: "#2563EB",
     regression_kriging: "#D97706",
-    spline: "#F59E0B"
+    spline: "#B57718"
   };
   const surfaceMethodTrendColors = {
     idw: "#7C3AED",
@@ -200,6 +270,7 @@
     if (!input || !button) return;
     input.value = id || "";
     button.disabled = !id;
+    document.querySelectorAll('#aquiferSelectionForm button[type="submit"]').forEach(submit => { submit.disabled = !id; });
     if (badge) {
       badge.textContent = id ? label : "هنوز آبخوانی انتخاب نشده است";
       badge.classList.toggle("is-selected", Boolean(id));
@@ -357,29 +428,57 @@
         const tab = button.dataset.selectionTab;
         document.querySelectorAll(".selection-tab-button").forEach(item => {
           item.classList.toggle("is-active", item === button);
+          item.setAttribute("aria-selected", String(item === button));
+          item.tabIndex = item === button ? 0 : -1;
         });
         document.querySelectorAll("[data-selection-panel]").forEach(panel => {
           panel.classList.toggle("hidden", panel.dataset.selectionPanel !== tab);
         });
         if (tab === "map") {
-          resizeSelectionMap();
+          if (!state.selectionMap) initializeAquiferSelection();
+          else resizeSelectionMap();
         } else {
           syncDropdownSelection();
         }
       });
     });
+    document.querySelectorAll('.selection-tab-button').forEach(button => {
+      button.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const buttons = Array.from(document.querySelectorAll('.selection-tab-button'));
+        const target = event.key === 'Home' ? buttons[0] : event.key === 'End' ? buttons.at(-1) : buttons.find(item => item !== button);
+        target.click();
+        target.focus();
+      });
+    });
     document.getElementById("aquiferSelect")?.addEventListener("change", syncDropdownSelection);
+    document.getElementById('mahdoudeSelect')?.addEventListener('change', () => {
+      setSelectedAquifer('', 'در حال دریافت آبخوان‌های این محدوده…');
+      document.getElementById('selectedAquiferBadge').textContent = 'در حال دریافت آبخوان‌های این محدوده…';
+      const aquifers = document.getElementById('aquiferSelect');
+      aquifers.disabled = true;
+      aquifers.innerHTML = '<option value="">در حال دریافت…</option>';
+    });
     document.getElementById("aquiferSelectionForm")?.addEventListener("submit", event => {
       if (!document.getElementById("selectedAquiferId")?.value) {
         event.preventDefault();
-        window.alert("ابتدا یک آبخوان را از نقشه یا فهرست انتخاب کنید.");
+        event.stopImmediatePropagation();
+        document.getElementById('selectedAquiferBadge').textContent = 'ابتدا یک آبخوان را از فهرست یا نقشه انتخاب کنید.';
       }
-    });
+    }, true);
   }
 
   function persianDate(value) {
     if (!value) return "بدون داده";
     return String(value).replace(/\d/g, digit => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
+  }
+
+  function parseLocalizedNumber(value) {
+    return Number(String(value ?? '').trim()
+      .replace(/[۰-۹]/g, digit => String(digit.charCodeAt(0) - 0x06f0))
+      .replace(/[٠-٩]/g, digit => String(digit.charCodeAt(0) - 0x0660))
+      .replace(/٬/g, '').replace(/[٫,]/g, '.'));
   }
 
   function formatNumber(value, suffix = "") {
@@ -397,7 +496,7 @@
   }
 
   function periodDateLabel(year, month) {
-    return `${monthNames[month - 1]} ${year}`;
+    return `${monthNames[month - 1]} ${persianDate(year)}`;
   }
 
   function escapeHtml(value) {
@@ -891,6 +990,7 @@
     const shouldOpen = forceOpen ?? panel.classList.contains("hidden");
     panel.classList.toggle("hidden", !shouldOpen);
     toggle.setAttribute("aria-expanded", String(shouldOpen));
+    document.getElementById('workspaceChatTrigger')?.setAttribute('aria-expanded', String(shouldOpen));
     if (shouldOpen) {
       loadAiOptions();
       window.setTimeout(() => document.getElementById("aquiferChatInput")?.focus(), 50);
@@ -1022,6 +1122,7 @@
   function closeAiModal() {
     const modal = document.getElementById("aiAnalysisModal");
     if (!modal) return;
+    releaseDialogFocus(modal);
     modal.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
   }
@@ -1029,6 +1130,7 @@
   function closeMethodGuideModal() {
     const modal = document.getElementById("methodGuideModal");
     if (!modal) return;
+    releaseDialogFocus(modal);
     modal.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
   }
@@ -1061,6 +1163,7 @@
     closePrecipitationModal();
     renderMethodGuide();
     modal.classList.remove("hidden");
+    captureDialogFocus(modal);
     document.body.classList.add("overflow-hidden");
   }
 
@@ -1070,6 +1173,7 @@
     closeWellModal();
     closePrecipitationModal();
     modal.classList.remove("hidden");
+    captureDialogFocus(modal);
     document.body.classList.add("overflow-hidden");
     loadAiOptions();
   }
@@ -1256,9 +1360,8 @@
 
   function surfaceMethodLabel(data, method, compact = false) {
     const label = data?.surface_methods?.[method]?.metadata?.short_label
-      || data?.piezometric_surface?.short_label
       || surfaceMethodLabels[method]
-      || method;
+      || method || "بدون درون‌یابی";
     if (!compact) return label;
     return label
       .replace("سطح پیزومتریک ", "سطح ")
@@ -1268,7 +1371,7 @@
 
   function primarySurfaceMethod(data) {
     const methods = selectedSurfaceMethods(data);
-    return methods[0] || "idw";
+    return methods[0] || null;
   }
 
   function currentAnnualSurfaceMethod(data) {
@@ -1285,17 +1388,18 @@
       ? filters.surface_interpolation_methods.filter(Boolean)
       : [];
     const fallback = filters.surface_interpolation_method || "idw";
-    const requested = methods.length ? methods : [fallback];
+    const requested = Array.isArray(filters.surface_interpolation_methods) ? methods : [fallback];
     const normalized = [];
     requested.forEach(method => {
       if (surfaceMethodOrder.includes(method) && !normalized.includes(method)) {
         normalized.push(method);
       }
     });
-    if (!normalized.includes("idw")) {
-      normalized.unshift("idw");
-    }
     return surfaceMethodOrder.filter(method => normalized.includes(method));
+  }
+
+  function selectedBaseMethods(data) {
+    return data?.filters?.base_hydrograph_methods || ["arithmetic", "thiessen"];
   }
 
   function surfaceMethodPayload(data, method) {
@@ -1340,7 +1444,7 @@
         color: "#11395B",
         rows: annualRowsForPayload(data?.annual_decline, "arithmetic")
       }
-    ];
+    ].filter(method => selectedBaseMethods(data).includes(method.key));
     selectedSurfaceMethods(data).forEach(method => {
       const payload = surfaceMethodPayload(data, method);
       if (!payload?.annual_decline) return;
@@ -1354,7 +1458,8 @@
     const correctedAnnual = data?.corrected?.annual_decline || {};
     [
       ["corrected_thiessen", "تیسن اصلاحی", "#16A34A"],
-      ["corrected_arithmetic", "حسابی اصلاحی", "#0F766E"]
+      ["corrected_arithmetic", "حسابی اصلاحی", "#0F766E"],
+      ["corrected_median", "میانه اصلاحی", "#B45309"]
     ].forEach(([key, label, color]) => {
       if (correctedAnnual[key]) {
         methods.push({ key, label, color, rows: correctedAnnual[key] });
@@ -1411,7 +1516,7 @@
         color: "#E76F51",
         series: data?.hydrographs?.thiessen || []
       }
-    ];
+    ].filter(method => selectedBaseMethods(data).includes(method.key));
     selectedSurfaceMethods(data).forEach(method => {
       const payload = surfaceMethodPayload(data, method);
       if (!payload?.series?.length) return;
@@ -1424,7 +1529,8 @@
     });
     [
       ["corrected_arithmetic", "اصلاح‌شده حسابی", "#0F766E"],
-      ["corrected_thiessen", "اصلاح‌شده تیسن", "#16A34A"]
+      ["corrected_thiessen", "اصلاح‌شده تیسن", "#16A34A"],
+      ["corrected_median", "اصلاح‌شده میانه", "#B45309"]
     ].forEach(([key, label, color]) => {
       const series = correctedSeries(data, key);
       if (series.length) {
@@ -1628,13 +1734,10 @@
     };
   }
 
-  function openWizardEditor(root, step) {
-    setWizardCollapsed(root, false);
-    setWizardStep(root, step);
-    root.querySelector("#analysisFilters")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start"
-    });
+  function openSetupEditor(root, section) {
+    if (!root) return;
+    setEditorCollapsed(root, false);
+    focusSetupSection(root, section);
   }
 
   function trendChip(label, trend, variant = "") {
@@ -1697,6 +1800,11 @@
         label: "اصلاحی تیسن",
         seriesName: "اصلاح‌شده تیسن",
         trend: correctedTrend(data, "corrected_thiessen")
+      },
+      {
+        label: "اصلاحی میانه",
+        seriesName: "اصلاح‌شده میانه",
+        trend: correctedTrend(data, "corrected_median")
       },
       ...selectedSurfaceMethods(data).map(method => ({
         label: `اصلاحی ${surfaceMethodLabels[method] || method}`,
@@ -2469,14 +2577,15 @@
       const accepted = well.included;
       if (!accepted || well.longitude === null || well.latitude === null) return;
       if (current !== null && current !== undefined) {
-        currentPoints.push([well.longitude, well.latitude, current, well.name]);
+        currentPoints.push([well.longitude, well.latitude, current, well.name, well.id]);
       }
       if (hasComparison) {
         declinePoints.push([
           well.longitude,
           well.latitude,
           previous - current,
-          well.name
+          well.name,
+          well.id
         ]);
       }
     });
@@ -2696,9 +2805,9 @@
     const charts = state.spatialCharts;
     if (!data || !charts) return;
     const monthIndex = state.spatialMonthIndex;
-    const method = document.getElementById("spatialSurfaceMethod")?.value
-      || state.spatialSurfaceMethod
-      || primarySurfaceMethod(data);
+    const method = selectedSurfaceMethods(data).length
+      ? (document.getElementById("spatialSurfaceMethod")?.value || primarySurfaceMethod(data))
+      : null;
     state.spatialSurfaceMethod = method;
     renderSpatialMethodChips(data);
     const month = data.hydrographs.thiessen[monthIndex]?.[0];
@@ -2717,12 +2826,12 @@
       intervalInput.value = String(niceContourInterval(currentPoints));
       state.contourIntervalInitialized = true;
     }
-    let interval = Number(intervalInput.value);
+    let interval = parseLocalizedNumber(intervalInput.value);
     if ((!Number.isFinite(interval) || interval <= 0) && currentPoints.length >= 3) {
       interval = niceContourInterval(currentPoints);
       intervalInput.value = String(interval);
     }
-    const levels = currentPoints.length >= 3 ? contourLevels(currentPoints, interval) : [];
+    const levels = method && currentPoints.length >= 3 ? contourLevels(currentPoints, interval) : [];
     const grid = levels.length ? interpolationGrid(currentPoints, geometry, method) : null;
     const contourSeries = levels.map(level => ({
       id: `contour-${level}`,
@@ -2790,7 +2899,7 @@
           type: "scatter",
           coordinateSystem: "lmap",
           symbolSize: 8,
-          data: currentPoints.map(point => ({ value: point })),
+          data: currentPoints.map(point => ({ value: point, wellId: point[4] })),
           itemStyle: { color: "#11395B", borderColor: "#FFFFFF", borderWidth: 1.5 },
           z: 10,
           animation: false
@@ -2802,7 +2911,7 @@
     const declineValues = declinePoints.map(point => point[2]).filter(Number.isFinite);
     const minimumDecline = declineValues.length ? Math.min(...declineValues) : 0;
     const maximumDecline = declineValues.length ? Math.max(...declineValues) : 0;
-    const declineSurfaceData = declineSurface(declinePoints, geometry, method);
+    const declineSurfaceData = method ? declineSurface(declinePoints, geometry, method) : [];
     const targetMonth = Number(month.slice(5, 7));
     const rangeDeclinePoints = spatialRangeDeclinePoints(data, targetMonth);
     const declinePieces = declineClassPieces(rangeDeclinePoints);
@@ -2830,7 +2939,7 @@
           type: "scatter",
           coordinateSystem: "lmap",
           symbolSize: 7,
-          data: declinePoints.map(point => ({ value: point })),
+          data: declinePoints.map(point => ({ value: point, wellId: point[4] })),
           itemStyle: { color: "#FFFFFF", borderColor: "#11395B", borderWidth: 1.4 },
           z: 10,
           animation: false
@@ -2840,7 +2949,7 @@
     charts.decline.dispatchAction({ type: "lmapRoam" });
     window.requestAnimationFrame(applyHeatmapClip);
 
-    const methodLabel = surfaceMethodLabel(data, method, true);
+    const methodLabel = method ? surfaceMethodLabel(data, method, true) : "روش سطح انتخاب نشده؛ فقط پیزومترها نمایش داده می‌شوند";
     document.getElementById("spatialMonthLabel").textContent = persianDate(month);
     document.getElementById("contourMapSummary").textContent = currentPoints.length >= 3
       ? `${methodLabel} · ${faNumber.format(currentPoints.length)} چاه · ${faNumber.format(levels.length)} خط · فاصله ${formatNumber(interval, " متر")}`
@@ -2914,6 +3023,16 @@
       decline: echarts.init(declineElement)
     };
     state.charts.push(state.spatialCharts.contour, state.spatialCharts.decline);
+    [state.spatialCharts.contour, state.spatialCharts.decline].forEach(chart => {
+      chart.on("click", parameters => {
+        if (!parameters.data?.wellId) return;
+        const well = state.spatialData?.wells.find(item => item.id === parameters.data.wellId);
+        if (well) {
+          stopSpatialPlayback();
+          openWellModal(well);
+        }
+      });
+    });
     state.spatialCharts.contour.setOption({
       animation: false,
       textStyle: { fontFamily: "Vazirmatn" },
@@ -3298,7 +3417,7 @@
     addLine("corrected_arithmetic", "اصلاح‌شده حسابی", "#0F766E");
     addLine("corrected_thiessen", "اصلاح‌شده تیسن", "#16A34A");
     addLine("corrected_median", "اصلاح‌شده میانه", "#B45309");
-    surfaceMethodOrder.forEach(method => {
+    selectedSurfaceMethods(data).forEach(method => {
       addLine(
         `corrected_${method}`,
         `اصلاح‌شده ${surfaceMethodLabels[method] || method}`,
@@ -3335,33 +3454,6 @@
     return series;
   }
 
-  function correctedStatusAreaSeries(data) {
-    const rows = data?.corrected?.status_counts || [];
-    if (!rows.length) return [];
-    const config = [
-      ["measured_count", "وضعیت: اندازه‌گیری", "rgba(8, 126, 139, 0.12)"],
-      ["retired_count", "وضعیت: بازنشسته", "rgba(231, 111, 81, 0.15)"],
-      ["new_well_count", "وضعیت: چاه جدید", "rgba(124, 58, 237, 0.12)"],
-      ["imputed_count", "وضعیت: برآورد", "rgba(245, 158, 11, 0.13)"]
-    ];
-    return config.map(([key, name, color]) => ({
-      name,
-      type: "line",
-      yAxisIndex: 2,
-      stack: "well-status",
-      data: rows.map(row => row[key] || 0),
-      showSymbol: false,
-      smooth: false,
-      lineStyle: { width: 0 },
-      areaStyle: { color },
-      emphasis: { focus: "series" },
-      tooltip: {
-        valueFormatter: value => `${faNumber.format(value || 0)} ماه-چاه`
-      },
-      z: 0
-    }));
-  }
-
   function surfaceTrendChips(data, method, trend, variant = "") {
     const label = surfaceMethodLabel(data, method, true);
     return trendChip(`${label}${variant ? ` ${variant}` : ""}`, trend, variant === "مقایسه‌ای" ? "comparison" : "");
@@ -3371,275 +3463,213 @@
     return document.querySelector("[data-dashboard]");
   }
 
-  function wizardStepCount(root = activeDashboardRoot()) {
-    return root?.querySelectorAll("[data-wizard-panel]").length || 0;
-  }
-
-  function setWizardStep(root, nextStep) {
-    if (!root) return;
-    const panels = Array.from(root.querySelectorAll("[data-wizard-panel]"));
-    if (!panels.length) return;
-    const step = Math.max(0, Math.min(nextStep, panels.length - 1));
-    state.wizardStep = step;
-    panels.forEach((panel, index) => {
-      panel.classList.toggle("hidden", index !== step);
-    });
-    root.querySelectorAll("[data-wizard-step]").forEach(button => {
-      const buttonStep = Number(button.dataset.wizardStep);
-      const wasComplete = button.classList.contains("is-complete");
-      const isActive = buttonStep === step;
-      const isComplete = buttonStep < step;
-      button.classList.toggle("is-active", isActive);
-      button.classList.toggle("is-complete", isComplete);
-      button.classList.toggle("is-pending", buttonStep > step);
-      button.setAttribute("aria-current", isActive ? "step" : "false");
-      const badge = button.querySelector(".wizard-step-badge");
-      if (badge) {
-        badge.textContent = isActive ? "مرحله جاری" : isComplete ? "انجام شده" : "در انتظار";
-      }
-      if (!wasComplete && isComplete) {
-        button.classList.remove("just-completed");
-        void button.offsetWidth;
-        button.classList.add("just-completed");
-        window.setTimeout(() => {
-          button.classList.remove("just-completed");
-        }, 560);
-      }
-    });
-    const progress = root.querySelector("#wizardProgressLabel");
-    if (progress) {
-      progress.textContent = `مرحله ${faNumber.format(step + 1)} از ${faNumber.format(panels.length)}`;
-    }
-    const prev = root.querySelector("#wizardPrevStep");
-    const next = root.querySelector("#wizardNextStep");
-    if (prev) prev.disabled = step === 0;
-    if (next) next.disabled = step === panels.length - 1;
-    updateWizardStageUI(root);
-  }
-
   function dashboardStageState(root = activeDashboardRoot()) {
-    const aquiferId = root?.dataset.aquiferId;
-    if (!aquiferId) return { applied: false, dirty: false };
-    if (!state.dashboardStage[aquiferId]) {
-      state.dashboardStage[aquiferId] = { applied: false, dirty: false };
-    }
-    return state.dashboardStage[aquiferId];
+    const id = root?.dataset.aquiferId;
+    if (!id) return { applied: false, dirty: false, busy: false, initializing: true };
+    return state.dashboardStage[id] ||= { applied: false, dirty: false, busy: false, initializing: true };
   }
 
-  function wizardCollapsedState(root = activeDashboardRoot()) {
-    const aquiferId = root?.dataset.aquiferId;
-    if (!aquiferId) return false;
-    if (typeof state.wizardCollapsed[aquiferId] !== "boolean") {
-      state.wizardCollapsed[aquiferId] = false;
-    }
-    return state.wizardCollapsed[aquiferId];
+  function editorCollapsedState(root = activeDashboardRoot()) {
+    return Boolean(state.editorCollapsed[root?.dataset.aquiferId]);
   }
 
-  function setWizardCollapsed(root = activeDashboardRoot(), collapsed = false) {
-    if (!root?.dataset.aquiferId) return;
-    state.wizardCollapsed[root.dataset.aquiferId] = collapsed;
-    const form = root.querySelector("#analysisFilters");
-    form?.classList.toggle("is-collapsed", collapsed);
-    const toggle = root.querySelector("#wizardCollapseToggle");
+  function setEditorCollapsed(root = activeDashboardRoot(), collapsed = false) {
+    if (!root) return;
+    state.editorCollapsed[root.dataset.aquiferId] = collapsed;
+    root.querySelector('#analysisFilters')?.classList.toggle('is-collapsed', collapsed);
+    root.querySelector('#analysisEditor')?.classList.toggle('hidden', collapsed);
+    root.querySelector('.analysis-actionbar')?.classList.toggle('hidden', collapsed);
+    root.querySelector('#analysisAppliedSummary')?.classList.toggle('hidden', !collapsed);
+    const toggle = root.querySelector('#toggleAnalysisEditor');
     if (toggle) {
-      toggle.textContent = collapsed ? "باز کردن ویزارد" : "جمع کردن ویزارد";
+      toggle.textContent = collapsed ? 'ویرایش تنظیمات' : 'بستن تنظیمات';
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+      toggle.classList.toggle('hidden', !dashboardStageState(root).applied);
     }
-    root.querySelector("#wizardCollapsedSummary")?.classList.toggle("hidden", !collapsed);
-    root.querySelector("#wizardQuickEditActions")?.classList.toggle("hidden", !collapsed);
+    syncAnalysisSummary(root);
   }
 
-  function wizardRequirements(root = activeDashboardRoot(), data = state.currentData) {
-    const selectedCount = selectedManualWellIds().length;
-    const comparisonEnabled = Boolean(root?.querySelector("#comparisonTrendEnabled")?.checked);
-    const storage = Number(root?.querySelector("#storageCoefficient")?.value);
-    const comparisonStartYear = Number(root?.querySelector("#comparisonStartYear")?.value);
-    const comparisonStartMonth = Number(root?.querySelector("#comparisonStartMonth")?.value);
-    const comparisonEndYear = Number(root?.querySelector("#comparisonEndYear")?.value);
-    const comparisonEndMonth = Number(root?.querySelector("#comparisonEndMonth")?.value);
+  function focusSetupSection(root, step) {
+    const sections = ['wells', 'correction', 'methods', 'storage'];
+    const section = root?.querySelector(`[data-setup-section="${sections[step] || 'wells'}"]`);
+    if (section?.tagName === 'DETAILS') section.open = true;
+    section?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function analysisRequirements(root = activeDashboardRoot(), data = state.currentData) {
     const range = currentManualRange(root, data);
-    const comparisonComplete = !comparisonEnabled || (
-      comparisonStartYear
-      && comparisonStartMonth
-      && comparisonEndYear
-      && comparisonEndMonth
-    );
-    return [
-      {
-        label: "بازه تحلیل مشخص شده",
-        ready: Boolean(range)
-      },
-      {
-        label: "حداقل یک پیزومتر انتخاب شده",
-        ready: selectedCount > 0
-      },
-      {
-        label: "ضریب ذخیره معتبر است",
-        ready: Number.isFinite(storage) && storage > 0
-      },
-      {
-        label: comparisonEnabled ? "بازه مقایسه کامل شده" : "مقایسه شیب غیرفعال است",
-        ready: comparisonComplete
+    const surface = root ? selectedSurfaceMethodsFromForm(root) : [];
+    const baseCount = root?.querySelectorAll('#baseHydrographMethods input:checked').length || 0;
+    const support = root?.querySelector('#correctedSupportMethod')?.value || 'none';
+    const storageEnabled = root?.querySelector('#includeStorage')?.checked;
+    const storage = parseLocalizedNumber(root?.querySelector('#storageCoefficient')?.value);
+    const minimum = data?.filters ? data.filters.minimum_year * 12 + data.filters.minimum_month : 0;
+    const maximum = data?.filters ? data.filters.maximum_year * 12 + data.filters.maximum_month : 0;
+    let wellIssue = '';
+    const selected = new Set(selectedManualWellIds(root));
+    for (const well of data?.wells || []) {
+      if (!selected.has(well.id) || !range) continue;
+      const indexes = well.available_month_indexes || [];
+      const last = indexes.at(-1) || 0;
+      const observed = indexes.some(index => index >= range.startIndex && index <= range.endIndex);
+      const tail = state.wellTailSettings[root.dataset.aquiferId]?.[well.id] || { mode: 'none' };
+      if (!observed && (tail.mode === 'none' || !last || last >= range.endIndex)) {
+        wellIssue = last && last < range.endIndex
+          ? `«${well.name}» در این بازه مشاهده ندارد؛ تکمیل انتهایی را انتخاب کنید یا آن را از انتخاب خارج کنید.`
+          : `«${well.name}» در این بازه مشاهده ندارد؛ بازه را تغییر دهید یا آن را از انتخاب خارج کنید.`;
+        break;
       }
+      if (tail.mode === 'trend' && last < range.endIndex) {
+        const history = indexes.filter(index => index > last - Number(tail.years || 3) * 12);
+        if (history.length < 2 || history.at(-1) - history[0] < 12) {
+          wellIssue = `سابقه «${well.name}» برای شیب کافی نیست؛ آخرین مقدار ثابت را انتخاب کنید یا پیزومتر را از انتخاب خارج کنید.`;
+          break;
+        }
+      }
+    }
+    return [
+      { label: 'بازه شروع و پایان را به‌ترتیب و در محدوده داده‌ها انتخاب کنید.', ready: Boolean(range && range.startIndex >= minimum && range.endIndex <= maximum) },
+      { label: 'حداقل یک پیزومتر را از فهرست انتخاب کنید.', ready: selectedManualWellIds(root).length > 0 },
+      { label: wellIssue, ready: !wellIssue },
+      { label: 'حداقل یک روش محاسبه انتخاب کنید؛ شبکه ثابت به یک روش سطح نیاز دارد.', ready: Boolean((surface.length || baseCount || support !== 'none') && (support !== 'fixed_grid' || surface.length)) },
+      { label: 'برای تغییر ذخیره، ضریب معتبر بزرگ‌تر از صفر و حداکثر یک وارد کنید.', ready: !storageEnabled || (Number.isFinite(storage) && storage > 0 && storage <= 1) }
     ];
   }
 
   function setDashboardResultsVisibility(root = activeDashboardRoot()) {
     if (!root) return;
     const stage = dashboardStageState(root);
-    const results = root.querySelector("#dashboardResults");
-    const pending = root.querySelector("#wizardPendingState");
-    const shouldShowResults = stage.applied && !stage.dirty;
-    results?.classList.toggle("hidden", !shouldShowResults);
-    pending?.classList.toggle("hidden", shouldShowResults);
-    updateWizardStageUI(root);
+    root.querySelector('#dashboardResults')?.classList.toggle('hidden', !stage.applied);
+    root.querySelector('#resultsStaleBanner')?.classList.toggle('hidden', !(stage.applied && stage.dirty));
   }
 
-  function renderWizardPendingState(root = activeDashboardRoot(), data = state.currentData) {
-    if (!root || !data) return;
-    const checklist = root.querySelector("#wizardPendingChecklist");
-    const message = root.querySelector("#wizardPendingMessage");
-    const requirements = wizardRequirements(root, data);
-    const readyCount = requirements.filter(item => item.ready).length;
-    if (message) {
-      message.textContent = readyCount === requirements.length
-        ? "سناریو آماده اجرا است. برای ساخت خروجی‌ها دکمه «به‌روزرسانی تحلیل» را بزنید."
-        : "برای نمایش خروجی‌ها، آیتم‌های زیر را کامل کنید و سپس تحلیل را اجرا کنید.";
-    }
-    if (checklist) {
-      checklist.innerHTML = requirements.map(item => `
-        <div class="wizard-pending-item${item.ready ? " is-ready" : ""}">
-          ${item.ready ? "آماده" : "در انتظار"} · ${escapeHtml(item.label)}
-        </div>
-      `).join("");
-    }
-  }
-
-  function updateWizardStageUI(root = activeDashboardRoot()) {
+  function updateAnalysisActions(root = activeDashboardRoot()) {
     if (!root) return;
     const stage = dashboardStageState(root);
-    const stageLabel = root.querySelector("#wizardStageLabel");
-    const heroNote = root.querySelector("#wizardHeroNote");
-    const heroSelection = root.querySelector("#wizardHeroSelection");
-    const heroPeriod = root.querySelector("#wizardHeroPeriod");
-    const progressBar = root.querySelector("#wizardProgressBar");
-    const progressLabel = root.querySelector("#wizardProgressLabel");
-    const applyButton = root.querySelector("#applyAnalysisFilters");
-    const collapsedSummary = root.querySelector("#wizardCollapsedSummary");
-    const quickEditActions = root.querySelector("#wizardQuickEditActions");
-    const stepCount = wizardStepCount(root) || 1;
-    const stepShare = ((state.wizardStep + 1) / stepCount) * 70;
-    const requirements = wizardRequirements(root, state.currentData);
-    const allReady = requirements.every(item => item.ready);
-    const readinessShare = (requirements.filter(item => item.ready).length / requirements.length) * 30;
-    if (progressBar) {
-      progressBar.style.width = `${Math.max(12, Math.min(100, stepShare + readinessShare))}%`;
+    const advanced = root.querySelector('.advanced-methods');
+    if (advanced) {
+      const count = advanced.querySelectorAll('input:checked').length;
+      advanced.querySelector('summary').textContent = count ? `۴ روش دیگر · ${faNumber.format(count)} منتخب` : '۴ روش دیگر';
     }
-    if (stageLabel) {
-      stageLabel.textContent = stage.applied && !stage.dirty ? "تحلیل اجرا شده" : stage.dirty ? "نیازمند به‌روزرسانی" : "در حال تنظیم سناریو";
+    const correction = root.querySelector('[data-setup-section="correction"]>summary span');
+    if (correction) correction.textContent = root.querySelector('#correctedSupportMethod').value === 'none' ? 'اختیاری' : 'فعال';
+    const comparison = root.querySelector('[data-setup-section="comparison"]>summary span');
+    if (comparison) comparison.textContent = root.querySelector('#comparisonTrendEnabled').checked ? 'فعال' : 'اختیاری';
+    const unmet = analysisRequirements(root).find(item => !item.ready);
+    const button = root.querySelector('#applyAnalysisFilters');
+    if (button) {
+      button.disabled = stage.busy || stage.initializing || Boolean(unmet);
+      button.innerHTML = stage.busy ? '<span class="button-spinner" aria-hidden="true"></span>در حال محاسبه…' : `${stage.applied ? 'به‌روزرسانی نتایج' : 'محاسبه و مشاهده نتایج'} <span aria-hidden="true">←</span>`;
     }
-    if (heroNote) {
-      heroNote.textContent = stage.applied && !stage.dirty
-        ? "خروجی‌ها بر اساس آخرین تنظیمات همین ویزارد ساخته شده‌اند."
-        : stage.dirty
-          ? "تنظیمات تغییر کرده‌اند؛ برای دیدن خروجی تازه، تحلیل را دوباره اجرا کنید."
-          : "تا وقتی تصمیم‌ها نهایی نشوند، خروجی تحلیلی نمایش داده نمی‌شود.";
-    }
-    if (heroSelection) {
-      heroSelection.textContent = `${faNumber.format(selectedManualWellIds().length)} پیزومتر`;
-    }
-    if (heroPeriod) {
-      const startYear = root.querySelector("#startYear")?.value;
-      const startMonth = Number(root.querySelector("#startMonth")?.value || 0);
-      const endYear = root.querySelector("#endYear")?.value;
-      const endMonth = Number(root.querySelector("#endMonth")?.value || 0);
-      heroPeriod.textContent = startYear && startMonth && endYear && endMonth
-        ? `${monthNames[startMonth - 1]} ${startYear} تا ${monthNames[endMonth - 1]} ${endYear}`
-        : "—";
-    }
-    if (progressLabel) {
-      progressLabel.textContent = stage.applied && !stage.dirty
-        ? `تحلیل اجرا شده · مرحله ${faNumber.format(state.wizardStep + 1)} از ${faNumber.format(stepCount)}`
-        : `مرحله ${faNumber.format(state.wizardStep + 1)} از ${faNumber.format(stepCount)}`;
-    }
-    if (collapsedSummary) {
-      const methods = selectedSurfaceMethodsFromForm(root)
-        .map(method => surfaceMethodLabel(state.currentData, method, true))
-        .join(" + ");
-      const correctedSupport = correctedSupportLabels[root.querySelector("#correctedSupportMethod")?.value || "fixed_thiessen"];
-      const storageValue = root.querySelector("#storageCoefficient")?.value || "—";
-      collapsedSummary.textContent = `${faNumber.format(selectedManualWellIds(root).length)} پیزومتر | ${methods || "IDW"} | ${correctedSupport} | Sy=${storageValue}`;
-      collapsedSummary.classList.toggle("hidden", !wizardCollapsedState(root));
-    }
-    if (quickEditActions) {
-      quickEditActions.innerHTML = [
-        [0, "ویرایش پیزومترها"],
-        [1, "وضعیت شبکه"],
-        [2, "روش‌ها"],
-        [3, "ذخیره"]
-      ].map(([step, label]) => `
-        <button type="button" class="wizard-quick-edit-button" data-quick-edit-step="${step}">${escapeHtml(label)}</button>
-      `).join("");
-      quickEditActions.classList.toggle("hidden", !wizardCollapsedState(root));
-      quickEditActions.querySelectorAll("[data-quick-edit-step]").forEach(button => {
-        button.onclick = () => openWizardEditor(root, Number(button.dataset.quickEditStep));
-      });
-    }
-    if (applyButton && applyButton.dataset.loading !== "true") {
-      applyButton.disabled = !allReady;
-    }
-    renderWizardPendingState(root, state.currentData);
-  }
-
-  function markWizardDirty(root = activeDashboardRoot()) {
-    const stage = dashboardStageState(root);
-    if (stage.applied) {
-      stage.dirty = true;
-    }
+    const readiness = root.querySelector('#analysisReadiness');
+    if (readiness) readiness.textContent = stage.busy ? 'می‌توانید محاسبه را لغو کنید؛ تنظیمات حفظ می‌شوند.' : unmet?.label || 'آماده اجرا؛ فقط روش‌های انتخابی محاسبه می‌شوند.';
+    root.querySelector('#cancelAnalysis')?.classList.toggle('hidden', !stage.busy);
+    const editor = root.querySelector('#analysisEditor');
+    if (editor) editor.disabled = stage.busy;
+    root.setAttribute('aria-busy', String(stage.busy || stage.initializing));
     setDashboardResultsVisibility(root);
   }
 
-  function wizardPolicyText(root, data) {
-    return "مجموعه محاسباتی مستقیماً با پیزومترهای منتخب شما بسته می‌شود؛ خروجی خام و جریان اصلاحی روی همان شبکه انتخابی اجرا می‌شوند.";
+  function markAnalysisDirty(root = activeDashboardRoot()) {
+    const stage = dashboardStageState(root);
+    if (stage.applied) stage.dirty = true;
+    syncAnalysisSummary(root);
   }
 
-  function syncWizardSummaries(root, data = state.currentData) {
+  function syncAnalysisSummary(root, data = state.currentData) {
     if (!root || !data) return;
-    const startYear = root.querySelector("#startYear")?.value;
-    const startMonth = Number(root.querySelector("#startMonth")?.value || 0);
-    const endYear = root.querySelector("#endYear")?.value;
-    const endMonth = Number(root.querySelector("#endMonth")?.value || 0);
-    const startLabel = startYear && startMonth ? `${monthNames[startMonth - 1]} ${startYear}` : "—";
-    const endLabel = endYear && endMonth ? `${monthNames[endMonth - 1]} ${endYear}` : "—";
-    const selectedCount = selectedManualWellIds().length;
-    const step0 = `${faNumber.format(selectedCount)} پیزومتر منتخب · ${startLabel} تا ${endLabel}`;
-    const policyChip = root.querySelector("#wizardPolicyChip");
-    const policySummary = root.querySelector("#wizardPolicySummary");
-    const step1 = "شبکه انتخابی با policy اصلاحی";
-    const methods = selectedSurfaceMethodsFromForm(root)
-      .map(method => surfaceMethodLabel(data, method, true))
-      .join("، ");
-    const correctedSupport = correctedSupportLabels[root.querySelector("#correctedSupportMethod")?.value || "fixed_thiessen"];
-    const comparisonEnabled = root.querySelector("#comparisonTrendEnabled")?.checked;
-    const step2 = `${methods || "IDW"} · ${correctedSupport}${comparisonEnabled ? " · با مقایسه شیب" : ""}`;
-    const storageValue = root.querySelector("#storageCoefficient")?.value || "—";
-    const step3 = `Sy/S = ${faNumber.format(Number(storageValue) || 0)}`;
-    ["wizardSummary0", "wizardSummary1", "wizardSummary2", "wizardSummary3"].forEach((id, index) => {
-      const element = root.querySelector(`#${id}`);
-      if (!element) return;
-      element.textContent = [step0, step1, step2, step3][index];
+    const count = selectedManualWellIds(root).length;
+    const fromYear = root.querySelector('#startYear')?.value;
+    const toYear = root.querySelector('#endYear')?.value;
+    const fromMonth = Number(root.querySelector('#startMonth')?.value);
+    const toMonth = Number(root.querySelector('#endMonth')?.value);
+    const period = fromYear && toYear && fromMonth && toMonth
+      ? `${monthNames[fromMonth - 1]} ${persianDate(fromYear)} تا ${monthNames[toMonth - 1]} ${persianDate(toYear)}` : 'بازه مشخص نشده';
+    const support = root.querySelector('#correctedSupportMethod')?.value || 'none';
+    const methods = [...selectedHydrographLabelsFromForm(root), ...(support !== 'none' ? [`اصلاح: ${correctedSupportLabels[support]}`] : [])].join('، ');
+    const summary = `${faNumber.format(count)} پیزومتر · ${period}`;
+    const selectionSummary = root.querySelector('#analysisSelectionSummary');
+    if (selectionSummary) selectionSummary.textContent = count ? summary : 'پیزومترهای ورودی را انتخاب کنید';
+    const applied = root.querySelector('#analysisAppliedSummary');
+    if (applied) applied.innerHTML = `<span>${escapeHtml(summary)}</span><span>${escapeHtml(methods || 'روش انتخاب نشده')}${root.querySelector('#comparisonTrendEnabled')?.checked ? ' · مقایسه شیب فعال' : ''}</span><span>${root.querySelector('#includeStorage')?.checked ? 'با برآورد تغییر ذخیره' : 'تراز و افت آب'}</span>`;
+    updateAnalysisActions(root);
+  }
+
+  function showAnalysisError(root, message, technical = '', fieldId = '') {
+    const box = root.querySelector('#analysisInlineError');
+    root.querySelector('#analysisErrorMessage').textContent = message;
+    root.querySelector('#analysisErrorTechnical').textContent = technical;
+    root.querySelector('#analysisErrorDetails').classList.toggle('hidden', !technical || technical === message);
+    box.classList.remove('hidden');
+    setEditorCollapsed(root, false);
+    const field = fieldId ? root.querySelector(`#${fieldId}`) : null;
+    field?.closest('details')?.setAttribute('open', '');
+    field?.setAttribute('aria-invalid', 'true');
+    (field || box).focus({ preventScroll: true });
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function analysisErrorMessage(error) {
+    const raw = String(error?.message || error).trim();
+    if (/دریافت داده ناموفق بود/.test(raw)) return 'یکی از فایل‌های لازم دریافت نشد. اتصال و اجرای برنامه را بررسی کنید و دوباره تلاش کنید.';
+    if (/Failed to fetch|NetworkError|Failed to load|ERR_NETWORK|Load failed|No module named|ModuleNotFoundError/i.test(raw)) return 'دریافت ابزار یا داده کامل نشد. اتصال اولیه را بررسی کنید و دوباره محاسبه را بزنید.';
+    const lines = raw.split('\n');
+    return lines.at(-1).replace(/^(?:ValueError|KeyError|RuntimeError|Error):\s*/, '')
+      .replace(/^Program terminated with exit\(1\).*$/, 'ابزار محاسبه راه‌اندازی نشد. دریافت فایل‌های داخلی یا اتصال اولیه را بررسی و دوباره تلاش کنید.');
+  }
+
+  function stopDashboardWorker() {
+    ++state.requestToken;
+    ++dashboardWorkerGeneration;
+    dashboardWorker?.terminate();
+    dashboardWorker = null;
+    dashboardWorkerReady = null;
+    dashboardCalls.forEach(call => call.reject(new DOMException('Cancelled', 'AbortError')));
+    dashboardCalls.clear();
+  }
+
+  function cancelDashboardCalculation(root) {
+    stopDashboardWorker();
+    const stage = dashboardStageState(root);
+    stage.busy = false;
+    root.querySelector('#analysisComputeStatus').textContent = 'محاسبه لغو شد. تنظیمات شما حفظ شده‌اند.';
+    updateAnalysisActions(root);
+  }
+
+  function setResultsView(root, view = 'chart') {
+    if (!state.currentData || state.currentData.preview) return;
+    const panel = view === 'maps' ? 'maps' : view === 'wells' ? 'wells' : 'analysis';
+    root.querySelectorAll('[data-result-panel]').forEach(element => {
+      element.classList.toggle('hidden', element.dataset.resultPanel !== panel);
+      element.id = `result-panel-${element.dataset.resultPanel}`;
+      element.setAttribute('role', 'tabpanel');
+      if (element.dataset.resultPanel === panel) element.setAttribute('aria-labelledby', `result-tab-${view}`);
     });
-    if (policyChip) {
-      policyChip.textContent = "مسیر محاسبات: انتخاب پیزومتر";
+    root.querySelectorAll('[data-results-view]').forEach(button => {
+      const selected = button.dataset.resultsView === view;
+      button.id = `result-tab-${button.dataset.resultsView}`;
+      const target = ['maps', 'wells'].includes(button.dataset.resultsView) ? button.dataset.resultsView : 'analysis';
+      button.setAttribute('aria-controls', `result-panel-${target}`);
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    });
+    if (panel === 'analysis') {
+      const button = root.querySelector(`[data-tab-group="aquifer"][data-tab="${view}"]`);
+      if (button) switchTab(button);
     }
-    if (policySummary) {
-      policySummary.textContent = wizardPolicyText(root, data);
-    }
-    const storageSummary = root.querySelector("#wizardStorageSummary");
-    if (storageSummary) {
-      const area = data.storage?.area_km2 == null ? "نامشخص" : `${formatNumber(data.storage.area_km2, " km²")}`;
-      storageSummary.textContent = `مساحت مبنا: ${area} · این ضریب روی افت سالانه روش‌های خام و اصلاحی اعمال می‌شود.`;
-    }
-    updateWizardStageUI(root);
+    if (view !== 'maps') stopSpatialPlayback();
+    window.requestAnimationFrame(() => {
+      if (view === 'maps') {
+        if (!state.map) renderMap(state.currentData);
+        if (!state.spatialCharts) renderSpatialAnalysis(state.currentData);
+        state.map?.invalidateSize({ animate: false });
+        fitSpatialLeaflet(state.spatialCharts?.contour);
+        fitSpatialLeaflet(state.spatialCharts?.decline);
+      }
+      if (view === 'wells') renderWellCharts(state.currentData);
+      state.charts.filter(chart => !chart.isDisposed()).forEach(chart => chart.resize());
+    });
   }
 
   function renderFilterControls(data, root = activeDashboardRoot()) {
@@ -3648,13 +3678,14 @@
       state.manualWellSelections[root.dataset.aquiferId] = new Set(
         data.filters.manual_selection ? (data.filters.selected_well_ids || []) : []
       );
+      state.wellTailSettings[root.dataset.aquiferId] = { ...state.wellTailSettings[root.dataset.aquiferId], ...data.filters.well_tail_settings };
     }
     const years = Array.from(
       { length: data.filters.maximum_year - data.filters.minimum_year + 1 },
       (_, index) => data.filters.minimum_year + index
     );
     const yearOptions = years
-      .map(year => `<option value="${year}">${year}</option>`)
+      .map(year => `<option value="${year}">${persianDate(year)}</option>`)
       .join("");
     const yearValues = {
       startYear: data.filters.start_year,
@@ -3674,9 +3705,9 @@
     const continuousOnlyInput = document.getElementById("continuousOnly");
     if (continuousOnlyInput) continuousOnlyInput.checked = false;
     const storageInput = document.getElementById("storageCoefficient");
-    if (storageInput && data.filters.storage_coefficient != null) {
-      storageInput.value = String(data.filters.storage_coefficient);
-    }
+    if (storageInput) storageInput.value = data.filters.storage_coefficient == null ? '' : String(data.filters.storage_coefficient);
+    root.querySelector('#includeStorage').checked = data.filters.storage_coefficient != null;
+    root.querySelector('#storageCoefficientFields').classList.toggle('hidden', data.filters.storage_coefficient == null);
     const selectedSurfaceMethodSet = new Set(
       Array.isArray(data.filters.surface_interpolation_methods)
         ? data.filters.surface_interpolation_methods
@@ -3686,13 +3717,11 @@
       .querySelectorAll("#surfaceInterpolationMethods input[type='checkbox']")
       .forEach(input => {
         const method = input.value;
-        if (method === "idw") {
-          input.checked = true;
-          input.disabled = true;
-          return;
-        }
         input.checked = selectedSurfaceMethodSet.has(method);
       });
+    root.querySelectorAll("#baseHydrographMethods input[type='checkbox']").forEach(input => {
+      input.checked = selectedBaseMethods(data).includes(input.value);
+    });
     const correctedSupportSelect = document.getElementById("correctedSupportMethod");
     if (correctedSupportSelect) {
       correctedSupportSelect.value = correctedSupportMethod(data);
@@ -3714,6 +3743,13 @@
       });
       correctedSupportSelect.onchange = updateHint;
       updateHint();
+    }
+    if (data.preview) {
+      document.getElementById('comparisonTrendEnabled').checked = false;
+      syncComparisonTrendUI();
+      renderManualWellSelector(data, root);
+      syncAnalysisSummary(root, data);
+      return;
     }
     const spatialSurfaceMethod = document.getElementById("spatialSurfaceMethod");
     if (spatialSurfaceMethod) {
@@ -3754,9 +3790,8 @@
       Boolean(data.filters.comparison_enabled);
     syncComparisonTrendUI();
     renderManualWellSelector(data, root);
-    syncWizardSummaries(root, data);
-    setWizardStep(root, state.wizardStep);
-    setWizardCollapsed(root, wizardCollapsedState(root));
+    syncAnalysisSummary(root, data);
+    setEditorCollapsed(root, editorCollapsedState(root));
     setDashboardResultsVisibility(root);
   }
 
@@ -3771,13 +3806,18 @@
     const methods = Array.from(
       root.querySelectorAll("#surfaceInterpolationMethods input[type='checkbox']")
     )
-      .filter(input => input.checked || input.disabled)
+      .filter(input => input.checked)
       .map(input => input.value)
       .filter(Boolean);
-    if (!methods.includes("idw")) {
-      methods.unshift("idw");
-    }
     return surfaceMethodOrder.filter(method => methods.includes(method));
+  }
+
+  function selectedHydrographLabelsFromForm(root) {
+    return [
+      ...Array.from(root.querySelectorAll("#baseHydrographMethods input:checked"))
+        .map(input => input.value === "arithmetic" ? "حسابی" : "تیسن"),
+      ...selectedSurfaceMethodsFromForm(root).map(method => surfaceMethodLabels[method])
+    ];
   }
 
   function selectedManualWellIds(root = activeDashboardRoot()) {
@@ -3829,8 +3869,7 @@
     if (length <= 18) return 22;
     if (length <= 36) return 14;
     if (length <= 72) return 10;
-    if (length <= 144) return 6;
-    return 4;
+    return 8;
   }
 
   function shouldShowQuarterLabels(length) {
@@ -3887,7 +3926,7 @@
   function timelineScrollContainers(root = activeDashboardRoot()) {
     if (!root) return [];
     return [
-      ...root.querySelectorAll(".manual-well-timeline-wrap"),
+      ...root.querySelectorAll(".manual-well-timeline-wrap, .well-choice-timeline"),
       root.querySelector("#manualWellTimelineAxis")
     ].filter(Boolean);
   }
@@ -3930,7 +3969,7 @@
     return months.map(month => {
       const hasData = available.has(month.index);
       return `
-        <span class="well-coverage-cell ${hasData ? "has-data" : "no-data"}${month.month === 7 ? " water-year-start" : ""}" title="${escapeHtml(`${month.monthName} ${month.year}`)}"></span>
+        <span class="well-coverage-cell ${hasData ? "has-data" : "no-data"}${month.month === 7 ? " water-year-start" : ""}" title="${escapeHtml(`${month.monthName} ${persianDate(month.year)}: ${hasData ? 'دارای مشاهده' : 'بدون مشاهده'}`)}"></span>
       `;
     }).join("");
   }
@@ -3952,119 +3991,128 @@
     else selected.delete(wellId);
   }
 
-  function updateManualWellCount() {
-    const count = selectedManualWellIds().length;
-    const eligible = document.querySelectorAll('#manualWellList .manual-well-option[data-has-range-data="true"]').length;
-    const complete = document.querySelectorAll('#manualWellList .manual-well-option[data-complete="true"]').length;
-    const label = document.getElementById("manualWellCount");
-    if (label) {
-      label.textContent = `${faNumber.format(count)} پیزومتر انتخاب‌شده · ${faNumber.format(eligible)} دارای داده در بازه · ${faNumber.format(complete)} کامل در بازه`;
-    }
-    const selectedMetric = document.getElementById("manualSelectedMetric");
-    const eligibleMetric = document.getElementById("manualEligibleMetric");
-    const completeMetric = document.getElementById("manualCompleteMetric");
-    if (selectedMetric) selectedMetric.textContent = faNumber.format(count);
-    if (eligibleMetric) eligibleMetric.textContent = faNumber.format(eligible);
-    if (completeMetric) completeMetric.textContent = faNumber.format(complete);
-    syncWizardSummaries(activeDashboardRoot());
+  function updateManualWellCount(root = activeDashboardRoot()) {
+    if (!root) return;
+    const count = selectedManualWellIds(root).length;
+    const rows = Array.from(root.querySelectorAll('.well-choice-row'));
+    const complete = rows.filter(row => row.dataset.complete === 'true').length;
+    const label = root.querySelector('#manualWellCount');
+    if (label) label.textContent = `${faNumber.format(rows.length)} پیزومتر · ${faNumber.format(complete)} کامل در بازه`;
+    const metric = root.querySelector('#manualSelectedMetric');
+    if (metric) metric.textContent = `${faNumber.format(count)} منتخب`;
+    root.querySelector('#bulkTailControls')?.classList.toggle('hidden', !count);
+    const bulkLabel = root.querySelector('#bulkSelectedLabel');
+    if (bulkLabel) bulkLabel.textContent = `${faNumber.format(count)} پیزومتر انتخاب شده`;
+    syncAnalysisSummary(root);
   }
 
   function syncManualSelectionUI() {
-    const toggle = document.getElementById("manualWellSelection");
-    const panel = document.getElementById("manualWellPanel");
-    const continuousOnly = document.getElementById("continuousOnly");
-    if (!toggle || !panel || !continuousOnly) return;
-    toggle.checked = true;
-    panel.classList.remove("hidden");
-    continuousOnly.checked = false;
-    continuousOnly.disabled = true;
     updateManualWellCount();
   }
 
+  function normalizedWellSearch(value) {
+    return String(value).normalize('NFKC').toLocaleLowerCase('fa-IR')
+      .replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[\s\u200c_-]+/g, '');
+  }
+
+  function applyWellListFilter(root = activeDashboardRoot()) {
+    if (!root) return;
+    const query = normalizedWellSearch(root.querySelector('#manualWellSearch')?.value || '');
+    const filter = root.querySelector('#wellCoverageFilter')?.value || 'all';
+    const visible = [];
+    root.querySelectorAll('.well-choice-row').forEach(row => {
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      const accepted = !query || row.dataset.wellName.includes(query);
+      const matches = filter === 'all' || (filter === 'complete' && row.dataset.complete === 'true')
+        || (filter === 'partial' && row.dataset.complete !== 'true') || (filter === 'selected' && checkbox.checked);
+      row.classList.toggle('hidden', !accepted || !matches);
+      row.classList.toggle('is-selected', checkbox.checked);
+      if (accepted && matches && !checkbox.disabled) visible.push(checkbox);
+    });
+    root.querySelector('#wellListEmpty')?.classList.toggle('hidden', Boolean(root.querySelector('.well-choice-row:not(.hidden)')));
+    const selectAll = root.querySelector('#selectVisibleWells');
+    const checked = visible.filter(input => input.checked).length;
+    if (selectAll) {
+      selectAll.checked = visible.length > 0 && checked === visible.length;
+      selectAll.indeterminate = checked > 0 && checked < visible.length;
+      selectAll.disabled = !visible.length;
+    }
+  }
+
+  function monthIndexDate(index) {
+    if (!index) return 'بدون مشاهده';
+    const month = (index - 1) % 12 + 1;
+    return `${monthNames[month - 1]} ${persianDate(Math.floor((index - 1) / 12))}`;
+  }
+
   function renderManualWellSelector(data, root = activeDashboardRoot()) {
-    const toggle = document.getElementById("manualWellSelection");
-    const list = root?.querySelector("#manualWellList");
-    const search = root?.querySelector("#manualWellSearch");
-    if (!toggle || !list || !search) return;
-
-    toggle.checked = true;
+    const list = root?.querySelector('#manualWellList');
+    if (!list) return;
     const selected = ensureManualSelectionState(data, root);
+    const settings = state.wellTailSettings[root.dataset.aquiferId] ||= {};
     const months = visibleTimelineMonths(root, data);
-    renderTimelineAxis(months);
+    const showTimeline = root.dataset.coverageTimeline !== 'false';
+    root.querySelector('#manualWellTimelineAxis').classList.toggle('hidden', !showTimeline);
+    root.querySelector('#wellCoverageLegend').classList.toggle('hidden', !showTimeline);
+    if (showTimeline) renderTimelineAxis(months);
+    const range = currentManualRange(root, data);
     list.innerHTML = data.wells.map(well => {
-      const suffix = well.name_suffix > 1 ? ` (${faNumber.format(well.name_suffix)})` : "";
       const coverage = wellCoverage(well, months);
-      const checked = selected.has(well.id) || Boolean(well.selected);
-      const badgeClass = coverage.complete ? "is-complete" : "is-partial";
-      const badgeText = coverage.complete ? "کامل در بازه" : "ناقص در بازه";
-      const coverageStyle = `--coverage-months: ${Math.max(coverage.total, 1)}; --coverage-cell-size: ${timelineCellSize(Math.max(coverage.total, 1))}px`;
-      return `
-        <label class="manual-well-option" data-complete="${coverage.complete ? "true" : "false"}" data-has-range-data="${well.has_range_data ? "true" : "false"}" data-well-name="${escapeHtml(well.name.toLocaleLowerCase("fa-IR"))}">
-          <span class="manual-well-option-main">
-            <input
-              type="checkbox"
-              value="${escapeHtml(well.id)}"
-              ${checked ? "checked" : ""}
-            >
-            <span class="manual-well-option-copy">
-              <strong>${escapeHtml(well.name)}${suffix}</strong>
-              <small class="mt-1 block text-[9px] text-slate-400">
-                ${well.has_range_data ? (checked ? "داخل انتخاب فعلی" : "قابل انتخاب") : "در این بازه داده‌ای ندارد ولی قابل انتخاب است"}
-              </small>
-              <span class="manual-well-badges">
-                <span class="manual-well-badge ${badgeClass}">${badgeText}</span>
-                <span class="manual-well-badge">${faNumber.format(coverage.observed)} از ${faNumber.format(coverage.total)} ماه</span>
-                ${!well.has_range_data ? '<span class="manual-well-empty-note">بدون داده در بازه</span>' : ""}
-              </span>
-            </span>
-          </span>
-          <span class="manual-well-timeline-wrap">
-            <span class="well-coverage-strip" style="${coverageStyle}">
-              ${renderCoverageCells(well, months)}
-            </span>
-          </span>
-        </label>
-      `;
-    }).join("");
-
+      const available = well.available_month_indexes || [];
+      const lastObserved = available.at(-1) || 0;
+      const hasTrailingGap = lastObserved > 0 && Boolean(range && lastObserved < range.endIndex);
+      const tail = settings[well.id] || { mode: 'none', years: 3 };
+      const checked = selected.has(well.id);
+      const suffix = well.name_suffix > 1 ? ` (${faNumber.format(well.name_suffix)})` : '';
+      const percent = coverage.total ? Math.round(100 * coverage.observed / coverage.total) : 0;
+      return `<div class="well-choice-row${checked ? ' is-selected' : ''}" data-well-name="${escapeHtml(normalizedWellSearch(well.name))}" data-complete="${coverage.complete}" data-has-range-data="${coverage.observed > 0}">
+        <label class="well-name-cell"><input type="checkbox" value="${well.id}" ${checked ? 'checked' : ''} ${!well.has_data ? 'disabled' : ''}>
+          <span><strong>${escapeHtml(well.name)}${suffix}</strong><small>${lastObserved ? `آخرین مشاهده: ${monthIndexDate(lastObserved)}` : 'فاقد داده مشاهده‌شده'}</small></span></label>
+        <div class="well-coverage-cell-summary"><span class="coverage-text${coverage.complete ? ' is-complete' : ''}">${faNumber.format(coverage.observed)} از ${faNumber.format(coverage.total)} ماه${coverage.complete ? ' · کامل' : ''}</span>${showTimeline ? '' : `<span class="coverage-bar" style="--coverage:${percent}%" aria-hidden="true"><i></i></span>`}</div>
+        <div class="well-tail-cell">${hasTrailingGap ? `<select class="field" data-tail-mode="${well.id}" aria-label="تکمیل انتهای داده ${escapeHtml(well.name)}"><option value="none" ${tail.mode === 'none' ? 'selected' : ''}>بدون تکمیل</option><option value="hold_last" ${tail.mode === 'hold_last' ? 'selected' : ''}>آخرین مقدار ثابت</option><option value="trend" ${tail.mode === 'trend' ? 'selected' : ''}>ادامه با شیب گذشته</option></select><select class="field tail-years${tail.mode !== 'trend' ? ' hidden' : ''}" data-tail-years="${well.id}" aria-label="سابقه شیب ${escapeHtml(well.name)}" ${tail.mode !== 'trend' ? 'disabled' : ''}>${[2,3,4].map(years => `<option value="${years}" ${Number(tail.years || 3) === years ? 'selected' : ''}>${faNumber.format(years)} سال</option>`).join('')}</select>` : `<span class="tail-not-needed">${well.has_data ? 'تکمیل انتهایی لازم نیست' : 'داده‌ای برای تکمیل ندارد'}</span>`}</div>
+        ${showTimeline ? `<div class="well-choice-timeline"><span class="well-coverage-strip" style="--coverage-months:${Math.max(months.length, 1)};--coverage-cell-size:${timelineCellSize(months.length)}px">${renderCoverageCells(well, months)}</span></div>` : ''}
+      </div>`;
+    }).join('');
     list.onchange = event => {
-      const input = event.target.closest('input[type="checkbox"]');
-      if (!input) return;
-      toggleManualSelection(input.value, input.checked, root);
-      updateManualWellCount();
+      const wellId = event.target.dataset.tailMode || event.target.dataset.tailYears;
+      if (wellId) {
+        const mode = list.querySelector(`[data-tail-mode="${wellId}"]`).value;
+        const years = list.querySelector(`[data-tail-years="${wellId}"]`);
+        years.disabled = mode !== 'trend';
+        years.classList.toggle('hidden', mode !== 'trend');
+        settings[wellId] = { mode, years: Number(years.value) };
+      } else if (event.target.matches('input[type="checkbox"]')) {
+        toggleManualSelection(event.target.value, event.target.checked, root);
+      }
+      updateManualWellCount(root);
+      applyWellListFilter(root);
     };
-    toggle.onchange = syncManualSelectionUI;
-    search.value = "";
-    search.oninput = () => {
-      const query = search.value.trim().toLocaleLowerCase("fa-IR");
-      list.querySelectorAll(".manual-well-option").forEach(option => {
-        option.classList.toggle("hidden", Boolean(query) && !option.dataset.wellName.includes(query));
-      });
-    };
-    document.getElementById("selectAllEligibleWells").onclick = () => {
+    root.querySelector('#manualWellSearch').oninput = () => applyWellListFilter(root);
+    root.querySelector('#wellCoverageFilter').onchange = () => applyWellListFilter(root);
+    const selectRows = predicate => {
       list.querySelectorAll('input[type="checkbox"]').forEach(input => {
-        input.checked = true;
-        toggleManualSelection(input.value, true, root);
-      });
-      updateManualWellCount();
-    };
-    document.getElementById("selectCompleteRangeWells").onclick = () => {
-      list.querySelectorAll('input[type="checkbox"]').forEach(input => {
-        const option = input.closest(".manual-well-option");
-        input.checked = option?.dataset.complete === "true";
+        const row = input.closest('.well-choice-row');
+        input.checked = !input.disabled && predicate(row, input);
         toggleManualSelection(input.value, input.checked, root);
       });
-      updateManualWellCount();
+      applyWellListFilter(root);
+      updateManualWellCount(root);
+      markAnalysisDirty(root);
     };
-    document.getElementById("clearSelectedWells").onclick = () => {
-      list.querySelectorAll('input[type="checkbox"]').forEach(input => {
-        input.checked = false;
-        toggleManualSelection(input.value, false, root);
+    root.querySelector('#selectAllEligibleWells').onclick = () => selectRows(row => row.dataset.hasRangeData === 'true');
+    root.querySelector('#selectCompleteRangeWells').onclick = () => selectRows(row => row.dataset.complete === 'true');
+    root.querySelector('#clearSelectedWells').onclick = () => selectRows(() => false);
+    root.querySelector('#selectVisibleWells').onchange = event => {
+      list.querySelectorAll('.well-choice-row:not(.hidden) input[type="checkbox"]:not(:disabled)').forEach(input => {
+        input.checked = event.target.checked;
+        toggleManualSelection(input.value, input.checked, root);
       });
-      updateManualWellCount();
+      applyWellListFilter(root);
+      updateManualWellCount(root);
     };
-    bindTimelineScrollSync(root);
-    syncManualSelectionUI();
+    if (showTimeline) bindTimelineScrollSync(root);
+    applyWellListFilter(root);
+    updateManualWellCount(root);
   }
 
   function renderMonthOptions(side, selectedMonth = null) {
@@ -4091,84 +4139,21 @@
   function refreshManualWellPreview(root = activeDashboardRoot()) {
     if (!state.currentData || !root) return;
     renderManualWellSelector(state.currentData, root);
-    syncWizardSummaries(root, state.currentData);
+    syncAnalysisSummary(root, state.currentData);
   }
 
   function renderStats(data) {
-    const stats = data.stats;
-    const corrected = data.corrected || {};
-    const correctedCounts = corrected.status_counts || [];
-    const totalRetired = correctedCounts.reduce((sum, row) => sum + (Number(row.retired_count) || 0), 0);
-    const totalImputed = correctedCounts.reduce((sum, row) => sum + (Number(row.imputed_count) || 0), 0);
-    const change = stats.change;
-    const changeLabel = change === null
-      ? "بدون داده"
-      : change < 0
-        ? `${formatNumber(Math.abs(change), " متر")} افت`
-        : `${formatNumber(change, " متر")} افزایش`;
-    const featuredCards = [
-      {
-        eyebrow: "شاخص کلیدی",
-        label: "تغییر دوره",
-        value: changeLabel,
-        note: "اختلاف اولین و آخرین مقدار موجود در بازه تحلیل",
-        tone: change < 0 ? "alert" : "default"
-      },
-      {
-        eyebrow: "شبکه تحلیلی",
-        label: "چاه‌های داخل محاسبات",
-        value: formatNumber(stats.selected_wells),
-        note: `${formatNumber(stats.selected_sites)} ایستگاه مکانی برای تیسن و تحلیل سطح`,
-        tone: "support"
-      }
-    ];
-    const compactCards = [
-      ["کل پیزومترها", formatNumber(stats.total_wells), "همه نقاط ثبت‌شده"],
-      ["خارج از محاسبات", formatNumber(stats.excluded_wells), "با برچسب مجزا در نمودارها"],
-      ["تعداد ماه‌ها", formatNumber(data.hydrographs.arithmetic.length), "در بازه ماهانه منتخب"],
-      [
-        "ضریب ذخیره",
-        data.storage?.coefficient == null ? "—" : faNumber.format(data.storage.coefficient),
-        data.storage?.area_km2 == null
-          ? "مساحت آبخوان نامشخص"
-          : `${formatNumber(data.storage.area_km2, " km²")}`
-      ],
-      [
-        "پشتیبان اصلاح",
-        formatNumber(corrected.fixed_support_well_count),
-        `${correctedPrimaryLabel(data, true)} · ${formatNumber(corrected.fixed_support_site_count)} سایت`
-      ],
-      [
-        "برآورد اصلاحی",
-        formatNumber(totalImputed),
-        `${formatNumber(totalRetired)} ماه-چاه بازنشسته`
-      ]
-    ];
-    document.getElementById("statsGrid").innerHTML = `
-      <div class="dashboard-stats-featured">
-        ${featuredCards.map(card => `
-          <article class="stat-hero-card" data-tone="${card.tone}">
-            <div class="stat-hero-eyebrow">${card.eyebrow}</div>
-            <div class="stat-hero-label">${card.label}</div>
-            <div class="stat-hero-value">${card.value}</div>
-            <div class="stat-hero-note">${card.note}</div>
-          </article>
-        `).join("")}
-      </div>
-      <div class="dashboard-stats-secondary">
-        ${compactCards.map(([label, value, note]) => `
-          <article class="stat-mini-card">
-            <div class="stat-mini-label">${label}</div>
-            <div class="stat-mini-value">${value}</div>
-            <div class="stat-mini-note">${note}</div>
-          </article>
-        `).join("")}
-      </div>
-    `;
-    document.getElementById("periodBadge").textContent =
-      `${periodDateLabel(data.filters.start_year, data.filters.start_month)} تا ${periodDateLabel(data.filters.end_year, data.filters.end_month)}`;
-    document.getElementById("wellCountLabel").textContent =
-      `${faNumber.format(stats.total_wells)} نمودار · ${faNumber.format(stats.selected_wells)} داخل محاسبات`;
+    const selected = data.wells.filter(well => well.included);
+    const estimated = selected.reduce((sum, well) => sum + (well.tail_estimation?.estimated_month_indexes?.length || 0), 0);
+    const change = data.stats.change;
+    const label = change == null ? 'داده کافی نیست' : `${formatNumber(Math.abs(change))} متر ${change < 0 ? 'افت' : change > 0 ? 'افزایش' : 'تغییر'}`;
+    document.getElementById('statsGrid').innerHTML = `
+      <div class="result-stat"><span>تغییر تراز در دوره</span><strong class="${change < 0 ? 'is-decline' : ''}">${label}</strong><small>اختلاف اولین و آخرین مقدار معتبر</small></div>
+      <div class="result-stat"><span>شبکه محاسبات</span><strong>${faNumber.format(selected.length)} <em>پیزومتر</em></strong><small>از ${faNumber.format(data.wells.length)} پیزومتر آبخوان</small></div>
+      <div class="result-stat"><span>تکمیل انتهای داده</span><strong>${estimated ? `${faNumber.format(estimated)} <em>ماه برآوردی</em>` : 'بدون تکمیل انتهایی'}</strong><small>مشاهدات و برآوردها در جزئیات جدا هستند</small></div>
+      <div class="result-context"><span>${persianDate(data.stats.first_month)} تا ${persianDate(data.stats.last_month)}</span><span>مساحت: ${formatNumber(data.storage?.area_km2)} کیلومترمربع</span><span>${data.storage?.coefficient != null ? `ضریب ذخیره: ${formatNumber(data.storage.coefficient)}` : 'برآورد تغییر ذخیره غیرفعال است'}</span></div>`;
+    document.getElementById('periodBadge').textContent = `${periodDateLabel(data.filters.start_year, data.filters.start_month)} تا ${periodDateLabel(data.filters.end_year, data.filters.end_month)}`;
+    document.getElementById('wellCountLabel').textContent = `${faNumber.format(selected.length)} پیزومتر منتخب از ${faNumber.format(data.wells.length)} پیزومتر`;
   }
 
   function renderMap(data) {
@@ -4354,6 +4339,10 @@
   }
 
   function syncAquiferPanelHeights() {
+    if (document.body.classList.contains('workspace-page')) {
+      if (state.map) { state.map.invalidateSize({ animate: false }); refreshLeafletMinimumZoom(state.map); }
+      return;
+    }
     const mapElement = document.getElementById("map");
     const mapPanel = document.querySelector("[data-aquifer-map-panel]");
     const mapHeading = document.querySelector("[data-aquifer-map-heading]");
@@ -4396,7 +4385,7 @@
     const legendSelected = {};
     surfacePayloads.forEach(([method, payload]) => {
       const label = surfaceMethodLabel(data, method, true);
-      legendSelected[label] = method === "idw";
+      legendSelected[label] = true;
       legendSelected[`روند ${label} (بازه اصلی)`] = false;
       if (comparisonEnabled && payload?.comparison_trend) {
         legendSelected[`روند ${label} (مقایسه‌ای)`] = false;
@@ -4416,25 +4405,6 @@
       "وضعیت: برآورد": true
     };
     option.xAxis.data = categories;
-    option.yAxis[2] = {
-      type: "value",
-      name: "وضعیت شبکه",
-      min: 0,
-      position: "left",
-      offset: 48,
-      splitLine: { show: false },
-      axisLabel: {
-        formatter: value => faNumber.format(value),
-        fontSize: 9,
-        color: "#64748B"
-      },
-      nameTextStyle: {
-        fontFamily: "Vazirmatn",
-        fontSize: 9,
-        color: "#64748B",
-        padding: [0, 0, 8, 0]
-      }
-    };
     option.legend = {
       type: "scroll",
       orient: "horizontal",
@@ -4445,8 +4415,8 @@
       pageButtonPosition: "end",
       pageIconColor: "#087E8B",
       pageIconInactiveColor: "#CBD5E1",
-      pageTextStyle: { color: "#64748B", fontFamily: "Vazirmatn", fontSize: 10 },
-      textStyle: { fontFamily: "Vazirmatn", fontSize: 10, color: "#64748B" },
+      pageTextStyle: { color: "#64748B", fontFamily: "Vazirmatn", fontSize: 12 },
+      textStyle: { fontFamily: "Vazirmatn", fontSize: 12, color: "#64748B" },
       itemWidth: 14,
       itemHeight: 8,
       selected: {
@@ -4466,7 +4436,6 @@
     option.grid.top = 86;
     option.series = [
       precipitationBarSeries(data.precipitation),
-      ...correctedStatusAreaSeries(data),
       {
         name: "میانگین حسابی",
         type: "line",
@@ -4542,6 +4511,20 @@
       )),
       ...correctedHydrographSeries(data)
     ];
+    const rawMethodBySeries = {
+      "میانگین حسابی": "arithmetic", "روند حسابی (بازه اصلی)": "arithmetic",
+      "روند حسابی (مقایسه‌ای)": "arithmetic", "میانگین تیسن": "thiessen",
+      "روند تیسن (بازه اصلی)": "thiessen", "روند تیسن (مقایسه‌ای)": "thiessen"
+    };
+    option.series = option.series.filter(series => (
+      !rawMethodBySeries[series.name] || selectedBaseMethods(data).includes(rawMethodBySeries[series.name])
+    ));
+    option.series.forEach(series => {
+      if (series.type === 'line' && categories.length < 3) { series.showSymbol = true; series.symbolSize = 7; }
+      if (series.name.startsWith("اصلاح‌شده ") || ["میانگین حسابی", "میانگین تیسن"].includes(series.name)) {
+        option.legend.selected[series.name] = true;
+      }
+    });
     chart.setOption(option);
     state.charts.push(chart);
     renderAquiferTrendSummary(data, surfacePayloads, option.legend.selected);
@@ -4676,11 +4659,15 @@
       || !methodSelect
       || !ndviSelect
       || !ndviPeriodSelect
-      || element.closest(".hidden")
+      || element.parentElement.closest(".hidden")
     ) return;
     const selectedMethod = annualDeclineMethod(data, methodSelect.value)
       || annualDeclineMethod(data, currentAnnualSurfaceMethod(data));
-    if (!selectedMethod) return;
+    element.classList.toggle('hidden', !selectedMethod);
+    if (!selectedMethod) {
+      document.getElementById('aquiferAnnualChangesTable').innerHTML = '<div class="well-list-empty">برای تغییرات سالانه، بازه‌ای با نقاط شروع و پایان معتبر انتخاب کنید.</div>';
+      return;
+    }
     methodSelect.value = selectedMethod.key;
     state.annualSurfaceMethod = selectedMethod.key;
     const ndviMetric = ndviSelect.value || "median";
@@ -4881,6 +4868,7 @@
     state.aquiferAnnualChangesChart.resize();
 
     const table = document.getElementById("aquiferAnnualChangesTable");
+    const withStorage = data.filters.storage_coefficient != null;
     table.innerHTML = `
       <table class="data-table">
         <thead>
@@ -4892,7 +4880,7 @@
             <th>سطح کشت آبی احتمالی (هکتار)</th>
             <th>پوشش زمانی</th>
             <th>افت ${escapeHtml(selectedMethod.label)}</th>
-            <th>ذخیره ${escapeHtml(selectedMethod.label)}</th>
+            ${withStorage ? `<th>تغییر ذخیره ${escapeHtml(selectedMethod.label)} (میلیون مترمکعب)</th>` : ""}
           </tr>
         </thead>
         <tbody>
@@ -4937,7 +4925,7 @@
                 </div>
               </td>
               <td>${numberCell(annualRowsByWaterYear.get(row.water_year)?.decline)}</td>
-              <td>${numberCell(annualRowsByWaterYear.get(row.water_year)?.storage_change_mcm)}</td>
+              ${withStorage ? `<td>${numberCell(annualRowsByWaterYear.get(row.water_year)?.storage_change_mcm)}</td>` : ""}
             </tr>
           `).join("")}
         </tbody>
@@ -4954,6 +4942,10 @@
       state.aquiferScenarioChart = null;
     }
     const methods = selectedSurfaceMethods(data);
+    if (!methods.length) {
+      panel.innerHTML = '<p class="p-4 text-xs text-slate-500">برای سناریوی سطح، یک روش سطح پیزومتریک را در تنظیمات انتخاب و تحلیل را اجرا کنید.</p>';
+      return;
+    }
     const scenarios = methods.map(method => ({
       method,
       label: surfaceMethodLabel(data, method, true),
@@ -4979,7 +4971,7 @@
           <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <h4 class="text-base font-bold text-navy">سناریوی ۵ سال آینده</h4>
-              <p class="mt-1 text-[10px] leading-5 text-slate-500">ادامه خطی روند فعلی در بازه منتخب؛ سال‌ها با سال آبی فارسی گزارش می‌شوند.</p>
+              <p class="mt-1 text-[10px] leading-5 text-slate-500">ادامه خطی روند فعلی در بازه منتخب</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <span class="rounded-xl border border-teal/15 bg-teal/5 px-3 py-2 text-[10px] font-medium text-navy">
@@ -5300,7 +5292,6 @@
           <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <div>
               <h4 class="text-sm font-bold text-navy">سال‌های هشدار و دوره‌های افت</h4>
-              <p class="mt-1 text-[10px] leading-5 text-slate-500">همه سال‌ها بر اساس سال آبی فارسی مهر تا شهریور گزارش می‌شوند.</p>
             </div>
             <span dir="ltr" class="rounded-lg bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-500">
               ${period.start_water_year || "—"} تا ${period.end_water_year || "—"}
@@ -5411,7 +5402,12 @@
   function renderAquiferAnnualTable(data) {
     const container = document.getElementById("aquiferAnnualTable");
     const methods = annualDeclineMethods(data);
+    const withStorage = data.storage?.coefficient != null;
     const years = (data.annual_decline || []).map(row => row.water_year);
+    if (!years.length || !methods.length) {
+      container.innerHTML = '<div class="well-list-empty"><strong>افت سالانه برای این بازه قابل محاسبه نیست.</strong><p>از «ویرایش تنظیمات» بازه را گسترش دهید تا نقاط شروع و پایان سال آبی در داده‌ها موجود باشند.</p></div>';
+      return;
+    }
     const rowsByMethod = new Map(
       methods.map(method => [
         method.key,
@@ -5420,7 +5416,7 @@
     );
     const rows = years.map(waterYear => `
       <tr>
-        <td dir="ltr" class="sticky right-0 z-10 bg-white font-bold text-navy">${waterYear}</td>
+        <td dir="ltr" class="sticky right-0 z-10 bg-white font-bold text-navy">${persianDate(waterYear.split("-")[0])}</td>
         ${methods.map(method => {
           const row = rowsByMethod.get(method.key)?.get(waterYear) || {};
           return `
@@ -5428,7 +5424,7 @@
             <td>${endpointCell(row.end_level, row.end_month)}</td>
             <td>${metricCell(row.decline)}</td>
             <td>${metricCell(row.cumulative_decline)}</td>
-            <td>${metricCell(row.storage_change_mcm)}</td>
+            ${withStorage ? `<td>${metricCell(row.storage_change_mcm)}</td>` : ""}
           `;
         }).join("")}
       </tr>
@@ -5437,27 +5433,67 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th rowspan="2">سال آبی</th>
+            <th rowspan="2">سال آبی (WY)</th>
             ${methods.map(method => `
-              <th colspan="5" class="group-heading">${escapeHtml(method.label)}</th>
+              <th colspan="${withStorage ? 5 : 4}" class="group-heading">${escapeHtml(method.label)}</th>
             `).join("")}
           </tr>
           <tr>
-            ${methods.map(() => `
+            ${methods.map(method => `
               <th>تراز مهر شروع</th>
               <th>تراز پایان</th>
               <th>افت سالانه</th>
               <th>افت تجمعی</th>
-              <th>تغییر ذخیره</th>
+              ${withStorage ? "<th>تغییر ذخیره</th>" : ""}
             `).join("")}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="border-t border-slate-100 bg-slate-50 px-5 py-3 text-[10px] leading-5 text-slate-500">
-        پایان سال مهر بعد است؛ برای آخرین سال ناقص، آخرین مقدار موجود تا شهریور به‌عنوان پایان استفاده می‌شود. تغییر ذخیره بر حسب میلیون مترمکعب و با ضریب ذخیره/آبدهی ویژه واردشده محاسبه شده است.
+        پایان سال مهر بعد است؛ برای آخرین سال ناقص، آخرین مقدار موجود تا شهریور به‌عنوان پایان استفاده می‌شود. ${withStorage ? "تغییر ذخیره بر حسب میلیون مترمکعب و با ضریب واردشده است." : "برای افزودن تغییر ذخیره، گزینه آن و ضریب ذخیره را در تنظیمات تحلیل وارد کنید."}
       </div>
     `;
+  }
+
+  function wellEstimationNote(well) {
+    const tail = well.tail_estimation;
+    if (!tail) return "";
+    const method = tail.mode === "hold_last"
+      ? "تکرار آخرین مقدار مشاهده‌شده"
+      : `ادامه با شیب ${faNumber.format(tail.years)} سال گذشته (${formatSignedNumber(tail.slope_per_year, " متر در سال")})`;
+    return `داده‌های پس از ${tail.last_observed_month} برآوردی‌اند: ${method}. جدول افت و محاسبات شامل این مقادیر است.`;
+  }
+
+  function wellLevelSeries(well, color) {
+    const series = [{
+      name: "تراز مشاهده‌شده",
+      type: "line",
+      data: (well.observed_series || well.series).map(item => item[1]),
+      showSymbol: well.series.length < 3,
+      symbolSize: 7,
+      connectNulls: false,
+      lineStyle: { width: 2.5, color },
+      itemStyle: { color },
+      z: 3
+    }];
+    if (well.tail_estimation) {
+      const estimated = well.estimated_series.map(item => item[1]);
+      const first = estimated.findIndex(value => value !== null);
+      if (first > 0) estimated[first - 1] = well.series[first - 1][1];
+      series.push({
+        name: "تراز برآوردی (تکمیل انتهایی)",
+        type: "line",
+        data: estimated,
+        showSymbol: true,
+        symbolSize: 4,
+        connectNulls: false,
+        lineStyle: { width: 2.5, color: "#D97706", type: "dashed" },
+        itemStyle: { color: "#D97706" },
+        z: 4
+      });
+    }
+    return series;
   }
 
   function wellAnnualTable(well) {
@@ -5471,6 +5507,7 @@
       </tr>
     `).join("");
     return `
+      ${well.tail_estimation ? `<p class="px-4 py-2 text-[10px] text-amber-700">${escapeHtml(wellEstimationNote(well))}</p>` : ""}
       <div class="table-scroll h-72">
         <table class="data-table">
           <thead>
@@ -5491,6 +5528,7 @@
   function closeWellModal() {
     const modal = document.getElementById("wellDetailModal");
     if (!modal) return;
+    releaseDialogFocus(modal);
     modal.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
     if (state.modalChart) {
@@ -5502,6 +5540,7 @@
   function closePrecipitationModal() {
     const modal = document.getElementById("precipitationDetailModal");
     if (!modal) return;
+    releaseDialogFocus(modal);
     modal.classList.add("hidden");
     document.body.classList.remove("overflow-hidden");
     if (state.precipitationModalChart) {
@@ -5522,6 +5561,7 @@
     document.getElementById("precipitationModalMeta").textContent =
       `شناسه: ${station.id} · ارتفاع: ${formatNumber(station.elevation, " متر")}${distance}`;
     modal.classList.remove("hidden");
+    captureDialogFocus(modal);
     document.body.classList.add("overflow-hidden");
 
     window.requestAnimationFrame(() => {
@@ -5566,7 +5606,7 @@
     const status = well.included ? "داخل محاسبات آبخوان" : well.exclusion_reason || "خارج از محاسبات";
     document.getElementById("wellModalTitle").textContent = `${well.name}${suffix}`;
     document.getElementById("wellModalMeta").textContent =
-      `${status} · ارتفاع چاه: ${formatNumber(well.elevation, " متر")}`;
+      `${status} · ارتفاع چاه: ${formatNumber(well.elevation, " متر")} ${wellEstimationNote(well)}`;
     document.getElementById("wellModalTrend").innerHTML = [
       trendChip("شیب بازه اصلی", well.trend),
       ...(state.currentData.filters.comparison_enabled ? [
@@ -5581,6 +5621,7 @@
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== "modal-well-chart");
     });
     modal.classList.remove("hidden");
+    captureDialogFocus(modal);
     document.body.classList.add("overflow-hidden");
 
     window.requestAnimationFrame(() => {
@@ -5598,17 +5639,7 @@
       option.grid.top = 58;
       option.series = [
         precipitationBarSeries(state.currentData.precipitation),
-        {
-          name: "تراز آب",
-          type: "line",
-          data: well.series.map(item => item[1]),
-          showSymbol: false,
-          connectNulls: false,
-          lineStyle: { width: 2.5, color },
-          areaStyle: { color: "rgba(84, 198, 196, 0.12)" },
-          itemStyle: { color },
-          z: 3
-        },
+        ...wellLevelSeries(well, color),
         {
           name: "روند بازه اصلی",
           type: "line",
@@ -5667,7 +5698,7 @@
         <header class="border-b border-slate-100 px-5 py-4">
           <div class="flex items-start justify-between gap-3">
           <div>
-            <h4 class="text-sm font-bold text-navy">${escapeHtml(well.name)}${suffix}</h4>
+            <h4 class="text-sm font-bold text-navy"><button type="button" class="well-detail-link" data-open-well="${well.id}">${escapeHtml(well.name)}${suffix} <span aria-hidden="true">↗</span></button></h4>
             <div class="mt-1 text-[10px] text-slate-400">ارتفاع: ${formatNumber(well.elevation, " متر")}</div>
             ${well.exclusion_reason ? `<div class="mt-1 text-[10px] leading-5 text-amber-600">${escapeHtml(well.exclusion_reason)}</div>` : ""}
             <div class="mt-2 flex flex-wrap gap-2">
@@ -5703,7 +5734,19 @@
 
   function renderWellCharts(data) {
     const container = document.getElementById("wellCharts");
-    container.innerHTML = data.wells.map(wellCard).join("");
+    if (!data || data.preview) return;
+    state.observer?.disconnect();
+    state.charts = state.charts.filter(chart => {
+      if (chart.isDisposed()) return false;
+      if (chart.getDom()?.hasAttribute('data-well-chart')) { chart.dispose(); return false; }
+      return true;
+    });
+    const showAll = document.getElementById('showAllWellCharts').checked;
+    const query = normalizedWellSearch(document.getElementById('wellResultsSearch').value);
+    const wells = data.wells.map((well, index) => ({ well, index }))
+      .filter(({ well }) => (showAll || well.included) && (!query || normalizedWellSearch(well.name).includes(query)));
+    container.innerHTML = wells.length ? wells.map(({ well, index }) => wellCard(well, index)).join('')
+      : '<p class="well-list-empty">پیزومتری با این جست‌وجو پیدا نشد.</p>';
     state.observer = new IntersectionObserver(entries => {
       entries.forEach(entry => {
         if (!entry.isIntersecting) return;
@@ -5722,22 +5765,8 @@
         option.grid.top = 58;
         option.series = [
           precipitationBarSeries(data.precipitation),
-          {
-            name: "تراز آب",
-            type: "line",
-            data: well.series.map(item => item[1]),
-            showSymbol: false,
-            connectNulls: false,
-            lineStyle: {
-              width: 2,
-              color,
-              type: well.included ? "solid" : "dashed"
-            },
-            areaStyle: { color: well.included ? "rgba(84, 198, 196, 0.12)" : "rgba(245, 158, 11, 0.08)" },
-            itemStyle: { color },
-            z: 3
-          },
-          {
+        ...wellLevelSeries(well, color),
+        {
             name: "روند بازه اصلی",
             type: "line",
             data: well.trend.series.map(item => item[1]),
@@ -5784,59 +5813,43 @@
     if (button) switchTab(button);
   }
 
-  function dashboardFilterParams(data) {
-    const filters = data?.filters || {};
-    const params = new URLSearchParams();
-    [
-      "start_year",
-      "start_month",
-      "end_year",
-      "end_month",
-      "comparison_start_year",
-      "comparison_start_month",
-      "comparison_end_year",
-      "comparison_end_month"
-    ].forEach(key => {
-      if (filters[key] !== null && filters[key] !== undefined) {
-        params.set(key, filters[key]);
-      }
-    });
-    params.set("comparison_enabled", String(Boolean(filters.comparison_enabled)));
-    params.set("continuous_only", String(Boolean(filters.continuous_only)));
-    params.set("manual_selection", String(Boolean(filters.manual_selection)));
-    if (filters.storage_coefficient !== null && filters.storage_coefficient !== undefined) {
-      params.set("storage_coefficient", filters.storage_coefficient);
-    }
-    (filters.surface_interpolation_methods || [filters.surface_interpolation_method])
-      .filter(Boolean)
-      .forEach(method => {
-        params.append("surface_interpolation_methods", method);
-      });
-    if (filters.corrected_support_method) {
-      params.set("corrected_support_method", filters.corrected_support_method);
-    }
-    (filters.selected_well_ids || []).forEach(wellId => {
-      params.append("selected_well_ids", wellId);
-    });
-    return params;
-  }
-
   function openPdfReport() {
     const data = state.currentData;
     if (!data?.id) return;
-    const params = dashboardFilterParams(data);
-    const query = params.toString() ? `?${params}` : "";
-    window.open(`/reports/aquifer/${encodeURIComponent(data.id)}${query}`, "_blank", "noopener");
+    const report = window.open("", "_blank");
+    if (!report) return;
+    report.opener = null;
+    const chart = echarts.getInstanceByDom(document.getElementById("aquiferChart"));
+    const chartImage = chart?.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: "#fff" });
+    const title = `گزارش آبخوان ${data.aquifer}`;
+    report.document.write(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+      <title>${escapeHtml(title)}</title>
+      <link rel="stylesheet" href="/assets/css/app.css">
+      <style>body{background:white;padding:24px}h1,h2{font-weight:bold;margin:20px 0 12px}
+      table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:6px;font-size:10px}
+      .table-scroll{height:auto;overflow:visible}img{width:100%}section{margin:24px 0}
+      @media print{button{display:none}@page{size:A4 landscape;margin:12mm}section{break-inside:avoid}}</style>
+      </head><body><button onclick="window.print()">چاپ / ذخیره PDF</button>
+      <h1>${escapeHtml(title)}</h1><p>بازه: ${escapeHtml(data.stats.first_month)} تا ${escapeHtml(data.stats.last_month)} · سال آبی مهر تا شهریور</p>
+      <p>روش‌ها: ${escapeHtml(annualDeclineMethods(data).map(method => method.label).join("، "))}</p>
+      ${chartImage ? `<img alt="هیدروگراف معرف آبخوان" src="${chartImage}">` : ""}
+      <section>${document.getElementById("aquiferAnnualTable")?.innerHTML || ""}</section>
+      ${data.wells.filter(well => well.included).map(well => `<section><h2>${escapeHtml(well.name)}</h2>
+        <p>${escapeHtml(wellEstimationNote(well))}</p>${wellAnnualTable(well)}</section>`).join("")}
+      </body></html>`);
+    report.document.close();
   }
 
   function renderDashboardData(data, activeTab = "chart") {
     disposeVisuals();
     renderFilterControls(data, activeDashboardRoot());
     resetAquiferChat(data);
+    const chatTrigger = document.getElementById('workspaceChatTrigger');
+    if (chatTrigger) chatTrigger.disabled = false;
     renderStats(data);
     resetAiAnalysisCard();
     bindWellModal();
-    renderMap(data);
+    activeDashboardRoot().querySelectorAll('[data-result-panel]').forEach(panel => panel.classList.toggle('hidden', panel.dataset.resultPanel !== 'analysis'));
     renderAquiferChart(data);
     const ndviMetric = document.getElementById("ndviMetric");
     if (ndviMetric) {
@@ -5864,8 +5877,7 @@
       annualNdviPeriod.onchange = () => renderAquiferAnnualChanges(data);
     }
     renderAquiferAnnualTable(data);
-    renderSpatialAnalysis(data);
-    renderWellCharts(data);
+    setResultsView(activeDashboardRoot(), 'chart');
     if (activeTab !== "chart") {
       window.requestAnimationFrame(() => restoreAquiferTab(activeTab));
     } else {
@@ -5907,250 +5919,290 @@
     }
     if (group === "aquifer") {
       const viewSelect = document.getElementById("aquiferViewSelect");
-      if (viewSelect) viewSelect.value = tab;
+      if (viewSelect) viewSelect.value = ['annual', 'table'].includes(tab) ? 'chart' : tab;
+      scope.querySelector('.analysis-panel-controls')?.classList.toggle('hidden', ['annual', 'table'].includes(tab));
       syncAquiferPanelHeights();
     }
   }
 
-  async function loadDashboard(root, filters = null) {
-    const aquiferId = root.dataset.aquiferId;
-    if (!aquiferId) return;
-    const token = ++state.requestToken;
-    const activeTab = activeAquiferTab();
-    const button = root.querySelector("#applyAnalysisFilters");
-    if (button) {
-      button.disabled = true;
-      button.dataset.loading = "true";
-      button.textContent = "در حال محاسبه...";
+  function filtersFromForm(root) {
+    const unmet = analysisRequirements(root).find(item => !item.ready);
+    if (unmet) {
+      showAnalysisError(root, unmet.label);
+      return null;
     }
-    try {
-      const params = new URLSearchParams();
-      const storageInput = root.querySelector("#storageCoefficient");
-      const storageCoefficient = Number(storageInput?.value);
-      if (!Number.isFinite(storageCoefficient) || storageCoefficient <= 0) {
-        window.alert("ضریب ذخیره/آبدهی ویژه باید عددی مثبت باشد.");
-        storageInput?.focus();
-        return;
+    const value = id => Number(root.querySelector(`#${id}`).value);
+    const filters = {
+      startYear: value('startYear'), startMonth: value('startMonth'),
+      endYear: value('endYear'), endMonth: value('endMonth'),
+      comparisonStartYear: value('comparisonStartYear'), comparisonStartMonth: value('comparisonStartMonth'),
+      comparisonEndYear: value('comparisonEndYear'), comparisonEndMonth: value('comparisonEndMonth'),
+      comparisonEnabled: root.querySelector('#comparisonTrendEnabled').checked,
+      continuousOnly: false, manualSelection: true, selectedWellIds: selectedManualWellIds(root)
+    };
+    if (filters.comparisonEnabled) {
+      const start = filters.startYear * 12 + filters.startMonth;
+      const end = filters.endYear * 12 + filters.endMonth;
+      const comparisonStart = filters.comparisonStartYear * 12 + filters.comparisonStartMonth;
+      const comparisonEnd = filters.comparisonEndYear * 12 + filters.comparisonEndMonth;
+      if (comparisonStart > comparisonEnd || comparisonEnd < start || comparisonStart > end) {
+        showAnalysisError(root, 'بازه مقایسه را به‌ترتیب شروع و پایان و با هم‌پوشانی با بازه اصلی انتخاب کنید.', '', 'comparisonStartYear');
+        return null;
       }
-      params.set("storage_coefficient", String(storageCoefficient));
-      selectedSurfaceMethodsFromForm(root).forEach(method => {
-        params.append("surface_interpolation_methods", method);
-      });
-      const correctedSupport = root.querySelector("#correctedSupportMethod")?.value || "fixed_thiessen";
-      params.set("corrected_support_method", correctedSupport);
+    }
+    return filters;
+  }
+
+  async function loadDashboard(root, filters = null) {
+    const token = ++state.requestToken;
+    const stage = dashboardStageState(root);
+    const preview = !filters;
+    stage.initializing = preview;
+    stage.busy = !preview;
+    root.querySelector('#analysisInlineError').classList.add('hidden');
+    if (preview) {
+      root.querySelector('#dashboardLoadState').classList.remove('hidden', 'has-error');
+      root.querySelector('#retryDashboardLoad').classList.add('hidden');
+      root.querySelector('#setupLoadTitle').textContent = 'در حال آماده‌سازی فهرست پیزومترها';
+      root.querySelector('#setupLoadMessage').textContent = 'بازه و فهرست پس از خواندن داده‌ها نمایش داده می‌شوند.';
+    } else {
+      root.querySelector('#applyAnalysisFilters').dataset.loading = 'true';
+      root.querySelector('#analysisComputeStatus').textContent = 'شروع محاسبه…';
+    }
+    updateAnalysisActions(root);
+    try {
+      const aquiferId = root.dataset.aquiferId;
+      let args = { group_id: aquiferId };
       if (filters) {
-        params.set("start_year", filters.startYear);
-        params.set("start_month", filters.startMonth);
-        params.set("end_year", filters.endYear);
-        params.set("end_month", filters.endMonth);
-        params.set("comparison_enabled", String(filters.comparisonEnabled));
-        if (filters.comparisonEnabled) {
-          params.set("comparison_start_year", filters.comparisonStartYear);
-          params.set("comparison_start_month", filters.comparisonStartMonth);
-          params.set("comparison_end_year", filters.comparisonEndYear);
-          params.set("comparison_end_month", filters.comparisonEndMonth);
-        }
-        params.set("continuous_only", String(filters.continuousOnly));
-        params.set("manual_selection", String(filters.manualSelection));
-        filters.selectedWellIds.forEach(wellId => {
-          params.append("selected_well_ids", wellId);
+        const methods = selectedSurfaceMethodsFromForm(root);
+        args = {
+          ...args,
+          storage_coefficient: root.querySelector('#includeStorage').checked ? parseLocalizedNumber(root.querySelector('#storageCoefficient').value) : null,
+          surface_interpolation_methods: methods,
+          surface_interpolation_method: methods[0] || 'idw',
+          base_hydrograph_methods: Array.from(root.querySelectorAll('#baseHydrographMethods input:checked')).map(input => input.value),
+          corrected_support_method: root.querySelector('#correctedSupportMethod').value,
+          start_year: filters.startYear, start_month: filters.startMonth,
+          end_year: filters.endYear, end_month: filters.endMonth,
+          comparison_enabled: filters.comparisonEnabled,
+          continuous_only: false, manual_selection: true,
+          selected_well_ids: filters.selectedWellIds,
+          well_tail_settings: Object.fromEntries(filters.selectedWellIds.map(id => [id, state.wellTailSettings[aquiferId]?.[id] || { mode: 'none' }]))
+        };
+        if (filters.comparisonEnabled) Object.assign(args, {
+          comparison_start_year: filters.comparisonStartYear, comparison_start_month: filters.comparisonStartMonth,
+          comparison_end_year: filters.comparisonEndYear, comparison_end_month: filters.comparisonEndMonth
         });
       }
-      const query = params.toString() ? `?${params}` : "";
-      const response = await fetch(`/api/aquifers/${encodeURIComponent(aquiferId)}${query}`);
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.detail || "دریافت اطلاعات آبخوان ناموفق بود.");
-      }
-      const data = await response.json();
+      const data = await calculateDashboard(args, message => {
+        if (token !== state.requestToken) return;
+        root.querySelector(preview ? '#setupLoadMessage' : '#analysisComputeStatus').textContent = message;
+      }, preview ? 'preview' : 'dashboard');
       if (token !== state.requestToken) return;
-      const stage = dashboardStageState(root);
-      if (filters) {
+      stage.initializing = false;
+      stage.busy = false;
+      if (preview) {
+        root.querySelector('#dashboardLoadState').classList.add('hidden');
+        root.querySelector('#analysisFilters').classList.remove('hidden');
+        renderFilterControls(data, root);
+        root.querySelector('#periodBadge').textContent = `${periodDateLabel(data.filters.start_year, data.filters.start_month)} تا ${periodDateLabel(data.filters.end_year, data.filters.end_month)}`;
+      } else {
         stage.applied = true;
         stage.dirty = false;
-        setWizardCollapsed(root, true);
-      } else if (!stage.applied) {
-        stage.applied = false;
-        stage.dirty = false;
-      }
-      renderDashboardData(data, activeTab);
-      if (filters) {
-        root.querySelector("#dashboardResults")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start"
-        });
+        renderDashboardData(data);
+        setEditorCollapsed(root, true);
+        root.querySelector('#analysisComputeStatus').textContent = 'نتایج به‌روز شدند.';
+        root.querySelector('#dashboardResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     } catch (error) {
-      console.error("Dashboard rendering failed:", error);
-      window.alert(error.message);
+      if (token !== state.requestToken || error.name === 'AbortError') return;
+      const message = analysisErrorMessage(error);
+      if (preview) {
+        root.querySelector('#dashboardLoadState').classList.add('has-error');
+        root.querySelector('#setupLoadTitle').textContent = 'فهرست پیزومترها آماده نشد';
+        root.querySelector('#setupLoadMessage').textContent = message;
+        root.querySelector('#retryDashboardLoad').classList.remove('hidden');
+      } else {
+        showAnalysisError(root, message, error.message);
+        root.querySelector('#analysisComputeStatus').textContent = 'محاسبه انجام نشد؛ تنظیمات شما حفظ شده‌اند.';
+      }
     } finally {
-      const activeButton = root.querySelector("#applyAnalysisFilters");
-      if (activeButton) {
-        delete activeButton.dataset.loading;
-        activeButton.disabled = false;
-        activeButton.innerHTML = "<span>اجرای تحلیل با این تنظیمات</span><span aria-hidden=\"true\">←</span>";
-        updateWizardStageUI(root);
+      if (token === state.requestToken) {
+        stage.busy = false;
+        stage.initializing = false;
+        delete root.querySelector('#applyAnalysisFilters').dataset.loading;
+        updateAnalysisActions(root);
       }
     }
   }
 
+  function setPeriodPreset(root, preset) {
+    const data = state.currentData;
+    if (!data) return;
+    const minimum = data.filters.minimum_year * 12 + data.filters.minimum_month;
+    const maximum = data.filters.maximum_year * 12 + data.filters.maximum_month;
+    let first = minimum;
+    if (preset === 'recent') first = Math.max(minimum, maximum - 48);
+    if (preset === 'water-year') {
+      const year = Math.floor((maximum - 1) / 12);
+      const month = (maximum - 1) % 12 + 1;
+      first = Math.max(minimum, (month >= 7 ? year : year - 1) * 12 + 7);
+    }
+    root.querySelector('#startYear').value = Math.floor((first - 1) / 12);
+    root.querySelector('#endYear').value = Math.floor((maximum - 1) / 12);
+    renderMonthOptions('start', (first - 1) % 12 + 1);
+    renderMonthOptions('end', (maximum - 1) % 12 + 1);
+    refreshManualWellPreview(root);
+    markAnalysisDirty(root);
+    root.querySelectorAll('[data-period-preset]').forEach(button => button.classList.toggle('is-active', button.dataset.periodPreset === preset));
+  }
+
   function initializeDashboard(root) {
-    const form = root.querySelector("#analysisFilters");
-    dashboardStageState(root);
-    wizardCollapsedState(root);
-    root.querySelectorAll("[data-wizard-step]").forEach(button => {
-      button.addEventListener("click", () => {
-        setWizardStep(root, Number(button.dataset.wizardStep));
-      });
+    if (state.currentData && state.dashboardStage[state.currentData.id]?.busy) stopDashboardWorker();
+    document.getElementById('aquiferSelectionForm').classList.add('is-compact');
+    root.querySelector('[data-change-aquifer]').onclick = () => {
+      const picker = document.getElementById('aquiferSelectionForm');
+      picker.classList.remove('is-compact');
+      picker.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.querySelector('[data-selection-tab="dropdown"]').click();
+      document.getElementById('mahdoudeSelect').focus({ preventScroll: true });
+    };
+    disposeVisuals();
+    toggleAquiferChat(false);
+    const chatTrigger = document.getElementById('workspaceChatTrigger');
+    if (chatTrigger) chatTrigger.disabled = true;
+    state.currentData = null;
+    const stage = dashboardStageState(root);
+    Object.assign(stage, { applied: false, dirty: false, busy: false, initializing: true });
+    state.editorCollapsed[root.dataset.aquiferId] = false;
+    bindWellModal();
+    const form = root.querySelector('#analysisFilters');
+    root.querySelector('#retryDashboardLoad').onclick = () => loadDashboard(root);
+    root.querySelector('#cancelAnalysis').onclick = () => cancelDashboardCalculation(root);
+    root.querySelector('#toggleAnalysisEditor').onclick = () => setEditorCollapsed(root, !editorCollapsedState(root));
+    root.querySelectorAll('[data-edit-analysis]').forEach(button => button.onclick = () => {
+      setEditorCollapsed(root, false);
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-    root.querySelector("#wizardPrevStep")?.addEventListener("click", () => {
-      setWizardStep(root, state.wizardStep - 1);
-    });
-    root.querySelector("#wizardNextStep")?.addEventListener("click", () => {
-      setWizardStep(root, state.wizardStep + 1);
-    });
-    root.querySelector("#wizardCollapseToggle")?.addEventListener("click", () => {
-      setWizardCollapsed(root, !wizardCollapsedState(root));
-    });
-    root.querySelector("#methodGuideButton")?.addEventListener("click", openMethodGuideModal);
-    root.querySelector("#reportPdfButton")?.addEventListener("click", openPdfReport);
-    root.querySelector("#aiOpenModalButton")?.addEventListener("click", openAiModal);
-    root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => {
-      analyzeWithAi(root);
-    });
-    root.querySelector("#aquiferViewSelect")?.addEventListener("change", event => {
-      const tab = event.target.value;
-      const button = root.querySelector(
-        `[data-tab-group="aquifer"][data-tab="${tab}"]`
-      );
+    root.querySelector('#methodGuideButton').onclick = openMethodGuideModal;
+    root.querySelector('#reportPdfButton').onclick = openPdfReport;
+    root.querySelector('#aiOpenModalButton').onclick = openAiModal;
+    root.querySelector('#aiAnalyzeButton')?.addEventListener('click', () => analyzeWithAi(root));
+    root.querySelector('#aiProvider')?.addEventListener('change', syncAiModelOptions);
+    root.querySelector('#aiModel')?.addEventListener('change', updateAiModelHint);
+    root.querySelector('#aquiferViewSelect').onchange = event => {
+      const button = root.querySelector(`[data-tab-group="aquifer"][data-tab="${event.target.value}"]`);
       if (button) switchTab(button);
-    });
-    root.querySelector("#aiProvider")?.addEventListener("change", syncAiModelOptions);
-    root.querySelector("#aiModel")?.addEventListener("change", updateAiModelHint);
-    root.querySelector("#startYear").addEventListener("change", () => {
-      renderMonthOptions("start");
-      refreshManualWellPreview(root);
-    });
-    root.querySelector("#endYear").addEventListener("change", () => {
-      renderMonthOptions("end");
-      refreshManualWellPreview(root);
-    });
-    root.querySelector("#startMonth").addEventListener("change", () => {
-      refreshManualWellPreview(root);
-    });
-    root.querySelector("#endMonth").addEventListener("change", () => {
-      refreshManualWellPreview(root);
-    });
-    root.querySelector("#comparisonStartYear").addEventListener(
-      "change",
-      () => renderMonthOptions("comparisonStart")
-    );
-    root.querySelector("#comparisonEndYear").addEventListener(
-      "change",
-      () => renderMonthOptions("comparisonEnd")
-    );
-    root.querySelector("#comparisonTrendEnabled").addEventListener(
-      "change",
-      () => {
-        syncComparisonTrendUI();
-        syncWizardSummaries(root);
-        markWizardDirty(root);
+    };
+    for (const side of ['start', 'end', 'comparisonStart', 'comparisonEnd']) {
+      root.querySelector(`#${side}Year`).onchange = () => {
+        renderMonthOptions(side);
+        if (side === 'start' || side === 'end') refreshManualWellPreview(root);
+      };
+      if (side === 'start' || side === 'end') root.querySelector(`#${side}Month`).onchange = () => refreshManualWellPreview(root);
+    }
+    root.querySelector('#includeStorage').onchange = event => {
+      root.querySelector('#storageCoefficientFields').classList.toggle('hidden', !event.target.checked);
+      if (event.target.checked) root.querySelector('#storageCoefficient').focus();
+    };
+    root.querySelector('#comparisonTrendEnabled').onchange = syncComparisonTrendUI;
+    root.querySelectorAll('[data-period-preset]').forEach(button => button.onclick = () => setPeriodPreset(root, button.dataset.periodPreset));
+    root.querySelector('#toggleCoverageTimeline').onclick = event => {
+      const visible = root.dataset.coverageTimeline === 'false';
+      root.dataset.coverageTimeline = String(visible);
+      event.currentTarget.textContent = visible ? 'خلاصه پوشش' : 'نمایش ماه‌ها';
+      event.currentTarget.setAttribute('aria-pressed', String(visible));
+      renderManualWellSelector(state.currentData, root);
+    };
+    root.querySelector('#applyBulkTailPolicy').onclick = () => {
+      const policy = root.querySelector('#bulkTailPolicy').value.split(':');
+      const settings = state.wellTailSettings[root.dataset.aquiferId] ||= {};
+      const range = currentManualRange(root);
+      let count = 0;
+      for (const id of selectedManualWellIds(root)) {
+        const well = state.currentData.wells.find(well => well.id === id);
+        const last = well?.available_month_indexes?.at(-1);
+        if (!last || !range || last >= range.endIndex) continue;
+        settings[id] = { mode: policy[0], years: Number(policy[1] || 3) };
+        count++;
       }
-    );
-    form.addEventListener("change", event => {
-      if (event.target.id === "comparisonTrendEnabled") return;
-      syncWizardSummaries(root);
-      markWizardDirty(root);
-    });
-    form.addEventListener("input", () => {
-      syncWizardSummaries(root);
-      markWizardDirty(root);
-    });
-    form.addEventListener("submit", event => {
+      renderManualWellSelector(state.currentData, root);
+      markAnalysisDirty(root);
+      root.querySelector('#analysisComputeStatus').textContent = count ? `تکمیل انتهایی برای ${faNumber.format(count)} پیزومتر تنظیم شد؛ برای اعمال، محاسبه را اجرا کنید.` : 'منتخب‌ها به تکمیل انتهایی نیاز ندارند.';
+    };
+    const inputChanged = event => {
+      if (['manualWellSearch', 'wellCoverageFilter', 'bulkTailPolicy'].includes(event.target.id)) return;
+      root.querySelector('#analysisInlineError').classList.add('hidden');
+      event.target.removeAttribute('aria-invalid');
+      markAnalysisDirty(root);
+    };
+    form.addEventListener('change', inputChanged);
+    form.addEventListener('input', inputChanged);
+    form.onsubmit = event => {
       event.preventDefault();
-      const startYear = Number(root.querySelector("#startYear").value);
-      const startMonth = Number(root.querySelector("#startMonth").value);
-      const endYear = Number(root.querySelector("#endYear").value);
-      const endMonth = Number(root.querySelector("#endMonth").value);
-      const comparisonStartYear = Number(
-        root.querySelector("#comparisonStartYear").value
-      );
-      const comparisonStartMonth = Number(
-        root.querySelector("#comparisonStartMonth").value
-      );
-      const comparisonEndYear = Number(
-        root.querySelector("#comparisonEndYear").value
-      );
-      const comparisonEndMonth = Number(
-        root.querySelector("#comparisonEndMonth").value
-      );
-      const comparisonEnabled = root.querySelector(
-        "#comparisonTrendEnabled"
-      ).checked;
-      const monthsPerYear = state.currentData?.calendar?.months_per_year
-        || monthNames.length;
-      if (
-        startYear * monthsPerYear + startMonth
-        > endYear * monthsPerYear + endMonth
-      ) {
-        window.alert("تاریخ شروع باید قبل از تاریخ پایان باشد.");
-        return;
+      if (stage.busy || stage.initializing) return;
+      const filters = filtersFromForm(root);
+      if (filters) loadDashboard(root, filters);
+    };
+    root.querySelectorAll('[data-results-view]').forEach(button => {
+      button.onclick = () => setResultsView(root, button.dataset.resultsView);
+      button.onkeydown = event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const buttons = Array.from(root.querySelectorAll('[data-results-view]'));
+        const index = buttons.indexOf(button);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+          : (index + (event.key === 'ArrowLeft' ? 1 : -1) + buttons.length) % buttons.length;
+        buttons[next].click();
+        buttons[next].focus();
+      };
+    });
+    root.querySelector('#showAllWellCharts').onchange = () => renderWellCharts(state.currentData);
+    let wellSearchTimer;
+    root.querySelector('#wellResultsSearch').oninput = () => {
+      window.clearTimeout(wellSearchTimer);
+      wellSearchTimer = window.setTimeout(() => renderWellCharts(state.currentData), 150);
+    };
+    root.querySelector('#manualWellSearch').onkeydown = event => {
+      if (event.key === 'Enter') event.preventDefault();
+    };
+    root.addEventListener('click', event => {
+      const button = event.target.closest('[data-open-well]');
+      if (button) {
+        const well = state.currentData?.wells.find(well => well.id === button.dataset.openWell);
+        if (well) openWellModal(well);
       }
-      const analysisStartIndex = startYear * monthsPerYear + startMonth;
-      const analysisEndIndex = endYear * monthsPerYear + endMonth;
-      const comparisonStartIndex = (
-        comparisonStartYear * monthsPerYear + comparisonStartMonth
-      );
-      const comparisonEndIndex = (
-        comparisonEndYear * monthsPerYear + comparisonEndMonth
-      );
-      if (comparisonEnabled && comparisonStartIndex > comparisonEndIndex) {
-        window.alert("تاریخ شروع بازه مقایسه باید قبل از تاریخ پایان باشد.");
-        return;
-      }
-      if (comparisonEnabled && (
-        comparisonEndIndex < analysisStartIndex
-        || comparisonStartIndex > analysisEndIndex
-      )) {
-        window.alert("بازه مقایسه شیب باید با بازه تحلیل هم‌پوشانی داشته باشد.");
-        return;
-      }
-      const manualSelection = true;
-      const selectedWellIds = selectedManualWellIds();
-      if (!selectedWellIds.length) {
-        window.alert("برای اجرای تحلیل، حداقل یک پیزومتر دارای داده را انتخاب کنید.");
-        return;
-      }
-      loadDashboard(root, {
-        startYear,
-        startMonth,
-        endYear,
-        endMonth,
-        comparisonStartYear,
-        comparisonStartMonth,
-        comparisonEndYear,
-        comparisonEndMonth,
-        comparisonEnabled,
-        continuousOnly: false,
-        manualSelection,
-        selectedWellIds
-      });
     });
     loadDashboard(root);
   }
 
+  ['htmx:responseError', 'htmx:sendError'].forEach(type => {
+    document.body.addEventListener(type, event => {
+      const target = event.detail?.target;
+      if (target?.id === 'aquiferSelect' || target?.id === 'dashboardContent') {
+        document.getElementById('selectedAquiferBadge').textContent = 'دریافت اطلاعات کامل نشد. اتصال را بررسی کنید و انتخاب را دوباره انجام دهید.';
+        if (target.id === 'aquiferSelect') target.disabled = false;
+      }
+    });
+  });
+
   document.body.addEventListener("htmx:afterSwap", event => {
     if (event.detail.target.id === "aquiferSelect") {
+      event.detail.target.disabled = false;
       event.detail.target.addEventListener("change", syncDropdownSelection);
       if (activeSelectionTab() === "dropdown") syncDropdownSelection();
       return;
     }
+  });
+
+  // Wait for HTMX to restore swapped attributes before revealing a fast preview.
+  document.body.addEventListener("htmx:afterSettle", event => {
     if (event.detail.target.id !== "dashboardContent") return;
     const root = event.detail.target.querySelector("[data-dashboard]");
     if (root) {
       initializeDashboard(root);
       window.requestAnimationFrame(() => {
-        root.querySelector("#analysisFilters")?.scrollIntoView({
+        root.querySelector('.aquifer-context')?.scrollIntoView({
           behavior: "smooth",
           block: "start"
         });
@@ -6181,11 +6233,23 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     initializeSelectionTabs();
-    initializeAquiferSelection();
+    if (activeSelectionTab() === 'map') initializeAquiferSelection();
+    else syncDropdownSelection();
     initializeAquiferChat();
+    document.getElementById('workspaceChatTrigger')?.addEventListener('click', () => toggleAquiferChat());
   });
 
   document.addEventListener("keydown", event => {
+    if (event.key === 'Tab') {
+      const modal = Array.from(document.querySelectorAll('.well-modal:not(.hidden)')).at(-1);
+      if (modal) {
+        const controls = Array.from(modal.querySelectorAll('button:not(:disabled), select:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')).filter(element => element.getClientRects().length && !element.classList.contains('well-modal-backdrop'));
+        const first = controls[0];
+        const last = controls.at(-1);
+        if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+      }
+    }
     if (event.key === "Escape") {
       closeMethodGuideModal();
       closeAiModal();

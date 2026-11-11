@@ -40,6 +40,9 @@ templates.env.globals["asset_version"] = max(
     (ROOT / "frontend" / "assets" / "js" / "app.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "comparison.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "aquifer3d.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "dashboard-worker.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-worker.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "pyodide-runtime.js").stat().st_mtime_ns,
 )
 AI_REQUEST_MAX_BYTES = 64_000
 
@@ -103,9 +106,24 @@ def aquifer_3d(request: Request) -> HTMLResponse:
 
 @app.get("/data/{filename}")
 def aquifer_3d_source_data(filename: str) -> FileResponse:
-    if filename not in {"AQUIFER.geojson", "LOCATION.csv", "DATA.csv", "NEYSHABUR_BEDROCK_DEPTH.csv", "NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv.metadata.json"}:
+    if filename not in {"AQUIFER.geojson", "MAHDOUDE.geojson", "LOCATION.csv", "DATA.csv", "Monthly_Precipitation.csv", "Monthly_NDVI.csv", "Monthly_AET.csv", "Warm_Season_Irrigated_Area.csv", "NEYSHABUR_BEDROCK_DEPTH.csv", "NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv.metadata.json"}:
         raise HTTPException(status_code=404, detail="فایل پیدا نشد")
     return FileResponse(ROOT / "Data" / filename)
+
+
+@app.get("/dashboard-compute.py")
+def dashboard_compute_source() -> FileResponse:
+    return FileResponse(ROOT / "app" / "data_service.py", media_type="text/x-python")
+
+
+@app.get("/runtime/python-stdlib")
+def python_standard_library() -> FileResponse:
+    # Keep this internal runtime request out of archive download handlers.
+    return FileResponse(
+        ROOT / "frontend" / "assets" / "pyodide" / "python_stdlib.zip",
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": "inline", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.get("/aquifer3d-sw.js")

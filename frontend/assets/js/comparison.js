@@ -4,6 +4,7 @@
     charts: [],
     method: "",
     requestToken: 0,
+    lastFilters: null,
     mapRenderToken: 0,
     mapResizeObserver: null,
     tablePages: {
@@ -594,6 +595,8 @@
     document.getElementById("comparisonPeriodBadge").textContent =
       `${persianDate(data.filters.start_year, data.filters.start_month)} تا ${persianDate(data.filters.end_year, data.filters.end_month)}`;
     document.getElementById("comparisonLoading").classList.add("hidden");
+    document.getElementById("comparisonFilters").classList.remove("hidden");
+    document.getElementById("comparisonStats").classList.remove("hidden");
     document.getElementById("comparisonMaps").classList.remove("hidden");
     const renderToken = ++state.mapRenderToken;
     window.requestAnimationFrame(() => renderMapsWhenReady(data, renderToken));
@@ -601,10 +604,21 @@
 
   async function loadComparison(filters = null) {
     const token = ++state.requestToken;
+    state.lastFilters = filters;
+    const form = document.getElementById("comparisonFilters");
     const button = document.getElementById("applyComparisonFilters");
-    button.disabled = true;
+    form.querySelectorAll("select, button").forEach(control => { control.disabled = true; });
+    form.setAttribute("aria-busy", "true");
     button.textContent = "در حال محاسبه...";
-    document.getElementById("comparisonLoading").classList.remove("hidden");
+    const loading = document.getElementById("comparisonLoading");
+    loading.classList.remove("hidden", "has-error");
+    document.getElementById("comparisonLoadingSpinner").classList.remove("hidden");
+    document.getElementById("comparisonLoadingTitle").textContent = state.data ? "در حال به‌روزرسانی مقایسه" : "در حال آماده‌سازی مقایسه";
+    document.getElementById("comparisonLoadingMessage").textContent = state.data
+      ? "نتایج فعلی تا پایان محاسبه حفظ می‌شوند."
+      : "بازه‌ها و روش‌های محاسبه پس از دریافت اطلاعات نمایش داده می‌شوند.";
+    document.getElementById("retryComparison").classList.add("hidden");
+    document.getElementById("comparisonFilterError").classList.add("hidden");
     try {
       const params = new URLSearchParams();
       if (filters) {
@@ -623,20 +637,27 @@
       if (token !== state.requestToken) return;
       renderComparison(data);
     } catch (error) {
+      if (token !== state.requestToken) return;
       console.error("Comparison rendering failed:", error);
-      document.getElementById("comparisonLoading").innerHTML = `
-        <div class="text-center">
-          <div class="text-sm font-bold text-coral">نمایش مقایسه ممکن نشد</div>
-          <div class="mt-2 text-xs text-slate-500">${escapeHtml(error.message)}</div>
-        </div>
-      `;
+      loading.classList.remove("hidden");
+      loading.classList.add("has-error");
+      document.getElementById("comparisonLoadingSpinner").classList.add("hidden");
+      document.getElementById("comparisonLoadingTitle").textContent = state.data ? "به‌روزرسانی مقایسه انجام نشد" : "دریافت اطلاعات مقایسه انجام نشد";
+      document.getElementById("comparisonLoadingMessage").textContent = /Failed to fetch|NetworkError|Load failed/i.test(error.message)
+        ? "اتصال به برنامه را بررسی کنید و دوباره تلاش کنید."
+        : error.message;
+      document.getElementById("retryComparison").classList.remove("hidden");
+      if (!state.data) document.getElementById("comparisonPeriodBadge").textContent = "";
     } finally {
-      button.disabled = false;
+      if (token !== state.requestToken) return;
+      form.setAttribute("aria-busy", "false");
+      form.querySelectorAll("select, button").forEach(control => { control.disabled = !state.data; });
       button.innerHTML = "<span>به‌روزرسانی مقایسه</span><span aria-hidden=\"true\">←</span>";
     }
   }
 
   function initialize() {
+    document.getElementById("retryComparison").addEventListener("click", () => loadComparison(state.lastFilters));
     document.getElementById("comparisonStartYear").addEventListener("change", () => renderMonthOptions("Start"));
     document.getElementById("comparisonEndYear").addEventListener("change", () => renderMonthOptions("End"));
     document.getElementById("comparisonMapMethod").addEventListener("change", event => {
@@ -673,6 +694,7 @@
     });
     document.getElementById("comparisonFilters").addEventListener("submit", event => {
       event.preventDefault();
+      if (!state.data || document.getElementById("applyComparisonFilters").disabled) return;
       const filters = {
         startYear: Number(document.getElementById("comparisonStartYear").value),
         startMonth: Number(document.getElementById("comparisonStartMonth").value),
@@ -681,7 +703,10 @@
       };
       const monthsPerYear = state.data?.calendar.months_per_year || monthNames.length;
       if (dateIndex(filters.startYear, filters.startMonth, monthsPerYear) > dateIndex(filters.endYear, filters.endMonth, monthsPerYear)) {
-        window.alert("تاریخ شروع باید قبل از تاریخ پایان باشد.");
+        const message = document.getElementById("comparisonFilterError");
+        message.textContent = "تاریخ شروع باید قبل از تاریخ پایان باشد.";
+        message.classList.remove("hidden");
+        message.focus();
         return;
       }
       loadComparison(filters);
