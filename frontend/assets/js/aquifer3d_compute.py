@@ -1172,6 +1172,59 @@ def well_details(feature_index, name, lon, lat):
     return {'name':well['name'],'ground_msl':well['ground'],'records':records,'annual':annual}
 
 
+def urban_overlay(features):
+    """Clip public city footprints to the selected aquifer and drape for display only."""
+    if not _last_analysis:
+        return []
+    from shapely.geometry import shape, Polygon, Point
+    from shapely.ops import unary_union
+    data = _last_analysis
+    boundary = unary_union([Polygon(p[0], p[1:]) for p in data['display_grid']['polygons']])
+    mesh = data['volume_mesh']['vertices']
+    pixels = [[c['lon'], c['lat'], c['remaining_m'] + c['lost_m']]
+              for c in (data.get('pixel_water') or {}).get('cells', [])]
+    center = boundary.centroid.y
+    def position(coord):
+        lon, lat = coord[:2]
+        return [lon, lat, _idw(mesh, lon, lat, center),
+                _idw(pixels, lon, lat, center) if pixels else 0]
+    def parts(geometry):
+        if geometry.is_empty:
+            return
+        if geometry.geom_type == 'Polygon':
+            yield geometry
+        elif hasattr(geometry, 'geoms'):
+            for part in geometry.geoms:
+                yield from parts(part)
+    result = []
+    for feature in features:
+        city = shape(feature['geometry'])
+        if not city.is_valid:
+            city = city.buffer(0)
+        clipped = city.intersection(boundary)
+        if clipped.geom_type == 'Point' and not clipped.is_empty:
+            result.append({'name': feature['properties']['name'],
+                           'id': feature['properties']['id'],
+                           'source': feature['properties'].get('source', ''),
+                           'paths': [], 'label': position([clipped.x, clipped.y])})
+            continue
+        polygons = list(parts(clipped))
+        if not polygons:
+            continue
+        point = max(polygons, key=lambda p: p.area).representative_point()
+        label = feature['properties'].get('label')
+        if label and clipped.covers(Point(label[:2])):
+            point = Point(label[:2])
+        paths = [list(ring.coords) for polygon in polygons
+                 for ring in [polygon.exterior, *polygon.interiors]]
+        result.append({'name': feature['properties']['name'],
+                       'id': feature['properties']['id'],
+                       'source': feature['properties'].get('source', ''),
+                       'paths': [[position(p) for p in ring] for ring in paths],
+                       'label': position([point.x, point.y])})
+    return result
+
+
 def call_json(command, argument_json="{}"):
     global _last_analysis
     arguments = json.loads(argument_json)
@@ -1186,6 +1239,8 @@ def call_json(command, argument_json="{}"):
         _last_analysis = result
     elif command == 'cross_section':
         result = cross_section(arguments['start'],arguments['end'])
+    elif command == 'urban_overlay':
+        result = urban_overlay(arguments.get('features', []))
     elif command == 'well_details':
         result = well_details(arguments['feature_index'],arguments['name'],arguments['lon'],arguments['lat'])
     else:

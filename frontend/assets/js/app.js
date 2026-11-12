@@ -315,6 +315,7 @@
   }
 
   function addBaseMap(map) {
+    window.HydroCities?.attachLeaflet(map);
     if (map._hydroBaseMap) return map._hydroBaseMap;
     map._hydroBaseMap = L.tileLayer(BASEMAP_URL, {
       attribution: BASEMAP_ATTRIBUTION,
@@ -339,7 +340,7 @@
   function resizeSelectionMap() {
     if (!state.selectionMap) return;
     const refresh = () => {
-      state.selectionMap.invalidateSize({ animate: false, pan: false });
+      state.selectionMap.invalidateSize({ animate: false, pan: true });
       refreshLeafletMinimumZoom(state.selectionMap);
     };
     refresh();

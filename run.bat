@@ -61,13 +61,7 @@ if not exist ".venv-win\Scripts\python.exe" (
   exit /b 1
 )
 
-set "APP_PORT=8228"
-if exist ".env" (
-  for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
-    if /i "%%A"=="APP_PORT" set "APP_PORT=%%B"
-  )
-)
-
-echo Starting dashboard at http://127.0.0.1:%APP_PORT%
-call ".venv-win\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port %APP_PORT%
-pause
+call ".venv-win\Scripts\python.exe" scripts\launch_dashboard.py %*
+set "DASHBOARD_EXIT_CODE=%errorlevel%"
+if not "%DASHBOARD_EXIT_CODE%"=="0" pause
+exit /b %DASHBOARD_EXIT_CODE%

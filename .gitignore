@@ -3,7 +3,16 @@ node_modules/
 __pycache__/
 *.pyc
 .cache/
+.tmp/a3-redesign/
+.tmp/waterq-browser-qa/
+.tmp/quality-*-check.png
+.tmp/management-qa/
+.tmp/cumulative-subsidence-qa/
 .env
 ee-hydrocode.json
 
 .codex/*
+
+.tmp/map-layers-qa/
+
+.tmp/compact-dashboard-qa/

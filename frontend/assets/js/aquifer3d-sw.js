@@ -1,7 +1,9 @@
-const CACHE_NAME = "aquifer3d-offline-v22";
+const CACHE_NAME = "aquifer3d-offline-v30";
 const CORE_FILES = [
   "/",
   "/dashboard-compute.py",
+  "/comparison",
+  "/assets/js/comparison.js",
   "/assets/js/app.js",
   "/assets/js/dashboard-worker.js",
   "/assets/js/dashboard_catalog.py",
@@ -21,10 +23,29 @@ const CORE_FILES = [
   "/aquifer-3d",
   "/assets/css/app.css",
   "/assets/css/aquifer3d.css",
+  "/assets/css/aquifer3d-workspace.css",
+  "/assets/js/aquifer3d-workspace.js",
+  "/assets/js/aquifer3d-layout.js",
+  "/assets/js/aquifer3d-views.js",
+  "/assets/js/map-cities.js",
+  "/assets/js/dashboard-help.js",
+  "/assets/css/workbench.css",
+  "/assets/data/khorasan-razavi-urban.geojson",
+  "/assets/js/aquifer3d-management.js",
+  "/assets/js/aquifer-management-compute.py",
+  "/assets/css/aquifer3d-management.css",
+  "/subsidence/sources.json",
   "/assets/js/aquifer3d.js",
   "/assets/js/aquifer3d-render.js",
   "/assets/js/aquifer3d-tools.js",
   "/assets/js/aquifer3d-maps.js",
+  "/assets/js/aquifer3d-quality.js",
+  "/water-quality/compute.py",
+  "/water-quality/WaterQ.csv",
+  "/water-quality/covariates.npy",
+  "/water-quality/geology.geojson",
+  "/water-quality/sources.json",
+  "/runtime/quality-openblas",
   "/assets/js/aquifer3d-worker.js",
   "/assets/js/aquifer3d_compute.py",
   "/assets/pyodide/pyodide.mjs",
@@ -50,8 +71,9 @@ const CORE_FILES = [
 ];
 
 function isPythonPackage(url) {
-  return url.origin === "https://cdn.jsdelivr.net"
-    && /^\/pyodide\/v0\.29\.3\/full\/[^/]+\.whl$/.test(url.pathname);
+  return (url.origin === "https://cdn.jsdelivr.net"
+    && /^\/pyodide\/v0\.29\.3\/full\/[^/]+\.whl$/.test(url.pathname))
+    ||(url.origin===self.location.origin&&url.pathname.startsWith('/assets/pyodide/packages/')&&/\.(whl|zip)$/.test(url.pathname));
 }
 
 function isDashboardPartial(url) {
@@ -93,7 +115,8 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const pythonPackage = isPythonPackage(url);
   const partial = isDashboardPartial(url);
-  if (!pythonPackage && !partial
+  const subsidenceAsset=url.origin===self.location.origin&&url.pathname.startsWith('/subsidence/');
+  if (!pythonPackage && !partial && !subsidenceAsset
       && (url.origin !== self.location.origin || !CORE_FILES.includes(url.pathname))) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);

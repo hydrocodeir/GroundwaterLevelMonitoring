@@ -1,0 +1,60 @@
+{
+  "aquifer": "مشهد",
+  "water_year_start": 1401,
+  "water_year_end": 1403,
+  "gregorian_start": "2022-09-23",
+  "gregorian_end_exclusive": "2025-09-23",
+  "scale_m": 1000,
+  "region_bbox": [
+    [
+      58.38670000129127,
+      35.930111283696604
+    ],
+    [
+      60.04212295551273,
+      35.930111283696604
+    ],
+    [
+      60.04212295551273,
+      37.0978114785792
+    ],
+    [
+      58.38670000129127,
+      37.0978114785792
+    ],
+    [
+      58.38670000129127,
+      35.930111283696604
+    ]
+  ],
+  "gee_datasets": [
+    "USGS/SRTMGL1_003",
+    "COPERNICUS/S2_SR_HARMONIZED",
+    "ESA/WorldCover/v200"
+  ],
+  "s2_sampling": "Three least-cloudy scenes per MGRS tile in the reference window; reflectance resampled to 250m before indices, median then 1km averaging; NOT an annual vegetation mean",
+  "landcover_epoch": 2021,
+  "variables": [
+    "elevation",
+    "slope",
+    "ndvi",
+    "ndwi",
+    "bsi",
+    "swir_ratio",
+    "crops",
+    "built",
+    "bare"
+  ],
+  "interpretation": "Explanatory surface covariates, NOT measured groundwater EC or a vertical salinity profile",
+  "private_quality_rows_sent_to_cloud": false,
+  "geology": {
+    "url": "https://services8.arcgis.com/4KhTMTZ1x0f76DSg/arcgis/rest/services/GLiM_Niveau_I/FeatureServer/1",
+    "primary_doi": "10.1029/2012GC004370",
+    "version": "GLiM v1.1 level I",
+    "scale_note": "Regional lithology assembled at target 1:1M; not local borehole geology"
+  },
+  "sha256": {
+    "MASHHAD_GEE_COVARIATES.npy": "aec881527c3bf99dd231e5052207741f68ee367922d63a86276a23c7ebf3d2df",
+    "MASHHAD_GLIM.geojson": "d5e0b297100dd5e2cfa90ce2a03406bfc0869225adb7a5098c0b3d9fa56c6fbb"
+  }
+}

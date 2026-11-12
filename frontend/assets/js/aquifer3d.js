@@ -2,6 +2,10 @@ const assetVersion = new URL(import.meta.url).searchParams.get('v') || 'storage-
 const { mountAquiferScenes } = await import(`./aquifer3d-render.js?v=${encodeURIComponent(assetVersion)}`);
 const { mountProfessionalTools } = await import(`./aquifer3d-tools.js?v=${encodeURIComponent(assetVersion)}`);
 const { mountPlanMaps } = await import(`./aquifer3d-maps.js?v=${encodeURIComponent(assetVersion)}`);
+const { mountQualityTools } = await import(`./aquifer3d-quality.js?v=${encodeURIComponent(assetVersion)}`);
+const { mountWorkspace } = await import(`./aquifer3d-workspace.js?v=${encodeURIComponent(assetVersion)}`);
+const { mountManagementTools } = await import(`./aquifer3d-management.js?v=${encodeURIComponent(assetVersion)}`);
+const workspace = mountWorkspace();
 
 const $ = (id) => document.getElementById(id);
 const aquiferSelect = $("aquiferSelect3d");
@@ -21,10 +25,31 @@ let requestId = 0;
 let sceneCleanup = null;
 let toolsCleanup = null;
 let mapsCleanup = null;
+let qualityCleanup = null;
+let managementCleanup = null;
 let videoController = null;
 let selectedSummary = null;
 let selectionSequence = 0;
 let catalog = [];
+let appliedInputs = null;
+let modelUpdating = false;
+
+function captureInputs() {
+  return {baselineYear:baselineSelect.value,syMode:syMode.value,sy:syInput.value,
+    karatThickness:karatThicknessInput.value,bedrockFile:bedrockInput.files?.[0]||null,syFile:syFile.files?.[0]||null};
+}
+
+function discardInputs() {
+  if (!appliedInputs || !sceneCleanup || modelUpdating || buildButton.disabled) return;
+  selectionSequence++;
+  baselineSelect.value=appliedInputs.baselineYear;syMode.value=appliedInputs.syMode;
+  syInput.value=appliedInputs.sy;karatThicknessInput.value=appliedInputs.karatThickness;
+  for (const [input,file] of [[bedrockInput,appliedInputs.bedrockFile],[syFile,appliedInputs.syFile]]) {
+    const transfer=new DataTransfer();if(file)transfer.items.add(file);input.files=transfer.files;
+  }
+  updateSyMode();updateKaratControls();saveInputs();
+  setStatus('تنظیمات آخرین محاسبه برگردانده شد.','ready');
+}
 
 function format(value, digits = 1) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return "نامشخص";
@@ -42,9 +67,13 @@ function setStatus(message, state = "loading") {
   const element = $("status3d");
   element.textContent = message;
   element.dataset.state = state;
+  workspace.state(state, message);
 }
 
 function request(command, args = {}) {
+  if (modelUpdating && !['analyze','prepare','catalog','urban_overlay'].includes(command)) {
+    return Promise.reject(new Error('مدل در حال به‌روزرسانی است؛ پس از پایان محاسبه دوباره اجرا کنید.'));
+  }
   const id = ++requestId;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
@@ -108,6 +137,9 @@ function resetMetrics() {
 }
 
 function clearScenes() {
+  workspace.clear();
+  managementCleanup?.();managementCleanup=null;
+  qualityCleanup?.();qualityCleanup=null;
   mapsCleanup?.();mapsCleanup=null;
   toolsCleanup?.();toolsCleanup=null;
   videoController?.abort();
@@ -125,10 +157,10 @@ function updateSyMode() {
 
 function invalidateResult() {
   selectionSequence++;
-  clearScenes();
   buildButton.disabled = !selectedSummary?.years?.length;
-  setStatus('ورودی‌ها تغییر کرده‌اند؛ برای نمایش نتایج جدید «محاسبه و نمایش» را بزنید.', 'ready');
-  saveInputs();
+  const draft=captureInputs();
+  const unchanged=appliedInputs && Object.keys(draft).every(key=>draft[key]===appliedInputs[key]);
+  setStatus(unchanged&&sceneCleanup?'ورودی‌ها با آخرین محاسبه یکسان‌اند.':'تنظیمات جدید هنوز اعمال نشده‌اند؛ نمودارها مربوط به آخرین محاسبه‌اند.',unchanged&&sceneCleanup?'ready':'dirty');
 }
 
 function isNeyshabur(item) {
@@ -154,6 +186,7 @@ async function selectAquifer() {
   const index = Number(aquiferSelect.value);
   if (!Number.isInteger(index)) return;
   selectedSummary = null;
+  appliedInputs = null;
   bedrockInput.value = "";
   syFile.value = "";
   syMode.value = 'constant';
@@ -168,6 +201,7 @@ async function selectAquifer() {
     const summary = await request("prepare", { feature_index: index });
     if (sequence !== selectionSequence) return;
     selectedSummary = summary;
+    workspace.context(summary.name);
     const saved = getSaved(index);
     const endYear=new Intl.NumberFormat('fa-IR',{useGrouping:false}).format(summary.current_year);
     $('comparisonEnd').textContent=`انتهای مقایسه: شهریور ${endYear}`;
@@ -445,38 +479,51 @@ function updateMetrics(data) {
 }
 
 async function buildScene() {
-  if (!selectedSummary || !baselineSelect.value) return;
+  if (!selectedSummary || !baselineSelect.value || modelUpdating) return;
   const sequence = selectionSequence;
   const featureIndex = Number(aquiferSelect.value);
+  const inputs=captureInputs();
+  let frozenInputs=[];
   buildButton.disabled = true;
-  clearScenes();
   setStatus("در حال درون‌یابی سطح آب و ساخت شکل سه‌بعدی…");
   try {
-    const spatial = syMode.value === 'spatial';
-    const sy = spatial || syInput.value.trim() === "" ? null : Number(syInput.value);
+    const spatial = inputs.syMode === 'spatial';
+    const sy = spatial || inputs.sy.trim() === "" ? null : Number(inputs.sy);
     if (sy !== null && (!Number.isFinite(sy) || sy <= 0 || sy >= 1)) {
       throw new Error("آبدهی ویژه باید عددی بزرگ‌تر از صفر و کوچک‌تر از یک باشد.");
     }
-    const file = bedrockInput.files?.[0];
+    const file = inputs.bedrockFile;
     const bedrockText = file ? await file.text() : "";
-    if (spatial && !syFile.files?.length) throw new Error('فایل CSV آبدهی ویژه را انتخاب کنید.');
-    const syText = spatial ? await syFile.files[0].text() : '';
-    const karatThickness = isKarat(selectedSummary) && !file ? Number(karatThicknessInput.value) : null;
+    if (spatial && !inputs.syFile) throw new Error('فایل CSV آبدهی ویژه را انتخاب کنید.');
+    const syText = spatial ? await inputs.syFile.text() : '';
+    const karatThickness = isKarat(selectedSummary) && !file ? Number(inputs.karatThickness) : null;
     if (karatThickness !== null &&
-        (!Number.isFinite(karatThickness) || karatThicknessInput.value.trim() === "" ||
+        (!Number.isFinite(karatThickness) || inputs.karatThickness.trim() === "" ||
          karatThickness < 20 || karatThickness > 300)) {
       throw new Error("ضخامت اشباع فرضی کرات باید بین ۲۰ تا ۳۰۰ متر باشد. عمق کف از سطح زمین حداکثر ۳۰۰ متر است.");
     }
+    if(sequence!==selectionSequence)return;
+    modelUpdating=true;
+    frozenInputs=[aquiferSelect,baselineSelect,syMode,syInput,syFile,bedrockInput,karatThicknessInput].map(input=>[input,input.disabled]);
+    frozenInputs.forEach(([input])=>{input.disabled=true;});
     const data = await request("analyze", {
       feature_index: featureIndex,
-      baseline_year: Number(baselineSelect.value),
+      baseline_year: Number(inputs.baselineYear),
       sy,
       sy_text: syText,
       karat_thickness_m: karatThickness,
       bedrock_text: bedrockText
     });
     if (sequence !== selectionSequence || featureIndex !== Number(aquiferSelect.value)) return;
-    data.input_files={bedrock:file?.name||null,sy:spatial?syFile.files[0].name:null};
+    try {
+      const cities=await window.HydroCities.ready();
+      data.urban_overlay=await request('urban_overlay',{features:cities.features});
+      $('a3CitiesNote').textContent=`GHSL / JRC و OpenStreetMap · ${formatter.format(data.urban_overlay.length)} شهر در محدوده؛ پهنهٔ بافت شهری یا موقعیت نقطه‌ای، مطابق منبع`;
+    } catch(error) {data.urban_overlay=[];$('a3CitiesNote').textContent=error.message;}
+    if (sequence !== selectionSequence) return;
+    modelUpdating=false;
+    clearScenes();
+    data.input_files={bedrock:file?.name||null,sy:spatial?inputs.syFile.name:null};
     if (sceneCleanup) sceneCleanup();
     sceneCleanup = mountAquiferScenes({
       beforeCanvas: $("beforeCanvas"), afterCanvas: $("afterCanvas"), pixelCanvas: $("pixelCanvas"), data,
@@ -484,14 +531,20 @@ async function buildScene() {
     });
     sceneCleanup.setInteractionMode(document.querySelector('[data-interaction][aria-pressed="true"]')?.dataset.interaction);
     mapsCleanup=mountPlanMaps({data,waterRoot:$('waterPercentMap'),parameterRoot:$('parameterMaps')});
+    qualityCleanup=mountQualityTools({data,request});
+    managementCleanup=mountManagementTools({data,request,featureIndex});
     document.querySelectorAll('[data-scene-layer]').forEach(input => sceneCleanup.setLayer(input.dataset.sceneLayer, input.checked));
     updateMetrics(data);
     toolsCleanup=mountProfessionalTools({data,scene:sceneCleanup,request,featureIndex});
+    appliedInputs=inputs;
+    workspace.result(data);
     saveInputs();
     setStatus(`مدل ${data.aquifer.name} برای ${data.dates.before} و ${data.dates.after} آماده است.${data.grid.bedrock_source === "figure_s4" ? " کف از برآورد شکل S4 با عمق مرزیِ فرضی ساخته شده است." : data.grid.bedrock_source === "karat_scenario" ? " کف کرات فقط یک سناریوی فرضی است." : ""}`, "ready");
   } catch (error) {
     if (sequence === selectionSequence) setStatus(error.message, "error");
   } finally {
+    modelUpdating=false;
+    frozenInputs.forEach(([input,disabled])=>{input.disabled=disabled;});
     if (sequence === selectionSequence) buildButton.disabled = false;
   }
 }
@@ -531,6 +584,8 @@ async function start() {
 
 aquiferSelect.addEventListener("change", selectAquifer);
 buildButton.addEventListener("click", buildScene);
+document.addEventListener('a3:apply-inputs',()=>{if(!buildButton.disabled)buildScene();});
+document.addEventListener('a3:discard-inputs',discardInputs);
 baselineSelect.addEventListener("change", invalidateResult);
 syInput.addEventListener("input", invalidateResult);
 karatThicknessInput.addEventListener("input", invalidateResult);
@@ -553,6 +608,8 @@ function showWaterView(view) {
     ? 'هر ستون یک سلول مکانی است: آبی از صفر تا ضخامت معادل آب باقی‌مانده و قرمز بالای آن، معادل آب از دست‌رفتهٔ همان سلول. ارتفاع = ضخامت اشباع × Sy محل؛ حجم = ارتفاع × مساحت سلول. سلول‌های مرزی با پولیگون بریده می‌شوند. آب باقی‌مانده شامل افزایش‌های موضعی است؛ کاهش ذخیره معادل برداشت ناخالص نیست. برای چرخش بکشید، برای زوم از چرخ موس و برای جزئیات از کلیک استفاده کنید.'
     : view==='percent'?'درصدها از کف اصلی و Sy همین محاسبه ساخته می‌شوند؛ چرخ ماوس برای زوم، کشیدن نقشه برای جابجایی و کلیک برای مقدار دقیق.':$('waterCaption').dataset.totals || 'برای محاسبهٔ حجم، Sy و کف معتبر لازم است.';
   document.querySelector('.aquifer3d-scene-after [data-fullscreen]').dataset.fullscreen = pixels?'pixelCanvas':'afterCanvas';
+  document.querySelector('[data-video-kind="pixels"]').hidden = !pixels;
+  document.dispatchEvent(new CustomEvent('a3:water-view', { detail: view }));
 }
 document.querySelectorAll('[data-water-view]').forEach(button=>{
   button.addEventListener('click',()=>showWaterView(button.dataset.waterView));
@@ -607,4 +664,8 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/aquifer3d-sw.js", { updateViaCache: 'none' }).catch(() => {});
 }
 
+const cityToggle=$('a3CitiesToggle');
+cityToggle.checked=window.HydroCities.enabled;
+cityToggle.onchange=()=>window.HydroCities.setEnabled(cityToggle.checked);
+window.HydroCities.subscribe(()=>{cityToggle.checked=window.HydroCities.enabled;});
 start();

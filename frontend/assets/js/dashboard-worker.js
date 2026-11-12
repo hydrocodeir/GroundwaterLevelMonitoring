@@ -8,7 +8,7 @@ const progress = message => self.postMessage({ type: "progress", message });
 async function initialize() {
   progress("در حال آماده‌سازی…");
   const pyodide = await loadBrowserPython({
-    packageBaseUrl: `https://cdn.jsdelivr.net/pyodide/v${version}/full/`
+    packageBaseUrl: new URL('/assets/pyodide/packages/',self.location.href).href
   });
   pyodide.FS.mkdirTree("/app");
   pyodide.FS.mkdirTree("/Data");
@@ -38,6 +38,11 @@ async function fetchFiles(pyodide, paths) {
 
 async function initializeAnalysis(pyodide) {
   progress("در حال دریافت ابزارهای محاسبه؛ این دریافت فقط بار اول لازم است…");
+  const nativeFetch=self.fetch.bind(self);
+  self.fetch=(resource,options)=>{
+    const url=typeof resource==='string'?resource:resource?.url||String(resource);
+    return nativeFetch(/\/libopenblas-[^/]+\.zip(?:\?|$)/.test(url)?'/runtime/quality-openblas':resource,options);
+  };
   await pyodide.loadPackage(["numpy", "pandas", "scipy", "shapely", "pyproj"]);
   progress("در حال آماده‌سازی داده‌های تحلیل…");
   const paths = [
@@ -73,8 +78,9 @@ self.onmessage = ({ data }) => {
       await analysisReady;
       progress("در حال محاسبه روش‌های انتخاب‌شده…");
       pyodide.globals.set("dashboard_arguments", JSON.stringify(data.arguments));
+      const operation=data.command==='comparison'?'comparison':'dashboard';
       const result = await pyodide.runPythonAsync(
-        "json.dumps(dashboard_service.dashboard(**json.loads(dashboard_arguments)), ensure_ascii=False, allow_nan=False)"
+        `json.dumps(dashboard_service.${operation}(**json.loads(dashboard_arguments)), ensure_ascii=False, allow_nan=False)`
       );
       self.postMessage({ id: data.id, result: JSON.parse(result) });
     } catch (error) {

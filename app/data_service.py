@@ -4341,6 +4341,7 @@ class GroundwaterData:
         end_year: int | None = None,
         end_month: int | None = None,
         corrected_support_method: str = "fixed_thiessen",
+        selected_methods: list[str] | None = None,
     ) -> dict[str, Any]:
         (
             start_year_value,
@@ -4404,6 +4405,13 @@ class GroundwaterData:
             },
         }
 
+        requested_methods = list(dict.fromkeys(method_order if selected_methods is None else selected_methods))
+        if not requested_methods:
+            raise ValueError("یک روش مقایسه انتخاب کنید")
+        if any(method not in method_order for method in requested_methods):
+            raise ValueError("روش مقایسه معتبر نیست")
+        required_surface = {method.removeprefix("corrected_") for method in requested_methods}
+        needs_corrected = any(method.startswith("corrected_") for method in requested_methods)
         for group_id, group in self.groups.items():
             group_frame = self.monthly[self.monthly["_aquifer_id"] == group_id]
             selected_join_keys = self._selected_join_keys(
@@ -4430,10 +4438,14 @@ class GroundwaterData:
             arithmetic_values, thiessen_values = self._hydrograph_value_maps(
                 display_frame,
                 weights,
+                ["arithmetic", "thiessen"] if needs_corrected else
+                [method for method in ("arithmetic", "thiessen") if method in requested_methods],
             )
             surface_methods: dict[str, dict[str, Any]] = {}
             primary_surface_method = SURFACE_INTERPOLATION_METHOD_ORDER[0]
             for method in SURFACE_INTERPOLATION_METHOD_ORDER:
+                if method not in required_surface:
+                    continue
                 method_values, method_metadata = self._piezometric_surface_value_map(
                     group_id,
                     display_frame,
@@ -4444,6 +4456,10 @@ class GroundwaterData:
                     "values": method_values,
                     "metadata": method_metadata,
                 }
+            area_m2 = surface_methods.get(primary_surface_method, {}).get("metadata", {}).get("area_m2")
+            if area_m2 is None and needs_corrected and not selected_sites.empty:
+                projected, _ = self._projected_boundary(group_id, selected_sites)
+                area_m2 = float(projected.area)
             corrected_analysis = self._corrected_analysis_payload(
                 group_id,
                 months,
@@ -4459,9 +4475,9 @@ class GroundwaterData:
                 start_water_year,
                 annual_end_water_year,
                 None,
-                surface_methods[primary_surface_method]["metadata"]["area_m2"],
+                area_m2,
                 include_base_comparisons=True,
-            )
+            ) if needs_corrected else {}
 
             def method_metrics(values: dict[int, float]) -> dict[str, Any]:
                 start_level = finite_or_none(values.get(start_index))
@@ -4503,7 +4519,7 @@ class GroundwaterData:
                     "total_wells": group["well_count"],
                     "selected_wells": selected_well_count,
                     "selected_sites": len(weights),
-                    "methods": methods,
+                    "methods": {key: value for key, value in methods.items() if key in requested_methods},
                     "geometry": mapping(
                         self.boundary_matches[group_id]["aquifer"].geometry.simplify(
                             COMPARISON_GEOMETRY_TOLERANCE,
@@ -4525,8 +4541,8 @@ class GroundwaterData:
                 "end_year": end_year_value,
                 "end_month": end_month_value,
                 "continuous_only": True,
-                "selected_methods": method_order,
-                "map_method": method_order[0],
+                "selected_methods": requested_methods,
+                "map_method": requested_methods[0],
                 "corrected_support_method": corrected_support_method,
             },
             "calendar": {
@@ -4540,7 +4556,7 @@ class GroundwaterData:
                 "available_aquifers": {
                     method: {
                         metric: sum(
-                            item["methods"][method][metric] is not None
+                            item["methods"].get(method, {}).get(metric) is not None
                             for item in aquifers
                         )
                         for metric in (

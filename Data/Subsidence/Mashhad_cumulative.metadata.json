@@ -1,0 +1,63 @@
+{
+  "format_version": 1,
+  "source_file": "Data/Mashhad.tif",
+  "source_sha256": "39ed8d143f22b9c2a84c5adc9983ec208866a26ea60494e1b05bebd7ecf15d3e",
+  "csv_sha256": "fb57599f3f74089268ea011b62d6f9997a7baef928f3951fb4e46a203779971e",
+  "csv_columns": [
+    "longitude",
+    "latitude",
+    "cumulative_mm",
+    "pixel_row",
+    "pixel_column"
+  ],
+  "quantity": "cumulative",
+  "unit": "mm",
+  "source_unit": "mm",
+  "component": "vertical",
+  "direction": "down",
+  "calendar_basis": "persian",
+  "start_year": 1395,
+  "end_year": 1404,
+  "duration_years": 10,
+  "period_precision": "year",
+  "provenance": "Unit, sign, vertical component and year range supplied by user; absent from TIFF tags.",
+  "raster_grid": {
+    "crs": "EPSG:4326",
+    "width": 1317,
+    "height": 1034,
+    "affine": [
+      0.0009988317757009273,
+      0.0,
+      58.616,
+      0.0,
+      -0.0009988317757009299,
+      37.05260397196261
+    ],
+    "pixel_reference": "area_corner",
+    "source_pixel_is_point": false
+  },
+  "extent_wgs84": [
+    58.616,
+    36.01981191588785,
+    59.93146144859812,
+    37.05260397196261
+  ],
+  "statistics": {
+    "total_pixels": 1361778,
+    "valid_pixels": 251596,
+    "nodata_pixels": 1110182,
+    "minimum_signed_mm": 0.0,
+    "maximum_signed_mm": 1166.7069091796875,
+    "negative_pixels": 0,
+    "zero_pixels": 71416,
+    "positive_pixels": 180180
+  },
+  "notes": [
+    "Every finite valid pixel is exported once at its centre; zero values are retained; NaN/NoData/Inf are excluded.",
+    "Signed source displacements are preserved. Positive means subsidence magnitude for the user-confirmed declaration.",
+    "No annual time series is reconstructed. Division by declared duration only yields a period-average rate.",
+    "Start/end days and months are not supplied. Calendar-year windows are nominal and time alignment remains approximate."
+  ],
+  "csv_file": "Mashhad_cumulative.csv",
+  "sign_confirmation": "User confirmed after checking the nonnegative TIFF statistics: positive values are the magnitude of cumulative subsidence."
+}

@@ -1,4 +1,6 @@
-/** Analysis/presentation controls. Hydrological calculations stay in the worker. */
+const viewVersion=new URL(import.meta.url).searchParams.get('v')||'1';
+const {standardViews,presetCamera}=await import(`./aquifer3d-views.js?v=${encodeURIComponent(viewVersion)}`);
+/** Analysis and export controls. Hydrological calculations stay in the worker. */
 const $=id=>document.getElementById(id);
 const fmt=(v,d=1)=>Number.isFinite(v)?new Intl.NumberFormat('fa-IR',{maximumFractionDigits:d}).format(v):'—';
 const NS='http://www.w3.org/2000/svg';
@@ -32,7 +34,7 @@ async function svgImage(svg){const copy=svg.cloneNode(true);copy.setAttribute('x
 
 export function mountProfessionalTools({data,scene,request,featureIndex}){
   const root=$('professionalTools');root.hidden=false;
-  root.innerHTML=`<div class="a3-tool-heading"><h2>ابزارهای تحلیل و ارائه</h2><span id="a3ToolStatus" role="status"></span></div><nav class="a3-tool-tabs" role="tablist" aria-label="ابزارهای سه‌بعدی"></nav><div class="a3-tool-panels"></div>`;
+  root.innerHTML=`<div class="a3-tool-heading"><h2>ابزارهای تحلیل و خروجی</h2><span id="a3ToolStatus" role="status"></span></div><nav class="a3-tool-tabs" role="tablist" aria-label="ابزارهای سه‌بعدی"></nav><div class="a3-tool-panels"></div>`;
   let disposed=false;const disposers=[];
   const status=message=>{if(!disposed)$('a3ToolStatus').textContent=message;};
   function panel(key,label,html){
@@ -45,7 +47,7 @@ export function mountProfessionalTools({data,scene,request,featureIndex}){
   }
   function activate(key){root.querySelectorAll('[role=tab]').forEach(b=>{const active=b.id===`a3Tab-${key}`;b.setAttribute('aria-selected',active);b.tabIndex=active?0:-1;});root.querySelectorAll('[role=tabpanel]').forEach(p=>{p.hidden=p.id!==`a3Panel-${key}`;});}
   // 1. Section endpoints are editable on the polygon, including with the keyboard.
-  panel('section','برش مقطعی',`<p>دو سر خط را روی نقشه بکشید؛ کلیدهای جهت نیز نقطهٔ انتخاب‌شده را جابه‌جا می‌کنند. مقطع از کف اصلی ورودی محاسبه می‌شود.</p><div class="a3-section-layout"><div><svg id="a3SectionMap" viewBox="0 0 600 360" role="img" aria-label="نقشهٔ انتخاب مسیر برش"></svg><div class="a3-actions"><button type="button" id="a3SectionEW">برش غربی–شرقی</button><button type="button" id="a3SectionNS">برش شمالی–جنوبی</button></div></div><div><div class="a3-chart-scroll"><svg id="a3SectionChart" role="img" aria-label="مقطع سطح آب و سنگ‌بستر"></svg></div><p class="a3-scroll-hint">برای دیدن تمام نمودار، آن را افقی جابه‌جا کنید.</p><p id="a3SectionInfo" role="status"></p></div></div>`);
+  panel('section','برش مقطعی',`<p>دو سر خط را روی نقشه بکشید؛ کلیدهای جهت نیز نقطهٔ انتخاب‌شده را جابه‌جا می‌کنند. مقطع از کف اصلی ورودی محاسبه می‌شود.</p><div class="a3-section-layout"><div><svg id="a3SectionMap" viewBox="0 0 600 360" role="img" aria-label="نقشهٔ انتخاب مسیر برش"></svg><div class="a3-actions"><label class="hydro-city-toggle"><input type="checkbox" id="a3SectionCities" checked>محدودهٔ شهرها</label><button type="button" id="a3SectionEW">برش غربی–شرقی</button><button type="button" id="a3SectionNS">برش شمالی–جنوبی</button></div></div><div><div class="a3-chart-scroll"><svg id="a3SectionChart" role="img" aria-label="مقطع سطح آب و سنگ‌بستر"></svg></div><p class="a3-scroll-hint">برای دیدن تمام نمودار، آن را افقی جابه‌جا کنید.</p><p id="a3SectionInfo" role="status"></p></div></div>`);
   const polygons=data.display_grid.polygons,coords=polygons.flat(2);
   const west=Math.min(...coords.map(p=>p[0])),east=Math.max(...coords.map(p=>p[0])),south=Math.min(...coords.map(p=>p[1])),north=Math.max(...coords.map(p=>p[1]));
   const sx=111320*Math.cos((south+north)/2*Math.PI/180),scale=Math.min(550/((east-west)*sx),310/((north-south)*111320));
@@ -53,6 +55,11 @@ export function mountProfessionalTools({data,scene,request,featureIndex}){
   const ll=p=>[Math.max(west,Math.min(east,(p[0]-300)/sx/scale+(west+east)/2)),Math.max(south,Math.min(north,(180-p[1])/111320/scale+(south+north)/2))];
   const map=$('a3SectionMap');
   polygons.forEach(p=>map.append(svgNode('path',{d:p.map(r=>r.map((point,i)=>`${i?'L':'M'}${xy(point).join(',')}`).join(' ')+'Z').join(' '),'fill-rule':'evenodd',fill:'#e3eff4',stroke:'#668496','stroke-width':1})));
+  const cities=svgNode('g');map.append(cities);
+  const paintCities=()=>{if(!disposed){window.HydroCities?.paintSvg(cities,xy,[west,south,east,north]);$('a3SectionCities').checked=window.HydroCities?.enabled??false;}};
+  $('a3SectionCities').onchange=()=>window.HydroCities?.setEnabled($('a3SectionCities').checked);
+  const unsubscribeCities=window.HydroCities?.subscribe(paintCities);disposers.push(()=>unsubscribeCities?.());
+  window.HydroCities?.ready().then(paintCities).catch(()=>{});
   const line=svgNode('line',{stroke:'#b63d49','stroke-width':2});map.append(line);
   let endpoints=[[west,(south+north)/2],[east,(south+north)/2]],timer,sectionSequence=0,sectionResult;
   const handles=[0,1].map(i=>{const node=svgNode('circle',{r:8,fill:i?'#b63d49':'#14637b',tabindex:0,role:'button','aria-label':i?'انتهای مقطع؛ حرکت با کلیدهای جهت':'ابتدای مقطع؛ حرکت با کلیدهای جهت'});map.append(node);return node;});
@@ -76,31 +83,23 @@ export function mountProfessionalTools({data,scene,request,featureIndex}){
   $('a3SectionNS').onclick=()=>{endpoints=[[(west+east)/2,north],[(west+east)/2,south]];schedule();};
   paintLine();updateSection();activate('section');
   disposers.push(()=>{clearTimeout(timer);sectionSequence++;});
-  // 2. Presentation mode keeps titles, units and the selected visual in view.
-  panel('present','حالت ارائه',`<p>نمای انتخاب‌شده را با عنوان آبخوان و خلاصهٔ اعداد ارائه کنید. خروج با Escape؛ جابه‌جایی نماها با PageUp و PageDown.</p><div class="a3-actions"><label>نمای آغاز <select id="a3PresentationView"><option value="geology">سطح آب و سنگ‌بستر</option><option value="pixels">ستون‌های آب</option><option value="compare">مقایسهٔ هم‌زمان</option><option value="section">مقطع</option></select></label><button type="button" id="a3Present">شروع ارائه</button></div>`);
-  const bar=document.createElement('div');bar.className='a3-presentation-bar';bar.hidden=true;
-  bar.innerHTML=`<strong></strong><span></span><div><button type="button" id="a3PreviousSlide">نمای قبلی</button><button type="button" id="a3NextSlide">نمای بعدی</button><button type="button" id="a3ExitPresentation">خروج از ارائه</button></div>`;document.body.append(bar);
-  bar.querySelector('strong').textContent=`${data.aquifer.name} · شهریور ${data.dates.before.slice(0,4)} تا ${data.dates.after.slice(0,4)}`;
-  bar.querySelector('span').textContent=`افت میانگین ${fmt(data.metrics.mean_head_decline_m,2)} متر · ذخیرهٔ پایان ${fmt(data.metrics.drainable_after_mcm)} میلیون مترمکعب`;
-  const slides=['geology','pixels','compare','section'];let presenting=false,slide=0;
-  const originalWaterTab=document.querySelector('[data-water-view][aria-selected=true]')?.dataset.waterView;
-  function presentSlide(index){slide=(index+slides.length)%slides.length;document.body.dataset.a3Slide=slides[slide];if(slides[slide]==='pixels')$('waterPixelTab').click();if(slides[slide]==='compare')activate('compare');if(slides[slide]==='section')activate('section');window.dispatchEvent(new Event('resize'));}
-  function exitPresentation(){const wasPresenting=presenting;presenting=false;document.body.classList.remove('a3-presenting');delete document.body.dataset.a3Slide;bar.hidden=true;if(wasPresenting&&originalWaterTab)document.querySelector(`[data-water-view="${originalWaterTab}"]`)?.click();if(document.fullscreenElement===document.documentElement)document.exitFullscreen().catch(()=>{});}
-  $('a3Present').onclick=async()=>{presenting=true;document.body.classList.add('a3-presenting');bar.hidden=false;presentSlide(slides.indexOf($('a3PresentationView').value));try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();}catch{status('نمای ارائه فعال است؛ مرورگر تمام‌صفحه را نپذیرفت.');}$('a3ExitPresentation').focus();};
-  $('a3ExitPresentation').onclick=exitPresentation;$('a3PreviousSlide').onclick=()=>presentSlide(slide-1);$('a3NextSlide').onclick=()=>presentSlide(slide+1);
-  const presentationKey=e=>{if(!presenting)return;if(e.key==='Escape')exitPresentation();const arrow=['ArrowLeft','ArrowRight'].includes(e.key)&&!e.target.matches('input,select,textarea,canvas');if(['PageUp','PageDown'].includes(e.key)||arrow){e.preventDefault();presentSlide(slide+(['PageDown','ArrowLeft'].includes(e.key)?1:-1));}};
-  const fullscreenChanged=()=>{if(presenting&&!document.fullscreenElement)exitPresentation();};
-  document.addEventListener('keydown',presentationKey);document.addEventListener('fullscreenchange',fullscreenChanged);
-  disposers.push(()=>{exitPresentation();bar.remove();document.removeEventListener('keydown',presentationKey);document.removeEventListener('fullscreenchange',fullscreenChanged);});
   // 3. Both comparison canvases use the same live camera.
-  panel('compare','مقایسهٔ هم‌زمان',`<div class="a3-actions"><label>نوع مقایسه <select id="a3CompareMode"><option value="decline">افت روشن / افت خاموش</option><option value="storage">سنگ‌بستر / ستون‌های معادل آب</option></select></label></div><p>چرخاندن، جابه‌جایی و زوم در هر نما، نمای دیگر را هم تغییر می‌دهد.</p><div class="a3-compare-grid"><div><h3>افت روشن</h3><div class="aquifer3d-canvas-wrap"><canvas id="a3CompareA" tabindex="0" aria-label="نمای اول مقایسهٔ سه‌بعدی"></canvas></div></div><div><h3 id="a3CompareTitle">افت خاموش</h3><div class="aquifer3d-canvas-wrap"><canvas id="a3CompareB" tabindex="0" aria-label="نمای دوم مقایسهٔ سه‌بعدی"></canvas></div></div></div>`);
+  panel('compare','مقایسهٔ هم‌زمان',`<div class="a3-actions"><label>نوع مقایسه <select id="a3CompareMode"><option value="decline">افت روشن / افت خاموش</option><option value="storage">سنگ‌بستر / ستون‌های معادل آب</option></select></label><label>زاویهٔ دید<select id="a3CompareCamera">${standardViews.map(v=>`<option value="${v.key}"${v.key==='oblique'?' selected':''}>${v.label}</option>`).join('')}</select></label></div><p>چرخاندن، جابه‌جایی و زوم در هر نما، نمای دیگر را هم تغییر می‌دهد.</p><div class="a3-compare-grid"><div><h3>افت روشن</h3><div class="aquifer3d-canvas-wrap"><canvas id="a3CompareA" tabindex="0" aria-label="نمای اول مقایسهٔ سه‌بعدی"></canvas></div></div><div><h3 id="a3CompareTitle">افت خاموش</h3><div class="aquifer3d-canvas-wrap"><canvas id="a3CompareB" tabindex="0" aria-label="نمای دوم مقایسهٔ سه‌بعدی"></canvas></div></div></div>`);
   let compareCleanup=scene.addComparison($('a3CompareA'),$('a3CompareB'));
   $('a3CompareMode').onchange=()=>{compareCleanup();compareCleanup=scene.addComparison($('a3CompareA'),$('a3CompareB'),$('a3CompareMode').value);$('a3CompareTitle').textContent=$('a3CompareMode').value==='storage'?'ستون‌های معادل آب':'افت خاموش';};
   disposers.push(()=>compareCleanup());
   // 4. Camera and layer bookmarks are scoped to the aquifer and stored locally.
   panel('views','نماهای ذخیره‌شده',`<p>نما شامل زاویه، زوم، جابه‌جایی و لایه‌های روشن است. نماهای ذخیره‌شده فقط در همین مرورگر نگهداری می‌شوند.</p><div class="a3-actions" id="a3Presets"></div><div class="a3-actions"><label>نام نما <input id="a3ViewName" maxlength="80" placeholder="مثلاً بخش شرقی با افت روشن"></label><button type="button" id="a3SaveView">ذخیرهٔ نمای فعلی</button></div><div id="a3SavedViews" class="a3-saved-list"></div>`);
-  const presets=[['شمال',Math.PI,.55],['جنوب',0,.55],['شرق',-Math.PI/2,.55],['غرب',Math.PI/2,.55],['بالا',0,Math.PI/2],['مایل',.6,.65]];
-  presets.forEach(([label,yaw,pitch])=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>scene.applyView({camera:{yaw,pitch,zoom:1,panX:0,panY:0}});$('a3Presets').append(b);});
+  const cameraSelect=$('a3CameraView');
+  function applyCameraChoice(value,showScene=false){
+    const view=value.startsWith('saved:')?savedViews[Number(value.slice(6))]?.view:{camera:presetCamera(value)};
+    if(!view?.camera)return;
+    scene.applyView(view);syncLayers();cameraSelect.value=value;
+    if(showScene)$('a3Nav-scenes').click();
+  }
+  cameraSelect.onchange=()=>applyCameraChoice(cameraSelect.value);
+  $('a3CompareCamera').onchange=()=>applyCameraChoice($('a3CompareCamera').value);
+  standardViews.forEach(({key,label})=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>applyCameraChoice(key,true);$('a3Presets').append(b);});
   const viewsKey=`aquifer3d:views:v1:${featureIndex}`;
   let savedViews=[];
   try{const list=JSON.parse(localStorage.getItem(viewsKey)||'[]');if(Array.isArray(list))savedViews=list.filter(v=>v&&typeof v.name==='string'&&v.view?.camera).slice(0,20);}catch{/* Storage is optional. */}
@@ -108,10 +107,15 @@ export function mountProfessionalTools({data,scene,request,featureIndex}){
   function saveViews(){try{localStorage.setItem(viewsKey,JSON.stringify(savedViews));return true;}catch{status('ذخیرهٔ نما در مرورگر ممکن نیست.');return false;}}
   function listViews(){
     $('a3SavedViews').replaceChildren();
+    const previous=cameraSelect.value;cameraSelect.replaceChildren();
+    const fixed=document.createElement('optgroup');fixed.label='نماهای اصلی';
+    standardViews.forEach(({key,label})=>fixed.append(new Option(label,key)));cameraSelect.append(fixed);
+    if(savedViews.length){const custom=document.createElement('optgroup');custom.label='نماهای من';savedViews.forEach((v,i)=>custom.append(new Option(v.name,`saved:${i}`)));cameraSelect.append(custom);}
+    cameraSelect.value=[...cameraSelect.options].some(o=>o.value===previous)?previous:'oblique';cameraSelect.disabled=false;
     if(!savedViews.length){const p=document.createElement('p');p.textContent='هنوز نمایی ذخیره نشده است.';$('a3SavedViews').append(p);}
     savedViews.forEach((v,i)=>{const row=document.createElement('div'),open=document.createElement('button'),remove=document.createElement('button');
       row.className='a3-saved-row';open.type=remove.type='button';open.textContent=v.name;remove.textContent='حذف';remove.setAttribute('aria-label',`حذف نمای ${v.name}`);
-      open.onclick=()=>{scene.applyView(v.view);syncLayers();status(`نمای «${v.name}» بازیابی شد.`);};remove.onclick=()=>{savedViews.splice(i,1);if($('a3FilmSteps'))filmSteps.forEach(s=>{if(Number(s.viewIndex)===i)s.viewIndex='';else if(Number(s.viewIndex)>i)s.viewIndex=String(Number(s.viewIndex)-1);});saveViews();listViews();};row.append(open,remove);$('a3SavedViews').append(row);
+      open.onclick=()=>{applyCameraChoice(`saved:${i}`,true);status(`نمای «${v.name}» بازیابی شد.`);};remove.onclick=()=>{savedViews.splice(i,1);if($('a3FilmSteps'))filmSteps.forEach(s=>{if(Number(s.viewIndex)===i)s.viewIndex='';else if(Number(s.viewIndex)>i)s.viewIndex=String(Number(s.viewIndex)-1);});saveViews();listViews();};row.append(open,remove);$('a3SavedViews').append(row);
     });
     if($('a3FilmSteps'))filmRows();
   }
@@ -222,5 +226,5 @@ export function mountProfessionalTools({data,scene,request,featureIndex}){
   }
   $('a3ExportPNG').onclick=()=>exportTask('png');$('a3ExportReport').onclick=()=>exportTask('report');$('a3ExportSection').onclick=()=>exportTask('section');
   activate('section');
-  return ()=>{disposed=true;disposers.reverse().forEach(fn=>fn());root.hidden=true;root.replaceChildren();};
+  return ()=>{cameraSelect.onchange=null;cameraSelect.disabled=true;disposed=true;disposers.reverse().forEach(fn=>fn());root.hidden=true;root.replaceChildren();};
 }

@@ -1,4 +1,17 @@
 (() => {
+  const assetVersion=new URL(document.currentScript.src).searchParams.get('v')||'1';
+  let worker,jobId=0;const pending=new Map();
+  function computeComparison(args){
+    if(!worker){
+      worker=new Worker(`/assets/js/dashboard-worker.js?v=${encodeURIComponent(assetVersion)}`,{type:'module'});
+      worker.onmessage=({data})=>{
+        if(data.type==='progress'){document.getElementById('comparisonLoadingMessage').textContent=data.message;return;}
+        const job=pending.get(data.id);if(!job)return;pending.delete(data.id);if(data.error)job.reject(new Error(data.error));else job.resolve(data.result);
+      };
+      worker.onerror=event=>{pending.forEach(job=>job.reject(new Error(event.message||'اجرای محاسبه ناموفق بود.')));pending.clear();worker.terminate();worker=null;};
+    }
+    return new Promise((resolve,reject)=>{const id=++jobId;pending.set(id,{resolve,reject});worker.postMessage({id,command:'comparison',arguments:args});});
+  }
   const state = {
     data: null,
     charts: [],
@@ -169,10 +182,10 @@
     const rawMethods = (data.method_order || []).filter(method => !method.startsWith("corrected_"));
     const correctedMethods = (data.method_order || []).filter(method => method.startsWith("corrected_"));
     select.innerHTML = `
-      <optgroup label="افت‌های محاسبه‌شده">
+      <optgroup label="روش‌های پایه">
         ${rawMethods.map(method => `<option value="${method}">${escapeHtml(methodLabel(method))}</option>`).join("")}
       </optgroup>
-      <optgroup label="افت‌های اصلاح‌شده">
+      <optgroup label="با اصلاح شبکه">
         ${correctedMethods.map(method => `<option value="${method}">${escapeHtml(methodLabel(method))}</option>`).join("")}
       </optgroup>
     `;
@@ -240,6 +253,7 @@
     const map = component?.getLeaflet();
     if (!map || map._hydroComparisonConfigured) return;
     map._hydroComparisonConfigured = true;
+    window.HydroCities?.attachLeaflet(map);
     map._hydroBaseMap = L.tileLayer(BASEMAP_URL, {
       attribution: BASEMAP_ATTRIBUTION,
       maxNativeZoom: 19,
@@ -348,24 +362,6 @@
               }
             }
           }));
-          const center = api.coord(item.value.slice(0, 2));
-          children.push({
-            type: "text",
-            silent: true,
-            style: {
-              x: center[0],
-              y: center[1],
-              text: `${item.aquifer.aquifer}\n${formatSigned(item.value[2])}`,
-              textAlign: "center",
-              textVerticalAlign: "middle",
-              font: "8px Vazirmatn",
-              lineHeight: 12,
-              fill: "#172A3A",
-              backgroundColor: "rgba(255,255,255,0.66)",
-              padding: [2, 3],
-              borderRadius: 3
-            }
-          });
           return { type: "group", children };
         }
       }]
@@ -390,6 +386,7 @@
         if (entry.contentRect.width <= 0 || entry.contentRect.height <= 0) return;
         const chart = echarts.getInstanceByDom(entry.target);
         chart?.resize({ width: entry.contentRect.width, height: entry.contentRect.height });
+        if(chart&&state.data)fitComparisonLeaflet(chart,state.data);
       });
     });
     containers.forEach(container => state.mapResizeObserver.observe(container));
@@ -609,6 +606,7 @@
     const button = document.getElementById("applyComparisonFilters");
     form.querySelectorAll("select, button").forEach(control => { control.disabled = true; });
     form.setAttribute("aria-busy", "true");
+    document.getElementById("comparisonMaps").inert=true;
     button.textContent = "در حال محاسبه...";
     const loading = document.getElementById("comparisonLoading");
     loading.classList.remove("hidden", "has-error");
@@ -620,20 +618,9 @@
     document.getElementById("retryComparison").classList.add("hidden");
     document.getElementById("comparisonFilterError").classList.add("hidden");
     try {
-      const params = new URLSearchParams();
-      if (filters) {
-        params.set("start_year", filters.startYear);
-        params.set("start_month", filters.startMonth);
-        params.set("end_year", filters.endYear);
-        params.set("end_month", filters.endMonth);
-      }
-      const query = params.toString() ? `?${params}` : "";
-      const response = await fetch(`/api/comparison${query}`);
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.detail || "دریافت اطلاعات مقایسه ناموفق بود.");
-      }
-      const data = await response.json();
+      const args={selected_methods:[state.method||'thiessen']};
+      if(filters)Object.assign(args,{start_year:filters.startYear,start_month:filters.startMonth,end_year:filters.endYear,end_month:filters.endMonth});
+      const data=await computeComparison(args);
       if (token !== state.requestToken) return;
       renderComparison(data);
     } catch (error) {
@@ -651,6 +638,7 @@
     } finally {
       if (token !== state.requestToken) return;
       form.setAttribute("aria-busy", "false");
+      document.getElementById("comparisonMaps").inert=false;
       form.querySelectorAll("select, button").forEach(control => { control.disabled = !state.data; });
       button.innerHTML = "<span>به‌روزرسانی مقایسه</span><span aria-hidden=\"true\">←</span>";
     }
@@ -662,7 +650,7 @@
     document.getElementById("comparisonEndYear").addEventListener("change", () => renderMonthOptions("End"));
     document.getElementById("comparisonMapMethod").addEventListener("change", event => {
       state.method = event.target.value;
-      rerenderComparisonViews();
+      document.getElementById("comparisonFilters").requestSubmit();
     });
     document.getElementById("comparisonMaps").addEventListener("click", event => {
       const tab = event.target.closest("[data-comparison-tab]");

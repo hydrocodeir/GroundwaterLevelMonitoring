@@ -10,13 +10,16 @@
     <link rel="apple-touch-icon" href="{{ url_for('assets', path='img/favicon-192.png') }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/leaflet.css') }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/workbench.css') }}?v={{ asset_version }}">
+    <script defer src="{{ url_for('assets', path='js/map-cities.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('assets', path='js/dashboard-help.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('assets', path='js/htmx.min.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/echarts.min.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/echarts-extension-leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/app.js') }}?v={{ asset_version }}"></script>
   </head>
-  <body class="dashboard-page workspace-page">
+  <body class="workbench-theme dashboard-page workspace-page">
     <a class="skip-link" href="#dashboardContent">رفتن به فضای تحلیل</a>
     {% set active_page = 'analysis' %}
     {% include 'partials/site_header.html' %}

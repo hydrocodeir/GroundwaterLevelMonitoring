@@ -1,0 +1,179 @@
+{
+  "snapshot_date": "2026-11-12",
+  "snapshot_date_persian": "1405-08-21",
+  "scientific_execution": "Browser Pyodide; package step only formats text and copies bytes",
+  "inputs_and_code": [
+    {
+      "path": "Data/AQUIFER.geojson",
+      "bytes": 1073331,
+      "sha256": "285679190899e9e740c9369f17dfb05deb745c932bc0898c71a981dae2a050e0"
+    },
+    {
+      "path": "Data/DATA.csv",
+      "bytes": 28014269,
+      "sha256": "5230e7c925e91fdce58c3a051203949b7d4733564c99cb567b35c0a08bbff4ad"
+    },
+    {
+      "path": "Data/LOCATION.csv",
+      "bytes": 91232,
+      "sha256": "80b33043f7ab11fbfddbc8ee7ff77de5aacf75cc314d54ca75f7368219409b12"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_MSL.csv",
+      "bytes": 490235,
+      "sha256": "3ad5a3c00b3db34d0f273c29948b3f0e69f2da6897b2229c34502b92af4e0746"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_PRIOR.csv",
+      "bytes": 166463,
+      "sha256": "7e2eb0a30982a283258d1b90c8a50b6c71b044efda7abac8c11776f535acfc35"
+    },
+    {
+      "path": "Data/WaterQ.csv",
+      "bytes": 449172,
+      "sha256": "d2bbf51a8a0424c79e70a6d576cad90007b5dfb93f8db6eabb402b202e5a92df"
+    },
+    {
+      "path": "Data/WaterQ_Sources/GLIM_LAYER_METADATA.json",
+      "bytes": 39438,
+      "sha256": "43b58bdf7c5ad45d264b97c970a3571381d80cb8307f62dc54ed721e290ef522"
+    },
+    {
+      "path": "Data/WaterQ_Sources/MASHHAD_GEE_COVARIATES.npy",
+      "bytes": 896480,
+      "sha256": "aec881527c3bf99dd231e5052207741f68ee367922d63a86276a23c7ebf3d2df"
+    },
+    {
+      "path": "Data/WaterQ_Sources/MASHHAD_GLIM.geojson",
+      "bytes": 1100333,
+      "sha256": "d5e0b297100dd5e2cfa90ce2a03406bfc0869225adb7a5098c0b3d9fa56c6fbb"
+    },
+    {
+      "path": "Data/WaterQ_Sources/MASHHAD_WATERQ_SOURCE_METADATA.json",
+      "bytes": 1717,
+      "sha256": "5daddc18df3d5e246fcfa31ef56b17c36e8cdbc24ba9576982832dd0f14424f1"
+    },
+    {
+      "path": "Data/WaterQ_Sources/README.fa.md",
+      "bytes": 2817,
+      "sha256": "cac3be035e3199deb509887c789e4d79b30c666700e2afdd692c4568bac8f8d8"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d-maps.js",
+      "bytes": 26399,
+      "sha256": "8c760f91626469b7b1fdb69523450a53fbd26eca9042cb398a4d9e61e10d21fa"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d-quality.js",
+      "bytes": 10618,
+      "sha256": "d8b3334d028cb1bb9fd23efbcf6d5269b01979f25d3575f5afc10fb9da00eac6"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d-worker.js",
+      "bytes": 6522,
+      "sha256": "d1a34e9f566d942c1cc3a58636a5a3d4b6068c30170e058c6f88b504e300d008"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d_compute.py",
+      "bytes": 64175,
+      "sha256": "351b28f0d1dc05ddf9e9d3803b68491734356de6d03f00a6b90dc51fd36ae8a9"
+    },
+    {
+      "path": "scripts/fetch_waterq_sources.py",
+      "bytes": 6309,
+      "sha256": "425cd79b4d5d2c7ecea1cdf8257107f23a2479aba0507b5ab945872419852406"
+    },
+    {
+      "path": "scripts/package_quality_report.py",
+      "bytes": 4183,
+      "sha256": "5b0e74c57ab21d99ef57d8738a4cf1942da692f7d3afea3c82318071ca522269"
+    },
+    {
+      "path": "scripts/render_quality_preview.py",
+      "bytes": 3016,
+      "sha256": "4f8837c81e63e98fd5129fbe6a385269858f2eeae53a9e8933015733388cf284"
+    },
+    {
+      "path": "scripts/run_waterq_browser.py",
+      "bytes": 8262,
+      "sha256": "4e50532c93a9f749881b85cb345b79bc1a74e1771fe4688dc06d33d0b38351a1"
+    },
+    {
+      "path": "scripts/waterq_compute.py",
+      "bytes": 37493,
+      "sha256": "db14916c14029625d83bfc827cf46034a0d4c47cfc719741b1723f003e012d35"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "outputs/water_quality/MASHHAD_EC.png",
+      "bytes": 169219,
+      "sha256": "1d0d2766be501a2f7f9c83902cec28073cb634f9059711bb8af8c9dfd39e96c9"
+    },
+    {
+      "path": "outputs/water_quality/MASHHAD_IRRIGATION_FRACTION.png",
+      "bytes": 171691,
+      "sha256": "87ed3fc9f103b883440ac0a43626bf4e9c8f10d5696d4c03d177f5eb96d57b6e"
+    },
+    {
+      "path": "outputs/water_quality/MASHHAD_QUALITY_ZONES.png",
+      "bytes": 145632,
+      "sha256": "17a36f562f970cf7c8f4ad97f12ee8264edc4c2eba6f056e2a4bf12bc47a561d"
+    },
+    {
+      "path": "outputs/water_quality/METHODS.fa.md",
+      "bytes": 14468,
+      "sha256": "0de19673bbd1ae70b1f9e540383480897d1ee8045a4b293b58cafcc374eaeefd"
+    },
+    {
+      "path": "outputs/water_quality/quality_drinking_pct.tif",
+      "bytes": 9096,
+      "sha256": "ce9d565c211b9af2912734005d263d5419fe88c17227c04de81f94b6324a4690"
+    },
+    {
+      "path": "outputs/water_quality/quality_ec.tif",
+      "bytes": 9088,
+      "sha256": "13e0ff9883a145ba84dde331a6ecd33173d7f2f0dacacdabfd0c4f629fe7a892"
+    },
+    {
+      "path": "outputs/water_quality/quality_sar.tif",
+      "bytes": 9088,
+      "sha256": "f3f5f179bfe7dec41bcc65880dc342674b066b34413d52fba6674546e133f4bd"
+    },
+    {
+      "path": "outputs/water_quality/quality_usable_pct.tif",
+      "bytes": 9096,
+      "sha256": "ca2eec6a2871aa013fa048254aa0f8171c98cb0990aa2bdc5b13014dac843ce5"
+    },
+    {
+      "path": "outputs/water_quality/quality_zone.tif",
+      "bytes": 9088,
+      "sha256": "51aab379edd62e49bbe1e09936c5ab23061ae16b77f943a36010582f1a714842"
+    },
+    {
+      "path": "outputs/water_quality/REPORT.fa.html",
+      "bytes": 724312,
+      "sha256": "84dddd96cba4bcb2eef514e288d42042273a7898130a40812377c7a19ac4fa7e"
+    },
+    {
+      "path": "outputs/water_quality/WATERQ_AUDIT.json",
+      "bytes": 2131,
+      "sha256": "44799e40d55c379136bf4b7053e2366c99d0fc3ea6aa90fb2cd1c58cd5d2f726"
+    },
+    {
+      "path": "outputs/water_quality/WATERQ_ESTIMATE.json",
+      "bytes": 6083,
+      "sha256": "b935af19eaecfa5488b0b75fd0b6103876ff3f019155707f5e27c21e546101f1"
+    },
+    {
+      "path": "outputs/water_quality/WATERQ_GRID.csv",
+      "bytes": 93422,
+      "sha256": "d2c4f5e1e80704a030c0651342482be3d1f079925ae67edd30e2affe04fb6adc"
+    },
+    {
+      "path": "outputs/water_quality/WATERQ_ZONES.geojson",
+      "bytes": 301570,
+      "sha256": "39b8c74fab47ba0098f51003c76b3e100e43a378d4396b9d7e6438728a545847"
+    }
+  ]
+}

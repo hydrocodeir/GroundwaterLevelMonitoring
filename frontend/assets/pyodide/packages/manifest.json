@@ -1,0 +1,66 @@
+{
+  "pyodide_version": "0.29.3",
+  "source": "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/",
+  "packages": [
+    {
+      "name": "certifi",
+      "file": "certifi-2026.1.4-py3-none-any.whl",
+      "sha256": "f4a28d9afc3e7f15bed4437710794d5c439d7f3aab1310767eea26eae3be534d",
+      "bytes": 152900
+    },
+    {
+      "name": "libopenblas",
+      "file": "libopenblas-0.3.26.zip",
+      "sha256": "f8f5db65c9367ed7f057d0ee853d94ddb3c007968aa8138253461dad42537fa2",
+      "bytes": 2119540
+    },
+    {
+      "name": "numpy",
+      "file": "numpy-2.2.5-cp313-cp313-pyodide_2025_0_wasm32.whl",
+      "sha256": "6eaab6a7bb658d71ebe702911a3deab715323642462eb41b65565ca6a7cc23f1",
+      "bytes": 3103966
+    },
+    {
+      "name": "pandas",
+      "file": "pandas-2.3.3-cp313-cp313-pyodide_2025_0_wasm32.whl",
+      "sha256": "5b1c0acfc8555be16057e8609e9eb7f279037c2469032bcc23e2a691380a50ae",
+      "bytes": 4493384
+    },
+    {
+      "name": "pyproj",
+      "file": "pyproj-3.7.2-cp313-cp313-pyodide_2025_0_wasm32.whl",
+      "sha256": "fd7af196bfb8d88c095293fa241498982cb39d7af15a3fc133ae533185d6d710",
+      "bytes": 3724971
+    },
+    {
+      "name": "python-dateutil",
+      "file": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+      "sha256": "ddca13fc1046572701872b9517622b57f847c77eea4bf9fdc995256e6c82beaf",
+      "bytes": 229892
+    },
+    {
+      "name": "pytz",
+      "file": "pytz-2025.2-py2.py3-none-any.whl",
+      "sha256": "5a9c9286f6c03a4d16ee4ced15d511097568e1e41329d3499b597ecd7f1d317e",
+      "bytes": 509225
+    },
+    {
+      "name": "scipy",
+      "file": "scipy-1.14.1-cp313-cp313-pyodide_2025_0_wasm32.whl",
+      "sha256": "96fbc718e81cf54ac7df7d8a2c24e370fa3c45086e917c3d58752207d85d21af",
+      "bytes": 13258840
+    },
+    {
+      "name": "shapely",
+      "file": "shapely-2.0.7-cp313-cp313-pyodide_2025_0_wasm32.whl",
+      "sha256": "3c14600713a254d407c92bccd2d8c679b23296ac1aacb69556cf1d5352d71f6c",
+      "bytes": 834626
+    },
+    {
+      "name": "six",
+      "file": "six-1.17.0-py2.py3-none-any.whl",
+      "sha256": "1f715fc699e802b31e53290ead6c16a4d6a8da462a225d2e06097fce45ab70b9",
+      "bytes": 11050
+    }
+  ]
+}

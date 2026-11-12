@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "mashhad-cumulative-1395-1404",
+      "label": "نشست تجمعی قائم؛ ۱۳۹۵ تا ۱۴۰۴ شمسی",
+      "csv_url": "/subsidence/Mashhad_cumulative.csv",
+      "metadata_url": "/subsidence/Mashhad_cumulative.metadata.json",
+      "extent_wgs84": [
+        58.616,
+        36.01981191588785,
+        59.93146144859812,
+        37.05260397196261
+      ]
+    }
+  ]
+}

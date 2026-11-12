@@ -10,12 +10,15 @@
     <link rel="apple-touch-icon" href="{{ url_for('assets', path='img/favicon-192.png') }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/leaflet.css') }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/workbench.css') }}?v={{ asset_version }}">
+    <script defer src="{{ url_for('assets', path='js/map-cities.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('assets', path='js/dashboard-help.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('assets', path='js/leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/echarts.min.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/echarts-extension-leaflet.js') }}"></script>
     <script defer src="{{ url_for('assets', path='js/comparison.js') }}?v={{ asset_version }}"></script>
   </head>
-  <body class="workspace-page comparison-page min-h-screen">
+  <body class="workbench-theme workspace-page comparison-page min-h-screen">
     {% set active_page = 'comparison' %}
     {% include 'partials/site_header.html' %}
     <header class="page-heading comparison-page-heading">
@@ -33,7 +36,7 @@
               آبخوان‌های فاقد داده کافی، خاکستری نمایش داده می‌شوند.
             </p>
           </div>
-          <div class="rounded-lg bg-teal/5 px-3 py-2 text-[10px] font-medium text-teal">
+          <div data-help-copy class="rounded-lg bg-teal/5 px-3 py-2 text-[10px] font-medium text-teal">
             پیزومترهای دارای داده در کل بازه
           </div>
         </div>
@@ -65,8 +68,8 @@
               <span class="field-label">روش فعال مقایسه</span>
               <select id="comparisonMapMethod" class="field h-11"></select>
             </label>
-            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] leading-5 text-slate-500">
-              فقط یک روش در هر لحظه نمایش داده می‌شود و با تغییر آن، نقشه و جدول به‌روزرسانی می‌شوند.
+            <div data-help-copy class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] leading-5 text-slate-500">
+              روش انتخابی محاسبه می‌شود؛ با تغییر آن، نقشه و جدول به‌روزرسانی می‌شوند.
             </div>
           </div>
           <button id="applyComparisonFilters" type="submit" class="primary-button">
@@ -134,7 +137,7 @@
             </div>
           </article>
         </div>
-        <div class="border-t border-slate-100 bg-white px-5 py-4 text-[10px] leading-6 text-slate-500">
+        <div data-help-copy class="border-t border-slate-100 bg-white px-5 py-4 text-[10px] leading-6 text-slate-500">
           مقدار مثبت و قرمز نشان‌دهنده افت، مقدار منفی و آبی نشان‌دهنده افزایش تراز و سفید نشان‌دهنده تغییر تقریباً صفر است. آبخوان خاکستری داده کافی برای شاخص انتخابی ندارد.
         </div>
       </section>

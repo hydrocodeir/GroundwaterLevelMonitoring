@@ -34,8 +34,15 @@ load_environment()
 
 app = FastAPI(title="داشبورد پایش آب زیرزمینی")
 app.mount("/assets", StaticFiles(directory=ROOT / "frontend" / "assets"), name="assets")
+app.mount("/subsidence", StaticFiles(directory=ROOT / "Data" / "Subsidence"), name="subsidence")
 templates = Jinja2Templates(directory=ROOT / "frontend" / "templates")
 templates.env.globals["asset_version"] = max(
+    (ROOT / "frontend" / "assets" / "js" / "dashboard-help.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "data" / "khorasan-razavi-urban.geojson").stat().st_mtime_ns,
+    (ROOT / "app" / "data_service.py").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "css" / "workbench.css").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "map-cities.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-views.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "css" / "app.css").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "app.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "comparison.js").stat().st_mtime_ns,
@@ -43,6 +50,14 @@ templates.env.globals["asset_version"] = max(
     (ROOT / "frontend" / "assets" / "js" / "aquifer3d-render.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "aquifer3d-tools.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "aquifer3d-maps.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-quality.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-workspace.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-layout.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "css" / "aquifer3d-workspace.css").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "css" / "aquifer3d-management.css").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-management.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer-management-compute.py").stat().st_mtime_ns,
+    (ROOT / "scripts" / "waterq_compute.py").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "aquifer3d_compute.py").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "css" / "aquifer3d.css").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "dashboard-worker.js").stat().st_mtime_ns,
@@ -119,6 +134,27 @@ def aquifer_3d_source_data(filename: str) -> FileResponse:
 @app.get("/dashboard-compute.py")
 def dashboard_compute_source() -> FileResponse:
     return FileResponse(ROOT / "app" / "data_service.py", media_type="text/x-python")
+
+
+@app.get("/water-quality/{filename}")
+def water_quality_static(filename: str) -> FileResponse:
+    paths = {
+        "compute.py": ROOT / "scripts/waterq_compute.py",
+        "WaterQ.csv": ROOT / "Data/WaterQ.csv",
+        "covariates.npy": ROOT / "Data/WaterQ_Sources/MASHHAD_GEE_COVARIATES.npy",
+        "geology.geojson": ROOT / "Data/WaterQ_Sources/MASHHAD_GLIM.geojson",
+        "sources.json": ROOT / "Data/WaterQ_Sources/MASHHAD_WATERQ_SOURCE_METADATA.json",
+    }
+    if filename not in paths or not paths[filename].is_file():
+        raise HTTPException(status_code=404, detail="منبع کیفیت پیدا نشد")
+    return FileResponse(paths[filename])
+
+
+@app.get("/runtime/quality-openblas")
+def quality_openblas_static() -> FileResponse:
+    return FileResponse(ROOT / "frontend/assets/pyodide/quality-openblas.bin",
+                        media_type="application/octet-stream",
+                        headers={"Content-Disposition": "inline"})
 
 
 @app.get("/runtime/python-stdlib")

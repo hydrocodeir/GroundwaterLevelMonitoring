@@ -1,0 +1,1 @@
+[out:json][timeout:45];(node[place=city](33,55,39,63);node[place=town](33,55,39,63););out body;

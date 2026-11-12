@@ -1,0 +1,205 @@
+{
+  "aquifer": {
+    "name": "مشهد",
+    "mahdoude": "مشهد",
+    "area_km2": 2526.19
+  },
+  "volume_dates": {
+    "before": "1381-06",
+    "after": "1405-06",
+    "before_water_year": 1380,
+    "after_water_year": 1404
+  },
+  "quality_water_year": 1403,
+  "window_years": 3,
+  "volume_model": {
+    "sy_mode": "spatial",
+    "sy": null,
+    "sy_min": 0.042259377354057395,
+    "sy_max": 0.09531679082480854,
+    "bedrock_source": "mashhad_msl",
+    "common_wells": 45,
+    "input_files": {
+      "bedrock": "mashhad_msl",
+      "sy": "MASHHAD_SY_PRIOR.csv"
+    },
+    "allocation": "Pixel storage weights normalized to analytical 38x38 total; Sy fixed with depth within a column"
+  },
+  "quality_input_file": "WaterQ.csv",
+  "newest_available_quality_water_year": 1403,
+  "quality_volume_year_gap": 1,
+  "records_in_window": 338,
+  "sites": 105,
+  "thresholds": {
+    "drinking_ec_uScm": 1500.0,
+    "irrigation_ec_uScm": 3000.0
+  },
+  "vertical_model": {
+    "bottom_top_ec_ratio": 1.0,
+    "reference": "geometric_mid_depth_proxy",
+    "calibrated_from_depth_samples": false
+  },
+  "total_remaining_mcm": 14295.315818538924,
+  "volumes_mcm": {
+    "drinking": 8551.257148027305,
+    "irrigation": 12148.741143733769,
+    "unknown": 922.6498035371408,
+    "irrigation_unknown": 922.6498035371408,
+    "drinking_low": 4383.870118807244,
+    "drinking_high": 12111.819854578827,
+    "irrigation_low": 8190.332423042041,
+    "irrigation_high": 13372.666015001794,
+    "drinking_excluded": 4821.408866974478,
+    "irrigation_excluded": 1223.9248712680146
+  },
+  "depth_sensitivity": {
+    "0.5": {
+      "drinking_mcm": 8828.68881857094,
+      "irrigation_mcm": 12109.030824586343
+    },
+    "1": {
+      "drinking_mcm": 8551.257148027305,
+      "irrigation_mcm": 12148.741143733769
+    },
+    "2": {
+      "drinking_mcm": 8828.68881857094,
+      "irrigation_mcm": 12109.030824586343
+    },
+    "4": {
+      "drinking_mcm": 8780.45697417982,
+      "irrigation_mcm": 11820.568216898333
+    }
+  },
+  "validation": {
+    "method": "5 folds of 10km spatial blocks; all repeated site observations aggregated before split",
+    "fold_count": 5,
+    "scores": {
+      "idw": {
+        "rmse_log": 0.607366092910619,
+        "mae_ec": 770.162893177803,
+        "rmse_ec": 1225.4143878603807
+      },
+      "trend_idw": {
+        "rmse_log": 0.6125154612859097,
+        "mae_ec": 778.5470670598716,
+        "rmse_ec": 1242.236957263092
+      },
+      "gee_idw": {
+        "rmse_log": 0.6199204428127134,
+        "mae_ec": 763.7252594127486,
+        "rmse_ec": 1200.9480683079012
+      },
+      "geology_gee_idw": {
+        "rmse_log": 0.6720947700921908,
+        "mae_ec": 783.2764015454215,
+        "rmse_ec": 1220.125531184302
+      }
+    },
+    "selected": "idw",
+    "residual_log_q10_q90": [
+      -0.6621637947218832,
+      0.766992836473203
+    ],
+    "support_radius_m": 9156.490196491764,
+    "note": "Model-selection CV and EC sensitivity, not an independent 95% CI or validation of depth assumptions"
+  },
+  "covariates": {
+    "raster_fields": [
+      "elevation",
+      "slope",
+      "ndvi",
+      "ndwi",
+      "bsi",
+      "swir_ratio",
+      "crops",
+      "built",
+      "bare"
+    ],
+    "lithology_codes": [
+      "ev",
+      "mt",
+      "pa",
+      "pb",
+      "sc",
+      "sm",
+      "ss",
+      "su",
+      "vb",
+      "vi"
+    ],
+    "invalid_public_geology_geometries_repaired": 2,
+    "geology_repair": "Shapely make_valid before clipping; original source retained unchanged"
+  },
+  "limitations": [
+    "EC-only drinking salinity screen; not potability certification",
+    "Agriculture: EC ceiling plus avoidance of FAO severe EC/SAR infiltration restriction; not crop-specific yield or full water suitability",
+    "Vertical allocation is a scenario; surface imagery does not measure deep EC",
+    "Volumes are potential drainable storage, not sustainable abstraction",
+    "Outside convex hull or validated-distance support remains unknown; unknown is never assigned fresh water",
+    "Depth-scenario and EC-error ranges are sensitivity ranges, not statistical confidence intervals"
+  ],
+  "public_source_metadata": {
+    "aquifer": "مشهد",
+    "water_year_start": 1401,
+    "water_year_end": 1403,
+    "gregorian_start": "2022-09-23",
+    "gregorian_end_exclusive": "2025-09-23",
+    "scale_m": 1000,
+    "region_bbox": [
+      [
+        58.38670000129127,
+        35.930111283696604
+      ],
+      [
+        60.04212295551273,
+        35.930111283696604
+      ],
+      [
+        60.04212295551273,
+        37.0978114785792
+      ],
+      [
+        58.38670000129127,
+        37.0978114785792
+      ],
+      [
+        58.38670000129127,
+        35.930111283696604
+      ]
+    ],
+    "gee_datasets": [
+      "USGS/SRTMGL1_003",
+      "COPERNICUS/S2_SR_HARMONIZED",
+      "ESA/WorldCover/v200"
+    ],
+    "s2_sampling": "Three least-cloudy scenes per MGRS tile in the reference window; reflectance resampled to 250m before indices, median then 1km averaging; NOT an annual vegetation mean",
+    "landcover_epoch": 2021,
+    "variables": [
+      "elevation",
+      "slope",
+      "ndvi",
+      "ndwi",
+      "bsi",
+      "swir_ratio",
+      "crops",
+      "built",
+      "bare"
+    ],
+    "interpretation": "Explanatory surface covariates, NOT measured groundwater EC or a vertical salinity profile",
+    "private_quality_rows_sent_to_cloud": false,
+    "geology": {
+      "url": "https://services8.arcgis.com/4KhTMTZ1x0f76DSg/arcgis/rest/services/GLiM_Niveau_I/FeatureServer/1",
+      "primary_doi": "10.1029/2012GC004370",
+      "version": "GLiM v1.1 level I",
+      "scale_note": "Regional lithology assembled at target 1:1M; not local borehole geology"
+    },
+    "sha256": {
+      "MASHHAD_GEE_COVARIATES.npy": "aec881527c3bf99dd231e5052207741f68ee367922d63a86276a23c7ebf3d2df",
+      "MASHHAD_GLIM.geojson": "d5e0b297100dd5e2cfa90ce2a03406bfc0869225adb7a5098c0b3d9fa56c6fbb"
+    }
+  },
+  "units_assumed": {
+    "ec": "uS/cm, treated as EC25; source temperature correction not documented",
+    "utm": "WGS84 north; original datum not documented"
+  }
+}

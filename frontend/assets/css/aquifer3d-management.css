@@ -1,0 +1,35 @@
+.a3-management{padding:22px;color:#27465c;min-width:0}
+.a3-management-inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:16px 0}
+.a3-management label{display:flex;flex-direction:column;gap:7px;font-size:12px;min-width:0}
+.a3-management input,.a3-management select,.a3-management button{min-height:44px;border:1px solid #bbceda;border-radius:5px;padding:8px 11px;background:white;color:#27465c;font:12px Vazirmatn,Tahoma,sans-serif;max-width:100%}
+.a3-management input[type=number]{direction:ltr;text-align:left}
+.a3-management small{font-size:10px;line-height:1.9;color:#536e7e}
+.a3-management button{cursor:pointer}.a3-management button:hover{background:#edf5f8}.a3-management button:disabled{opacity:.55;cursor:wait}
+.a3-management p{font-size:12px;line-height:1.95;margin:12px 0}
+.a3-management-settings{border:1px solid #d8e2e7;border-radius:5px;padding:12px 14px;margin:14px 0}
+.a3-management-settings summary{font-size:12px;cursor:pointer;min-height:30px;line-height:2}
+.a3-management-settings summary span{font-size:10px;color:#617984;margin-inline-start:12px;overflow-wrap:anywhere}
+.a3-management .a3-actions{align-items:center}.a3-management [data-m-run]{background:#14647a;color:#fff;border-color:#14647a;font-weight:600}
+.a3-management [data-m-status],.a3-management [data-m-source-status]{font-size:12px;line-height:2}
+.a3-management-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:20px;border:1px solid #d8e2e7;border-radius:6px;overflow:hidden}
+.a3-management-cards article{display:flex;flex-direction:column;gap:10px;padding:14px;border-inline-end:1px solid #d8e2e7;background:#f9fbfc}
+.a3-management-cards article:last-child{border:0}.a3-management-cards span{font-size:11px;line-height:1.9}.a3-management-cards strong{font-size:19px;color:#19536a}
+.a3-management-caution{border-inline-start:3px solid #b29a64;background:#faf7ef;padding:12px 14px}
+.a3-management-tabs{display:flex;overflow-x:auto;gap:4px;margin-top:18px;border-bottom:1px solid #bbceda}
+.a3-management-tabs{position:sticky;top:0;background:#fff;z-index:3}
+.a3-management-tabs button{flex:none;white-space:nowrap;border:0;border-bottom:3px solid transparent;border-radius:0;padding:10px 13px}
+.a3-management-tabs button[aria-selected=true]{background:#e8f1f4;color:#125b70;border-bottom-color:#14647a;font-weight:600}
+.a3-management-zones{display:flex;flex-wrap:wrap;gap:10px 22px;padding:12px 0}
+.a3-management-zones span{display:inline-flex;align-items:center;gap:7px;font-size:11px}.a3-management-zones i{width:12px;height:12px;display:inline-block;border:1px solid #8ba0ab;border-radius:2px}
+.a3-management .a3-management-horizon{display:flex;flex-direction:row;align-items:center;gap:12px;margin-top:18px}
+.a3-management-chart svg{display:block;width:100%;font:12px Vazirmatn,Tahoma,sans-serif;direction:ltr;background:#fff;border:1px solid #d8e2e7;border-radius:5px;margin:14px 0}
+.a3-management .a3-table-wrap{margin:14px 0;max-height:420px;overflow:auto;border:1px solid #d8e2e7}
+.a3-management table{width:100%;border-collapse:collapse;font-size:11px}
+.a3-management th,.a3-management td{text-align:start;padding:10px;border-bottom:1px solid #d8e2e7;white-space:nowrap}
+.a3-management th{position:sticky;top:0;background:#edf4f7;font-weight:600}
+.a3-management code{direction:ltr;unicode-bidi:isolate;font-size:11px;overflow-wrap:anywhere}
+.a3-management :focus-visible{outline:2px solid #14647a;outline-offset:3px}
+body.a3-presenting #a3Panel-management{display:none!important}
+@media(max-width:1400px){.a3-management-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.a3-management-cards article{border-bottom:1px solid #d8e2e7}.a3-management-cards article:nth-child(2){border-inline-end:0}.a3-management-cards article:nth-child(3){border-bottom:0}}
+@media(max-width:850px){.a3-management-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.a3-management{padding:14px}.a3-management-inputs{grid-template-columns:1fr}.a3-management-cards{grid-template-columns:1fr}.a3-management-cards article{border-inline-end:0!important;border-bottom:1px solid #d8e2e7!important}.a3-management-cards article:last-child{border:0!important}.a3-management .a3-actions{align-items:stretch;flex-direction:column}.a3-management .a3-management-horizon{align-items:stretch;flex-direction:column}.a3-management-chart svg{min-height:200px}.a3-management-map{padding:5px}.a3-management-settings{padding:10px}}

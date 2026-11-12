@@ -8,33 +8,30 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('assets', path='img/favicon-32.png') }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d-management.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d-workspace.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/workbench.css') }}?v={{ asset_version }}">
+    <script defer src="{{ url_for('assets', path='js/map-cities.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('assets', path='js/dashboard-help.js') }}?v={{ asset_version }}"></script>
     <script type="module" src="{{ url_for('assets', path='js/aquifer3d.js') }}?v={{ asset_version }}"></script>
   </head>
-  <body class="aquifer3d-page">
+  <body class="workbench-theme aquifer3d-page">
     {% set active_page = '3d' %}
     {% include 'partials/site_header.html' %}
+
+    <a class="a3-skip" href="#a3WorkspaceMain">رفتن به نتایج</a>
     <div class="aquifer3d-shell">
-      <header class="page-heading">
-        <div><h1>نمای سه‌بعدی آبخوان</h1><p id="comparisonIntro">مقایسهٔ سطح آب و تغییر ذخیره بین شهریور مبنا و آخرین شهریور دارای داده</p></div>
-        <span class="page-period" id="comparisonEnd">انتهای مقایسه: آخرین شهریور دارای داده</span>
+      <header class="a3-workspace-heading">
+        <div><h1>نمای سه‌بعدی آبخوان</h1><p id="comparisonIntro">مقایسهٔ سطح آب و تغییر ذخیره بین دو زمان</p></div>
+<div class="a3-heading-actions"><button type="button" data-open-tool="export">خروجی و گزارش</button></div>
       </header>
-
-      <main>
-        <section class="aquifer3d-config aquifer3d-card" aria-labelledby="aquifer3d-config-title">
-          <div class="aquifer3d-section-heading">
-            <div>
-              <p class="aquifer3d-kicker">۰۱ / ورودی‌های تحلیل</p>
-              <h2 id="aquifer3d-config-title">محدوده و فرض‌های محاسبه</h2>
-            </div>
-          </div>
-
-          <div class="aquifer3d-form-grid">
+<div class="a3-quick-controls"><div class="a3-quick-fields">
             <label class="aquifer3d-field" for="aquiferSelect3d">
               <span class="aquifer3d-field-label">آبخوان</span>
               <select id="aquiferSelect3d" required aria-describedby="aquifer3d-aquifer-help">
                 <option value="">در حال بارگذاری آبخوان‌ها…</option>
               </select>
-              <small id="aquifer3d-aquifer-help">مرز سه‌بعدی از پلیگون همین آبخوان ساخته می‌شود.</small>
+              <small id="aquifer3d-aquifer-help">مرز و پیزومترهای آبخوان انتخابی استفاده می‌شوند.</small>
             </label>
 
             <label class="aquifer3d-field" for="baselineYear">
@@ -45,10 +42,22 @@
               <small id="aquifer3d-year-help">شهریور سال انتخابی؛ پایان سال آبیِ آغازشده در سال قبل.</small>
             </label>
 
+</div><div class="a3-quick-actions"><button id="toggleA3Settings" class="a3-settings-toggle" type="button" aria-controls="a3Settings" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg>تنظیمات مدل</button><button id="build3d" class="aquifer3d-build-button" type="button">محاسبه و نمایش</button></div></div>
+      <div class="a3-workspace-layout" id="a3Workspace" data-settings="closed" data-state="loading" data-scene="geology">
+        <aside id="a3Settings" aria-label="ورودی‌های تحلیل">
+<section class="aquifer3d-config aquifer3d-card" aria-labelledby="aquifer3d-config-title">
+          <div class="aquifer3d-section-heading a3-settings-heading">
+            <div>
+
+              <h2 id="aquifer3d-config-title">تنظیم تحلیل</h2><button id="closeA3Settings" type="button" aria-label="بستن تنظیمات">×</button>
+            </div>
+          </div>
+
+<div class="a3-settings-body"><details class="a3-input-details" open><summary>آبدهی ویژه (Sy)</summary><div class="aquifer3d-form-grid">
             <label class="aquifer3d-field" for="syMode">
               <span class="aquifer3d-field-label">روش تعیین آبدهی ویژه</span>
               <select id="syMode"><option value="constant">Sy ثابت برای کل آبخوان</option><option value="spatial">Sy مکانی از فایل CSV</option></select>
-              <small>برای تبدیل ضخامت اشباع به ارتفاع معادل آب قابل زهکشی.</small>
+              <small>تبدیل ضخامت اشباع به معادل آب قابل زهکشی.</small>
             </label>
             <label class="aquifer3d-field" id="syConstantField" for="syInput">
               <span class="aquifer3d-field-label">آبدهی ویژه <span dir="ltr">(Sy)</span></span>
@@ -65,6 +74,7 @@
               <small id="syFileHelp">ستون‌های <code dir="ltr">longitude,latitude,Sy</code>؛ مختصات WGS84، Sy بین صفر و یک (مثلاً ۰٫۰۶). نقاط باید پیرامون آبخوان را هم پوشش دهند.</small>
             </label>
 
+          </div></details><details class="a3-input-details"><summary>سنگ‌بستر و فایل جایگزین</summary><div class="aquifer3d-form-grid">
             <label class="aquifer3d-field" id="karatThicknessField" for="karatThicknessInput" hidden>
               <span class="aquifer3d-field-label" id="karatThicknessLabel">ضخامت اشباع فرضی کرات در تاریخ پایان</span>
               <span class="aquifer3d-input-suffix">
@@ -81,55 +91,69 @@
             </label>
           </div>
 
-          <div class="aquifer3d-action-row">
-            <button id="build3d" class="aquifer3d-build-button" type="button">محاسبه و نمایش</button>
-            <p id="status3d" class="aquifer3d-status" role="status" aria-live="polite">برای شروع، آبخوان و سال مبنا را انتخاب کنید.</p>
+          </details></div><div class="aquifer3d-action-row">
+            <p id="a3SettingsFeedback" role="status" aria-live="polite" hidden></p>
+            <button id="a3SettingsApply" class="aquifer3d-build-button" type="button">اعمال تنظیمات</button>
+            <p>تغییرات پس از زدن «اعمال تنظیمات» وارد محاسبه می‌شوند.</p>
           </div>
         </section>
-
-        <section class="aquifer3d-summary" aria-labelledby="aquifer3d-summary-title">
-          <div class="aquifer3d-section-heading aquifer3d-summary-heading">
-            <div>
-              <p class="aquifer3d-kicker">۰۲ / برآوردها</p>
-              <h2 id="aquifer3d-summary-title">نتایج محاسبه</h2>
-            </div>
-            <p>اعداد پس از اجرای تحلیل ظاهر می‌شوند.</p>
-          </div>
-          <div class="aquifer3d-metrics">
-            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">▧</span><span class="aquifer3d-metric-label">مساحت آبخوان</span><strong id="areaMetric">—</strong><small>بر پایهٔ مرز GeoJSON سامانه</small></article>
-            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">⌁</span><span class="aquifer3d-metric-label">پیزومترهای دارای داده</span><strong id="wellMetric">—</strong><small>پوشش دو زمان مقایسه</small></article>
+        </aside>
+        <button class="a3-settings-backdrop" id="a3SettingsBackdrop" type="button" aria-label="بستن تنظیمات" tabindex="-1" hidden></button>
+<aside class="a3-section-rail" aria-label="بخش‌های تحلیل">          <div class="a3-context-bar"><div><strong id="a3ActiveAquifer">در حال بارگذاری آبخوان…</strong><span class="page-period" id="comparisonEnd">انتهای مقایسه: آخرین شهریور دارای داده</span></div><span id="a3ResultState" data-state="loading">در حال آماده‌سازی</span></div>
+          <nav class="a3-workspace-tabs" role="tablist" aria-label="بخش‌های نمای سه‌بعدی" aria-orientation="vertical">
+            <button id="a3Nav-scenes" role="tab" aria-selected="true" aria-controls="a3Panel-scenes" type="button" data-workspace-tab="scenes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v9l-9 5-9-5V8Zm0 10v9M3 8l9 5 9-5"/></svg><span><strong>نمای آبخوان</strong><small>سطح آب و ذخیره</small></span></button>
+            <button id="a3Nav-quality" role="tab" aria-selected="false" aria-controls="a3Panel-quality" type="button" tabindex="-1" data-workspace-tab="quality" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-12ZM8 15a4 4 0 0 0 4 4"/></svg><span><strong>کیفیت آب</strong><small>شوری و حجم قابل استفاده</small></span></button>
+            <button id="a3Nav-management" role="tab" aria-selected="false" aria-controls="a3Panel-management" type="button" tabindex="-1" data-workspace-tab="management" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M5 15l5-5 4 2 5-7M15 5h4v4"/></svg><span><strong>آینده و اقدام</strong><small>اولویت، آستانه و فرونشست</small></span></button>
+            <button id="a3Nav-parameters" role="tab" aria-selected="false" aria-controls="a3Panel-parameters" type="button" tabindex="-1" data-workspace-tab="parameters" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 9-4 9 4-9 4Zm0 5 9 4 9-4M3 17l9 4 9-4"/></svg><span><strong>لایه‌های ورودی</strong><small>Sy، سنگ‌بستر و فرونشست</small></span></button>
+            <button id="a3Nav-tools" role="tab" aria-selected="false" aria-controls="a3Panel-tools" type="button" tabindex="-1" data-workspace-tab="tools" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H4ZM9 20l3-4 3 4M8 12l3-3 3 2 3-4"/></svg><span><strong>تحلیل و خروجی</strong><small>برش، مقایسه و خروجی</small></span></button>
+            <button id="a3Nav-sources" role="tab" aria-selected="false" aria-controls="a3Panel-sources" type="button" tabindex="-1" data-workspace-tab="sources"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6ZM14 3v5h5M9 12h7M9 16h7"/></svg><span><strong>منابع و فرض‌ها</strong><small>پوشش و روش محاسبه</small></span></button>
+          </nav></aside>
+        <main id="a3WorkspaceMain" tabindex="-1">
+<div id="a3DraftNotice" class="a3-draft-notice" hidden><div><strong>تنظیمات جدید هنوز اعمال نشده‌اند</strong><p>نمودارها و خروجی‌ها مربوط به آخرین محاسبه‌اند.</p></div><button id="a3ApplyDraft" type="button">اعمال تغییرات</button><button id="a3DiscardDraft" type="button">برگرداندن تنظیمات</button></div>
+          <div class="a3-panel-heading"><div><h2 id="a3SectionTitle">نمای آبخوان</h2><p id="a3SectionDescription">سطح آب، سنگ‌بستر و تغییر ذخیره</p></div><label class="a3-mobile-section" for="a3SectionSelect"><span>بخش نمایش</span><select id="a3SectionSelect"></select></label></div>
+          <div class="a3-status-strip"><span class="a3-status-dot" aria-hidden="true"></span><p id="status3d" class="aquifer3d-status" role="status" aria-live="polite">برای شروع، آبخوان و سال مبنا را انتخاب کنید.</p></div>
+<section class="aquifer3d-summary" data-metrics-expanded="false" aria-label="خلاصهٔ نتایج محاسبه">
+          <button id="a3MobileSummary" class="a3-mobile-summary" type="button" aria-expanded="false" aria-controls="a3Metrics">خلاصهٔ نتایج <span id="a3MobileMetricValue">—</span><span aria-hidden="true">⌄</span></button>
+          <div id="a3Metrics" class="aquifer3d-metrics">
+            <article data-secondary-metric class="aquifer3d-metric"><span class="aquifer3d-metric-icon">▧</span><span class="aquifer3d-metric-label">مساحت آبخوان</span><strong id="areaMetric">—</strong><small>بر پایهٔ مرز GeoJSON سامانه</small></article>
+            <article data-secondary-metric class="aquifer3d-metric"><span class="aquifer3d-metric-icon">⌁</span><span class="aquifer3d-metric-label">پیزومترهای دارای داده</span><strong id="wellMetric">—</strong><small>پوشش دو زمان مقایسه</small></article>
             <article class="aquifer3d-metric aquifer3d-metric-warn"><span class="aquifer3d-metric-icon">↓</span><span class="aquifer3d-metric-label">تغییر میانگین سطح آب</span><strong id="declineMetric">—</strong><small>متر؛ بین دو شهریور</small></article>
             <article class="aquifer3d-metric aquifer3d-metric-accent"><span class="aquifer3d-metric-icon">◒</span><span class="aquifer3d-metric-label">تغییر برآوردی ذخیرهٔ آب</span><strong id="storageMetric">—</strong><small>با آبدهی ویژهٔ انتخابی</small></article>
-            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label">حجم آب قابل زهکشی در سال مبنا</span><strong id="volumeBeforeMetric">—</strong><small id="volumeBeforeHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
+            <article data-secondary-metric class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label">حجم آب قابل زهکشی در سال مبنا</span><strong id="volumeBeforeMetric">—</strong><small id="volumeBeforeHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
             <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label" id="volumeAfterLabel">حجم آب قابل زهکشی در تاریخ پایان</span><strong id="volumeAfterMetric">—</strong><small id="volumeAfterHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
           </div>
+          <button id="a3MoreMetrics" class="a3-more-metrics" type="button" aria-expanded="false">مساحت، پوشش داده و حجم مبنا <span aria-hidden="true">⌄</span></button>
         </section>
+          <p class="a3-volume-caution">حجم قابل زهکشی، معادل آب قابل بهره‌برداری نیست. <button id="a3OpenQuality" type="button">بررسی محدودیت شوری و حجم قابل استفاده</button></p>
 
-        <section class="aquifer3d-scenes" aria-labelledby="aquifer3d-scenes-title">
-          <div class="aquifer3d-section-heading">
-            <div>
-              <p class="aquifer3d-kicker">۰۳ / تصویر مقایسه‌ای</p>
-              <h2 id="aquifer3d-scenes-title">افت سطح آب و تغییر ذخیره</h2>
-            </div>
-            <div class="aquifer3d-legend"><span><i class="aquifer3d-legend-bedrock"></i> <span id="bedrockLegendLabel">سنگ‌بستر</span></span></div>
+          <div class="a3-workspace-panel" id="a3Panel-scenes" role="tabpanel" aria-labelledby="a3Nav-scenes" data-workspace-panel="scenes">
+            <div id="a3EmptyState" class="a3-empty-state"><svg viewBox="0 0 100 80" aria-hidden="true"><path d="m10 29 40-20 40 20-40 20Z M10 42l40 20 40-20M10 55l40 20 40-20"/></svg><h2 id="a3EmptyTitle">در حال آماده‌سازی مدل آبخوان</h2><p id="a3EmptyText">داده‌ها و محیط محاسبه برای نخستین نمایش بارگذاری می‌شوند.</p><button id="a3EmptyAction" type="button" hidden>تنظیم ورودی‌ها</button></div>
+<section class="aquifer3d-scenes" aria-label="نمایش سطح آب و ذخیره">
+
+          <select id="a3SceneSelect" class="a3-mobile-scene-select" aria-label="نوع نمایش آبخوان"><option value="geology">افت نسبت به سنگ‌بستر</option><option value="water">آب باقی‌مانده و از دست‌رفته</option><option value="both">دو نما کنار هم</option></select>
+          <div class="a3-view-switcher" role="tablist" aria-label="نمودار سه‌بعدی">
+            <button id="sceneGeologyTab" type="button" role="tab" aria-selected="true" aria-controls="sceneGeology" data-scene-view="geology">افت نسبت به سنگ‌بستر</button>
+            <button id="sceneWaterTab" type="button" role="tab" aria-selected="false" aria-controls="sceneWater" tabindex="-1" data-scene-view="water">آب باقی‌مانده و از دست‌رفته</button>
+            <button id="sceneBothTab" type="button" role="tab" aria-selected="false" aria-controls="sceneGeology sceneWater" tabindex="-1" data-scene-view="both">نمای کنار هم</button>
           </div>
           <div class="aquifer3d-toolbar" role="group" aria-label="کنترل نمای سه‌بعدی">
-            <button type="button" data-camera="in" disabled aria-label="بزرگ‌نمایی">+ بزرگ‌نمایی</button>
-            <button type="button" data-camera="out" disabled aria-label="کوچک‌نمایی">− کوچک‌نمایی</button>
-            <button type="button" data-camera="top" disabled>نمای بالا</button>
-            <button type="button" data-camera="reset" disabled>بازنشانی نما</button>
+            <button type="button" data-camera="in" disabled aria-label="بزرگ‌نمایی" title="بزرگ‌نمایی">+</button>
+            <button type="button" data-camera="out" disabled aria-label="کوچک‌نمایی" title="کوچک‌نمایی">−</button>
+<details id="a3CameraPresets" class="a3-camera-presets" open><summary>نماها</summary><div>            <label class="a3-camera-view-label" for="a3CameraView">زاویهٔ دید<select id="a3CameraView" aria-label="نماهای سه‌بعدی" disabled><option value="oblique">مایل</option></select></label>
+            <button type="button" data-camera="reset" disabled>بازنشانی نما</button></div></details>
             <button type="button" data-interaction="rotate" aria-pressed="true">چرخش</button>
-            <button type="button" data-interaction="pan" aria-pressed="false">جابجایی با ماوس / قلم</button>
+            <button type="button" data-interaction="pan" aria-pressed="false">جابه‌جایی</button>
             <output id="zoomLabel" aria-live="polite">۱۰۰٪</output>
-            <span>چرخ ماوس: زوم · راست‌کلیک و کشیدن: جابجایی · دو انگشت: زوم و جابجایی</span>
+
           </div>
+          <div class="a3-scene-context"><label class="hydro-city-toggle"><input id="a3CitiesToggle" type="checkbox" checked><i class="hydro-city-key" aria-hidden="true"></i>شهرها</label><small id="a3CitiesNote">GHSL ۲۰۲۵ · بافت شهری؛ مرز قانونی نیست</small></div>
           <div class="aquifer3d-scene-grid">
-            <article class="aquifer3d-scene aquifer3d-scene-before">
-              <div class="aquifer3d-scene-heading"><h3>افت سطح آب نسبت به سنگ‌بستر</h3><p>حجم‌های نیمه‌شفاف؛ اتصال کفِ نمایشی به سطح مبنا در مرز</p><div class="aquifer3d-scene-actions"><button type="button" data-video-kind="geology" disabled aria-live="polite">فیلم دو دور · افت روشن / خاموش</button><button type="button" data-fullscreen="beforeCanvas">تمام‌صفحه</button></div><div class="aquifer3d-layer-options"><label><input type="checkbox" data-scene-layer="bedrock" checked> سنگ‌بستر</label><label><input type="checkbox" data-scene-layer="wells" checked> پیزومترها</label><label class="balance-retained"><input type="checkbox" data-scene-layer="blue" checked> آبی: باقی‌مانده</label><label class="balance-lost"><input type="checkbox" data-scene-layer="red" checked> قرمز: افت</label><label class="balance-gained"><input type="checkbox" data-scene-layer="green" checked> سبز: افزایش</label></div></div>
+            <article id="sceneGeology" class="aquifer3d-scene aquifer3d-scene-before" role="tabpanel" aria-labelledby="sceneGeologyTab">
+              <div class="aquifer3d-scene-heading"><h3>افت سطح آب نسبت به سنگ‌بستر</h3><p>آبی: لایهٔ باقی‌مانده · قرمز: افت از زمان مبنا · سبز: افزایش موضعی</p><div class="aquifer3d-scene-actions"><details class="a3-layer-disclosure"><summary>لایه‌ها</summary><div class="aquifer3d-layer-options"><label><input type="checkbox" data-scene-layer="bedrock" checked> سنگ‌بستر</label><label><input type="checkbox" data-scene-layer="wells" checked> پیزومترها</label><label class="balance-retained"><input type="checkbox" data-scene-layer="blue" checked> آبی: باقی‌مانده</label><label class="balance-lost"><input type="checkbox" data-scene-layer="red" checked> قرمز: افت</label><label class="balance-gained"><input type="checkbox" data-scene-layer="green" checked> سبز: افزایش</label></div></details><button type="button" data-video-kind="geology" disabled aria-live="polite">فیلم دو دور · افت روشن / خاموش</button><button type="button" data-fullscreen="beforeCanvas">تمام‌صفحه</button></div></div>
               <div class="aquifer3d-canvas-wrap"><canvas id="beforeCanvas" width="900" height="660" tabindex="0" role="img" aria-label="لایه اشباع سه‌بعدی؛ کلیدهای مثبت و منفی برای زوم و کلیدهای جهت برای چرخش"></canvas></div>
               <div class="aquifer3d-scene-caption" id="saturatedCaption">پس از محاسبه نمایش داده می‌شود.</div>
             </article>
-            <article class="aquifer3d-scene aquifer3d-scene-after">
+            <article id="sceneWater" class="aquifer3d-scene aquifer3d-scene-after" role="tabpanel" aria-labelledby="sceneWaterTab" hidden>
               <div class="aquifer3d-scene-heading"><h3>آب باقی‌مانده و از دست رفته</h3><p id="waterViewSubtitle">ستون‌های مربعی روی محدودهٔ آبخوان؛ آبی در پایین، قرمز روی آن</p><div class="aquifer3d-scene-actions"><button type="button" data-video-kind="pixels" disabled aria-live="polite">دانلود فیلم ۳۶۰° · ۲۴ ثانیه</button><button type="button" data-fullscreen="pixelCanvas">تمام‌صفحه</button></div><div class="aquifer3d-water-tabs" role="tablist" aria-label="نوع نمایش آب باقی‌مانده و از دست‌رفته"><button type="button" id="waterPixelTab" role="tab" aria-selected="true" aria-controls="waterPixelPanel" data-water-view="pixels">ستون‌های مکانی</button><button type="button" id="waterMapTab" role="tab" aria-selected="false" aria-controls="waterMapPanel" tabindex="-1" data-water-view="percent">نقشهٔ درصدها (۲D)</button><button type="button" id="waterTotalTab" role="tab" aria-selected="false" aria-controls="waterTotalPanel" tabindex="-1" data-water-view="totals">حجم کل آبخوان</button></div><div class="aquifer3d-layer-options"><span class="balance-retained">■ آب باقی‌مانده در پایان دوره</span><span class="balance-lost">■ آب از دست‌رفته در دوره</span></div></div>
               <div id="waterPixelPanel" role="tabpanel" aria-labelledby="waterPixelTab"><div class="aquifer3d-canvas-wrap"><canvas id="pixelCanvas" width="900" height="660" tabindex="0" role="img" aria-label="ستون‌های مربعی سه‌بعدی روی آبخوان؛ پایین آبی باقی‌مانده و بالای قرمز از دست‌رفته؛ کشیدن برای چرخش، چرخ موس یا مثبت و منفی برای زوم و کلیک برای جزئیات"></canvas></div></div>
               <div id="waterMapPanel" role="tabpanel" aria-labelledby="waterMapTab" hidden><div id="waterPercentMap" class="a3-map"></div></div>
@@ -138,19 +162,24 @@
               <div class="aquifer3d-scene-caption" id="waterCaption">برای محاسبهٔ حجم، Sy و کف معتبر لازم است.</div>
             </article>
           </div>
-        </section>
-
-        <section class="aquifer3d-card a3-plan-section" id="parameterMaps" hidden aria-labelledby="parameterMapsTitle"><div class="aquifer3d-section-heading"><div><h2 id="parameterMapsTitle">نقشهٔ دوبعدی Sy و سنگ‌بستر</h2><p>سطح درون‌یابی‌شده و خطوط تراز ورودی‌های همین محاسبه</p></div></div><div class="a3-parameter-map a3-map"></div></section>
-        <section id="professionalTools" class="aquifer3d-card a3-professional" hidden aria-label="ابزارهای تحلیل و ارائه"></section>
-        <section class="aquifer3d-notes aquifer3d-card" aria-labelledby="aquifer3d-notes-title">
-          <div class="aquifer3d-section-heading"><div><p class="aquifer3d-kicker">۰۴ / منشأ و محدودیت</p><h2 id="aquifer3d-notes-title">منابع و روش محاسبه</h2></div></div>
-          <div class="aquifer3d-notes-grid">
+        <details class="a3-interaction-help"><summary>راهنمای ماوس، قلم و لمس</summary><p class="a3-canvas-help">برای چرخش بکشید؛ برای زوم از چرخ ماوس و برای جابه‌جایی از راست‌کلیک و کشیدن استفاده کنید. روی پیزومتر یا ستون کلیک کنید تا جزئیات باز شود.</p></details></section>
+          </div>
+          <div class="a3-workspace-panel" id="a3Panel-quality" role="tabpanel" aria-labelledby="a3Nav-quality" data-workspace-panel="quality" hidden><section id="qualityTools" class="aquifer3d-card a3-quality" hidden aria-label="برآورد حجم با محدودیت شوری"></section></div>
+          <div class="a3-workspace-panel" id="a3Panel-management" role="tabpanel" aria-labelledby="a3Nav-management" data-workspace-panel="management" hidden><section id="managementTools" class="aquifer3d-card a3-management" hidden aria-label="اولویت مداخله و آیندهٔ آبخوان"></section></div>
+          <div class="a3-workspace-panel" id="a3Panel-parameters" role="tabpanel" aria-labelledby="a3Nav-parameters" data-workspace-panel="parameters" hidden><section class="aquifer3d-card a3-plan-section" id="parameterMaps" hidden aria-labelledby="parameterMapsTitle"><div class="aquifer3d-section-heading"><div><h2 id="parameterMapsTitle">لایه‌های ورودی آبخوان</h2><p>Sy، سنگ‌بستر، نشست تجمعی و پوشش دادهٔ فرونشست</p></div></div><div class="a3-parameter-map a3-map"></div></section><p id="a3NoParameters" hidden>برای این محاسبه، نقشهٔ پارامتر موجود نیست. داده‌های سنگ‌بستر یا Sy مکانی را در تنظیم تحلیل وارد کنید.</p></div>
+          <div class="a3-workspace-panel" id="a3Panel-tools" role="tabpanel" aria-labelledby="a3Nav-tools" data-workspace-panel="tools" hidden><section id="professionalTools" class="aquifer3d-card a3-professional" hidden aria-label="ابزارهای تحلیل و خروجی"></section></div>
+          <div class="a3-workspace-panel" id="a3Panel-sources" role="tabpanel" aria-labelledby="a3Nav-sources" data-workspace-panel="sources" hidden>
+<section class="aquifer3d-notes aquifer3d-card" aria-labelledby="aquifer3d-notes-title">
+          <div class="aquifer3d-section-heading"><div><h2 id="aquifer3d-notes-title">منابع و روش محاسبه</h2></div></div>
+          <p class="a3-source-summary"><span id="bedrockLegendLabel">سنگ‌بستر</span> · جزئیات ورودی‌ها و محدودیت برآورد در ادامه آمده است.</p><div class="aquifer3d-notes-grid">
             <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۱</span><div><h3>منابع و فرض‌ها</h3><p id="sourceNote">مرز GeoJSON آبخوان و سطح آب از داده‌های همین سامانه گرفته می‌شوند. آبدهی ویژه و سنگ‌بستر باید برای آبخوان انتخابی با منبع محلی بررسی شوند.</p><p class="aquifer3d-source-link"><a href="https://pubs.usgs.gov/of/2002/ofr02197/documentation.pdf" target="_blank" rel="noopener noreferrer">توضیح USGS دربارهٔ آبدهی ویژه در آبخوان آزاد ↗</a></p></div></div>
             <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۲</span><div><h3>پوشش داده و روش</h3><p id="coverageNote">مدل پس از انتخاب آبخوان و دوره، تعداد پیزومترهای دارای داده و محدودیت پوشش مکانی را نشان می‌دهد. بدون دادهٔ سنگ‌بستر، نمایش عمق و شکل آبخوان شماتیک است و حجم مطلق آب قابل برآورد نیست.</p></div></div>
           </div>
           <p class="aquifer3d-method">سال آبی ایران از ۱ مهر تا ۳۱ شهریور است. شهریور هر سال، پایان سال آبیِ نام‌گذاری‌شده با سال قبل است. تغییر ذخیره از اختلاف تراز و آبدهی ویژه برآورد می‌شود. حجم آب قابل زهکشی حتی با دادهٔ سنگ‌بستر، برآوردی سناریویی است و مقدار واقعی آب قابل بهره‌برداری را نشان نمی‌دهد.</p>
         </section>
-      </main>
+          </div>
+        </main>
+      </div>
     </div>
   </body>
 </html>

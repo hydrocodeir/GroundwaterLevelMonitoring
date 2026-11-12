@@ -282,6 +282,32 @@ class GroundwaterDataTests(unittest.TestCase):
             expected = round(series[0][1] - series[-1][1], 2)
             self.assertAlmostEqual(payload["aquifers"][0]["methods"][method]["observed_decline"], expected)
 
+    def test_comparison_skips_unselected_interpolation_and_network_correction(self) -> None:
+        group_id, _, maximum = self.group_with_span(13)
+        sy, sm = self.year_month(maximum - 12)
+        ey, em = self.year_month(maximum)
+        with patch.object(self.service, "groups", {group_id: self.service.groups[group_id]}), \
+             patch.object(self.service, "_piezometric_surface_value_map", side_effect=AssertionError("unselected surface method ran")), \
+             patch.object(self.service, "_corrected_analysis_payload", side_effect=AssertionError("unselected correction ran")):
+            result = self.service.comparison(start_year=sy, start_month=sm, end_year=ey, end_month=em, selected_methods=["thiessen"])
+        self.assertEqual(result["filters"]["selected_methods"], ["thiessen"])
+        self.assertEqual(set(result["aquifers"][0]["methods"]), {"thiessen"})
+        self.assertIn("ordinary_kriging", result["method_order"])
+        dashboard = self.service.dashboard(group_id, start_year=sy, start_month=sm, end_year=ey, end_month=em,
+                                           surface_interpolation_methods=[], base_hydrograph_methods=["thiessen"], corrected_support_method="none")
+        series = dashboard["hydrographs"]["thiessen"]
+        self.assertAlmostEqual(result["aquifers"][0]["methods"]["thiessen"]["observed_decline"], round(series[0][1] - series[-1][1], 2))
+
+    def test_comparison_selected_corrected_base_matches_all_method_result(self) -> None:
+        group_id, _, maximum = self.group_with_span(13)
+        sy, sm = self.year_month(maximum - 12)
+        ey, em = self.year_month(maximum)
+        with patch.object(self.service, "groups", {group_id: self.service.groups[group_id]}):
+            all_methods = self.service.comparison(start_year=sy, start_month=sm, end_year=ey, end_month=em)
+            selected = self.service.comparison(start_year=sy, start_month=sm, end_year=ey, end_month=em, selected_methods=["corrected_arithmetic"])
+        self.assertEqual(set(selected["aquifers"][0]["methods"]), {"corrected_arithmetic"})
+        self.assertEqual(selected["aquifers"][0]["methods"]["corrected_arithmetic"], all_methods["aquifers"][0]["methods"]["corrected_arithmetic"])
+
     def test_corrected_support_method_can_select_fixed_median(self) -> None:
         group_id = next(iter(self.service.groups))
         payload = self.service.dashboard(

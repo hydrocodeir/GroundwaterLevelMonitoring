@@ -29,7 +29,9 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
   const verticalScale = (equivalent ? .48 : .40) / Math.max(1, maxZ - minZ);
   const normal = ([lon, lat, z]) => [(lon - (west + east) / 2) * sx / span,
     (lat - (north + south) / 2) * 111320 / span, (z - (minZ + maxZ) / 2) * verticalScale];
-  let width = 1, height = 1, ratio = 1, selected = null, projectedWells = [], lostContext = false;
+  let width = 1, height = 1, ratio = 1, selected = null, projectedWells = [], projectedCities=[], lostContext = false;
+  const info=options.annotations?null:document.createElement('p');
+  if(info){info.dataset.helpCopy='';info.className='a3-scene-metadata';info.textContent=`${equivalent?'ارتفاع معادل آب':'تراز MSL'}: ${fmt(minZ)} تا ${fmt(maxZ)} متر\nاغراق قائم: ${fmt(span*verticalScale)}×${pixel?`\nضلع سلول: ${fmt(data.pixel_water.side_m)} متر`:''}${!equivalent?`\nمیانگین تغییر تراز: ${fmt(data.metrics.mean_head_decline_m,2)} متر`:''}`;canvas.parentElement.append(info);}
   const buffers = [];
   const vertex = `attribute vec3 aPosition; attribute vec4 aColor;
     uniform vec3 uCamera; uniform vec2 uPan; uniform float uAspect; uniform float uPointSize;
@@ -117,13 +119,28 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
     gl.depthMask(pixel); draw(transparent); draw(rim);
     if (layers.wells && !equivalent) { gl.disable(gl.DEPTH_TEST); draw(wellLines); draw(markers,true); }
     gl.depthMask(true);
+    if(!equivalent && window.HydroCities?.enabled && data.urban_overlay?.length){
+      hud.save();hud.lineWidth=1.5;hud.strokeStyle='#80558b';hud.fillStyle='#b99ac020';hud.setLineDash([4,2]);
+      for(const city of data.urban_overlay){
+        hud.beginPath();
+        for(const ring of city.paths){ring.forEach((p,i)=>{const [x,y]=project(normal([p[0],p[1],p[equivalent?3:2]]));if(i)hud.lineTo(x,y);else hud.moveTo(x,y);});hud.closePath();}
+        hud.fill('evenodd');hud.stroke();
+      }
+      hud.setLineDash([]);hud.font='600 12px Vazirmatn, Tahoma, sans-serif';hud.textAlign='center';
+      projectedCities=data.urban_overlay.map(city=>({city,p:project(normal([city.label[0],city.label[1],city.label[2]]))}));
+      for(const {city,p:[x,y]} of projectedCities){hud.fillStyle='#80558b';hud.strokeStyle='#fff';hud.lineWidth=1;hud.beginPath();hud.arc(x,y,3,0,Math.PI*2);hud.fill();hud.stroke();if(options.annotations){hud.lineWidth=3;hud.strokeText(city.name,x,y-5);hud.fillStyle='#603f69';hud.fillText(city.name,x,y-5);}}
+      hud.restore();
+    }else projectedCities=[];
+    if(options.annotations){
     hud.fillText(equivalent ? `ارتفاع معادل آب: ۰ تا ${fmt(maxZ)} متر` : `تراز: ${fmt(minZ)} تا ${fmt(maxZ)} متر MSL`,16,height-33);
     hud.fillText(`اغراق قائم: ${fmt(span*verticalScale)}×`,16,height-13);
     if(declineScale>1){hud.fillStyle='#b43e48';hud.fillText(`بزرگ‌نمایی ضخامت افت: ×${fmt(declineScale)} · حجم‌ها واقعی‌اند`,16,height-55);hud.fillStyle='#27465c';}
+    if(!equivalent&&window.HydroCities?.enabled&&data.urban_overlay?.length)hud.fillText('شهرها: GHSL / JRC · OpenStreetMap',16,height-(declineScale>1?77:55),Math.max(100,width-32));
     if (pixel) hud.fillText(`ضلع سلول: ${fmt(data.pixel_water.side_m)} متر · برای جزئیات روی ستون کلیک کنید`,16,58,Math.max(100,width-30));
     if (!equivalent) {
       const change = data.metrics.mean_head_decline_m;
       hud.fillText(`میانگین ${change>=0?'افت':'افزایش'}: ${fmt(Math.abs(change),2)} متر`,16,58);
+    }
     }
     const origin = project([0,0,0]);
     for (const [name,p] of [['N',[0,1,0]],['E',[1,0,0]]]) {
@@ -131,7 +148,7 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
       hud.strokeStyle='#46677b';hud.beginPath();hud.moveTo(x,y);hud.lineTo(x+dx/n*25,y+dy/n*25);hud.stroke();hud.fillText(name,x+dx/n*34-4,y+dy/n*34+4);
     }
     projectedWells = wells.map(well => ({well,p:project(normal([well.lon,well.lat,well.after]))}));
-    if (selected && layers.wells) {
+    if (selected && layers.wells && options.annotations) {
       const text = pixel ? `باقی‌مانده ${fmt(selected.remaining_mcm,3)}؛ از دست‌رفته ${fmt(selected.lost_mcm,3)} میلیون مترمکعب`
         : `${selected.name} | مبنا ${fmt(selected.before)}، پایان ${fmt(selected.after)} | ${selected.before>=selected.after?'افت':'افزایش'} ${fmt(Math.abs(selected.before-selected.after))} متر`;
       const box=Math.min(width-20,hud.measureText(text).width+20);
@@ -149,14 +166,25 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
     const near=candidates.map(w=>({...w,d:Math.hypot(w.p[0]-x,w.p[1]-y)})).sort((a,b)=>a.d-b.d)[0];
     selected=near?.d<18?near.well:null;
     if(selected)options.onPick?.({kind:pixel?'cell':'well',value:selected});
+    else hover(event,true);
+  }
+  function hover(event,sticky=false){
+    const r=canvas.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;
+    const nearest=list=>list.map(item=>({...item,d:Math.hypot(item.p[0]-x,item.p[1]-y)})).sort((a,b)=>a.d-b.d)[0];
+    const city=nearest(projectedCities);
+    if(city?.d<12){window.HydroHelp?.showFor(canvas,`${city.city.name}\n${city.city.source||'GHSL / JRC'}`,event,sticky);return;}
+    const candidates=pixel?(data.pixel_water?.cells||[]).map(cell=>({well:cell,p:project(normal([cell.lon,cell.lat,cell.remaining_m+cell.lost_m*declineScale]))})):layers.wells?projectedWells:[];
+    const hit=nearest(candidates);
+    if(hit?.d<14){const v=hit.well,text=pixel?`آب باقی‌مانده: ${fmt(v.remaining_mcm,3)} میلیون مترمکعب\nآب از دست‌رفته: ${fmt(v.lost_mcm,3)} میلیون مترمکعب`:`${v.name}\nتراز مبنا: ${fmt(v.before)} متر MSL\nتراز پایان: ${fmt(v.after)} متر MSL\n${v.before>=v.after?'افت':'افزایش'}: ${fmt(Math.abs(v.before-v.after))} متر`;window.HydroHelp?.showFor(canvas,text,event,sticky);}
+    else window.HydroHelp?.hideTransient();
   }
   function contextLost(e){e.preventDefault();lostContext=true;render();}
   canvas.addEventListener('webglcontextlost',contextLost);
-  return { canvas, resize, render, pick, verticalExaggeration:span*verticalScale, recreate:scale=>createScene(canvas,data,equivalent,camera,layers,pixel,{...options,declineScale:scale}),
+  return { canvas, resize, render, pick, hover, verticalExaggeration:span*verticalScale, recreate:scale=>createScene(canvas,data,equivalent,camera,layers,pixel,{...options,declineScale:scale}),
     dispose(release=false){
       canvas.removeEventListener('webglcontextlost',contextLost);
       buffers.forEach(b=>gl.deleteBuffer(b));shaders.forEach(s=>gl.deleteShader(s));gl.deleteProgram(program);
-      gl.depthMask(true);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);overlay.remove();
+      gl.depthMask(true);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);overlay.remove();info?.remove();
       if(release)gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
   };
@@ -212,7 +240,7 @@ function createAggregateScene(canvas, data) {
       ctx.fillText(item.label,x+bar/2+depth/2,base+29);
     });
     ctx.fillStyle='#627987';ctx.font='11px Vazirmatn, Tahoma, sans-serif';ctx.textAlign='center';
-    ctx.fillText('حجم کل آبخوان · مقیاس یکسان برای هر دو حجم',width/2,height-15);
+
   }
   return {canvas,resize,render,dispose(){ctx.clearRect(0,0,width,height);}};
 }
@@ -251,7 +279,7 @@ export async function exportOrbitVideo({data,kind='geology',onProgress=()=>{},si
       if(index!==stageIndex){
         stageIndex=index;startView={...camera};activeKind=step.kind==='pixels'?'pixels':'geology';
         if(step.view?.layers)Object.keys(videoLayers).forEach(k=>{if(typeof step.view.layers[k]==='boolean')videoLayers[k]=step.view.layers[k];});
-        scene?.dispose();scene=createScene(canvas,data,activeKind==='pixels',camera,videoLayers,activeKind==='pixels',{declineScale:step.view?.declineScale||declineScale});scene.resize();
+        scene?.dispose();scene=createScene(canvas,data,activeKind==='pixels',camera,videoLayers,activeKind==='pixels',{declineScale:step.view?.declineScale||declineScale,annotations:true});scene.resize();
       }
       const eased=phase*phase*(3-2*phase);
       videoLayers.red=step.red!==false;
@@ -320,7 +348,7 @@ export async function exportAquiferImage({data,view,layout='pair',width=1920,tra
     let scene;
     try{
       const pixel=kinds[i]==='pixels';
-      scene=createScene(canvas,data,pixel,{...view.camera},{...view.layers,...(pixel?{blue:true,red:true,bedrock:true}:{})},pixel,{declineScale:view.declineScale||1,transparent,pixelRatio:1});scene.resize();scene.render();
+      scene=createScene(canvas,data,pixel,{...view.camera},{...view.layers,...(pixel?{blue:true,red:true,bedrock:true}:{})},pixel,{declineScale:view.declineScale||1,transparent,pixelRatio:1,annotations:true});scene.resize();scene.render();
       const x=30*unit+(count-1-i)*w,y=130*unit;ctx.drawImage(canvas,x,y,w,h);
       ctx.drawImage(stage.querySelector('.aquifer3d-overlay'),x,y,w,h);
       ctx.fillStyle='#173e56';ctx.font=`${22*unit}px Vazirmatn, Tahoma, sans-serif`;ctx.textAlign='center';ctx.fillText(pixel?'آب باقی‌مانده و از دست‌رفته':'افت سطح آب نسبت به سنگ‌بستر',x+w/2,118*unit);
@@ -358,7 +386,7 @@ export function mountAquiferScenes({beforeCanvas,afterCanvas,pixelCanvas,data,on
   function requestPaint(){if(!disposed&&!frame)frame=requestAnimationFrame(()=>{frame=0;scenes.forEach(s=>{if(s.canvas.getClientRects().length)s.render();});});onCameraChange({...camera});}
   function down(e){
     if(![0,1,2].includes(e.button))return;
-    e.preventDefault();
+    e.preventDefault();window.HydroHelp?.hide();
     e.currentTarget.focus({preventScroll:true});
     cancelAnimationFrame(transition);
     e.currentTarget.setPointerCapture?.(e.pointerId);touches.set(e.pointerId,[e.clientX,e.clientY]);
@@ -369,7 +397,7 @@ export function mountAquiferScenes({beforeCanvas,afterCanvas,pixelCanvas,data,on
   function move(e){
     if(touches.has(e.pointerId))touches.set(e.pointerId,[e.clientX,e.clientY]);
     if(touches.size===2){const [a,b]=[...touches.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]),mid=[(a[0]+b[0])/2,(a[1]+b[1])/2],r=e.currentTarget.getBoundingClientRect();if(pinch>0)camera.zoom=clamp(camera.zoom*d/pinch,.4,5);if(centroid){camera.panX+=(mid[0]-centroid[0])/r.width;camera.panY+=(mid[1]-centroid[1])/r.height;}centroid=mid;pinch=d;requestPaint();return;}
-    if(!dragging||dragging.id!==e.pointerId)return;
+    if(!dragging||dragging.id!==e.pointerId){scenes.find(s=>s.canvas===e.currentTarget)?.hover?.(e);return;}
     const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;if(Math.hypot(e.clientX-dragging.startX,e.clientY-dragging.startY)>4)dragging.moved=true;
     if(dragging.pan){const r=e.currentTarget.getBoundingClientRect();camera.panX+=dx/r.width;camera.panY+=dy/r.height;}
     else{camera.yaw+=dx*.008;camera.pitch=clamp(camera.pitch+dy*.006,.1,Math.PI/2);}
@@ -389,11 +417,13 @@ export function mountAquiferScenes({beforeCanvas,afterCanvas,pixelCanvas,data,on
     else{if(e.key==='ArrowLeft')camera.yaw-=.12;if(e.key==='ArrowRight')camera.yaw+=.12;
     if(e.key==='ArrowUp')camera.pitch=clamp(camera.pitch+.12,.1,Math.PI/2);if(e.key==='ArrowDown')camera.pitch=clamp(camera.pitch-.12,.1,Math.PI/2);}requestPaint();
   }
-  const events={pointerdown:down,pointermove:move,pointerup:up,pointercancel:up,lostpointercapture:up,wheel,dblclick:reset,keydown:key,contextmenu:e=>e.preventDefault()};
+  const events={pointerdown:down,pointermove:move,pointerup:up,pointercancel:up,lostpointercapture:up,wheel,dblclick:reset,keydown:key,pointerleave:()=>window.HydroHelp?.hideTransient(),contextmenu:e=>e.preventDefault()};
   interactive.forEach(canvas=>Object.entries(events).forEach(([name,fn])=>canvas.addEventListener(name,fn,{passive:false})));
   const observer=new ResizeObserver(()=>{scenes.forEach(s=>s.resize());requestPaint();});
   scenes.forEach(s=>{observer.observe(s.canvas);s.resize();});requestPaint();
+  const unsubscribeCities=window.HydroCities?.subscribe(requestPaint);
   function cleanup(){disposed=true;cancelAnimationFrame(frame);observer.disconnect();
+    unsubscribeCities?.();
     cancelAnimationFrame(transition);
     interactive.forEach(canvas=>Object.entries(events).forEach(([name,fn])=>canvas.removeEventListener(name,fn)));scenes.forEach(s=>s.dispose());}
   cleanup.verticalExaggeration=scenes[0].verticalExaggeration;cleanup.bedrockReal=data.grid.bedrock_real;

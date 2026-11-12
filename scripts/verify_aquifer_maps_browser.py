@@ -93,7 +93,7 @@ def main():
         parameter.screenshot(path=str(output/'sy-map-desktop.png'))
         # Mobile layout, keyboard tabs, map panning and responsive overflow.
         page.set_viewport_size({'width':390,'height':844});page.locator('#waterMapTab').click()
-        water.locator('svg').focus();page.keyboard.press('+');page.keyboard.press('ArrowLeft')
+        water.locator('.a3-plan-svg').focus();page.keyboard.press('+');page.keyboard.press('ArrowLeft')
         page.locator('#waterMapPanel').screenshot(path=str(output/'water-map-mobile.png'))
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
         # An exactly zero baseline must still render a usable grey map and exports.
