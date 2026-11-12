@@ -15,8 +15,8 @@
     {% include 'partials/site_header.html' %}
     <div class="aquifer3d-shell">
       <header class="page-heading">
-        <div><h1>نمای سه‌بعدی آبخوان</h1><p>مقایسه سطح آب و تغییر ذخیره بین شهریور سال مبنا و شهریور ۱۴۰۴</p></div>
-        <span class="page-period">انتهای مقایسه: شهریور ۱۴۰۴</span>
+        <div><h1>نمای سه‌بعدی آبخوان</h1><p id="comparisonIntro">مقایسهٔ سطح آب و تغییر ذخیره بین شهریور مبنا و آخرین شهریور دارای داده</p></div>
+        <span class="page-period" id="comparisonEnd">انتهای مقایسه: آخرین شهریور دارای داده</span>
       </header>
 
       <main>
@@ -45,7 +45,12 @@
               <small id="aquifer3d-year-help">شهریور سال انتخابی؛ پایان سال آبیِ آغازشده در سال قبل.</small>
             </label>
 
-            <label class="aquifer3d-field" for="syInput">
+            <label class="aquifer3d-field" for="syMode">
+              <span class="aquifer3d-field-label">روش تعیین آبدهی ویژه</span>
+              <select id="syMode"><option value="constant">Sy ثابت برای کل آبخوان</option><option value="spatial">Sy مکانی از فایل CSV</option></select>
+              <small>برای تبدیل ضخامت اشباع به ارتفاع معادل آب قابل زهکشی.</small>
+            </label>
+            <label class="aquifer3d-field" id="syConstantField" for="syInput">
               <span class="aquifer3d-field-label">آبدهی ویژه <span dir="ltr">(Sy)</span></span>
               <span class="aquifer3d-input-suffix">
                 <input id="syInput" type="number" min="0" max="1" step="any" inputmode="decimal" placeholder="مقدار دارای منبع" aria-describedby="aquifer3d-sy-help">
@@ -54,13 +59,19 @@
               <small id="aquifer3d-sy-help">مقدار باید ویژهٔ همین آبخوان و دارای منبع باشد؛ پیشنهاد پژوهشی نیشابور فقط برای همان آبخوان کاربرد دارد.</small>
             </label>
 
+            <label class="aquifer3d-field" id="syFileField" for="syFile" hidden>
+              <span class="aquifer3d-field-label">نقاط آبدهی ویژه</span>
+              <input id="syFile" type="file" accept=".csv,text/csv" aria-describedby="syFileHelp">
+              <small id="syFileHelp">ستون‌های <code dir="ltr">longitude,latitude,Sy</code>؛ مختصات WGS84، Sy بین صفر و یک (مثلاً ۰٫۰۶). نقاط باید پیرامون آبخوان را هم پوشش دهند.</small>
+            </label>
+
             <label class="aquifer3d-field" id="karatThicknessField" for="karatThicknessInput" hidden>
-              <span class="aquifer3d-field-label">ضخامت اشباع فرضی کرات در شهریور ۱۴۰۴</span>
+              <span class="aquifer3d-field-label" id="karatThicknessLabel">ضخامت اشباع فرضی کرات در تاریخ پایان</span>
               <span class="aquifer3d-input-suffix">
                 <input id="karatThicknessInput" type="number" min="20" max="300" step="1" inputmode="decimal" value="65" aria-describedby="aquifer3d-karat-thickness-help">
                 <span>متر</span>
               </span>
-              <small id="aquifer3d-karat-thickness-help">پیش‌فرض سناریو ۶۵ متر زیر سطح آب درون‌یابی‌شده از ۵ چاه شهریور ۱۴۰۴ است. فقط اگر عمق محاسبه‌شده از سطح زمین محلی بیش از ۳۰۰ متر شود، کف به عمق ۳۰۰ متر محدود می‌شود و ضخامت نسبت به سطح آب پنج‌چاهیِ مرجع کمتر از مقدار انتخابی خواهد بود.</small>
+              <small id="aquifer3d-karat-thickness-help">ضخامت سناریویی از سطح آب تاریخ پایان کم می‌شود؛ عمق کف از زمین محلی به سقف سناریو محدود می‌شود.</small>
             </label>
 
             <label class="aquifer3d-field aquifer3d-file-field" for="bedrockFile">
@@ -71,7 +82,7 @@
           </div>
 
           <div class="aquifer3d-action-row">
-            <button id="build3d" class="aquifer3d-build-button" type="button">ساخت مقایسهٔ سه‌بعدی <span aria-hidden="true">←</span></button>
+            <button id="build3d" class="aquifer3d-build-button" type="button">محاسبه و نمایش</button>
             <p id="status3d" class="aquifer3d-status" role="status" aria-live="polite">برای شروع، آبخوان و سال مبنا را انتخاب کنید.</p>
           </div>
         </section>
@@ -90,7 +101,7 @@
             <article class="aquifer3d-metric aquifer3d-metric-warn"><span class="aquifer3d-metric-icon">↓</span><span class="aquifer3d-metric-label">تغییر میانگین سطح آب</span><strong id="declineMetric">—</strong><small>متر؛ بین دو شهریور</small></article>
             <article class="aquifer3d-metric aquifer3d-metric-accent"><span class="aquifer3d-metric-icon">◒</span><span class="aquifer3d-metric-label">تغییر برآوردی ذخیرهٔ آب</span><strong id="storageMetric">—</strong><small>با آبدهی ویژهٔ انتخابی</small></article>
             <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label">حجم آب قابل زهکشی در سال مبنا</span><strong id="volumeBeforeMetric">—</strong><small id="volumeBeforeHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
-            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label">حجم آب قابل زهکشی در شهریور ۱۴۰۴</span><strong id="volumeAfterMetric">—</strong><small id="volumeAfterHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
+            <article class="aquifer3d-metric"><span class="aquifer3d-metric-icon">◉</span><span class="aquifer3d-metric-label" id="volumeAfterLabel">حجم آب قابل زهکشی در تاریخ پایان</span><strong id="volumeAfterMetric">—</strong><small id="volumeAfterHelp">برآورد سناریویی؛ نیازمند سنگ‌بستر</small></article>
           </div>
         </section>
 
@@ -98,31 +109,46 @@
           <div class="aquifer3d-section-heading">
             <div>
               <p class="aquifer3d-kicker">۰۳ / تصویر مقایسه‌ای</p>
-              <h2 id="aquifer3d-scenes-title">دو برش از یک آبخوان</h2>
+              <h2 id="aquifer3d-scenes-title">افت سطح آب و تغییر ذخیره</h2>
             </div>
-            <div class="aquifer3d-legend" aria-label="راهنمای رنگ‌ها"><span><i class="aquifer3d-legend-water"></i> بخش اشباع</span><span><i class="aquifer3d-legend-bedrock"></i> <span id="bedrockLegendLabel">سنگ‌بستر / بستر شماتیک</span></span><span><i class="aquifer3d-legend-decline"></i> اختلاف با سطح مبنا در شکل دوم</span></div>
+            <div class="aquifer3d-legend"><span><i class="aquifer3d-legend-bedrock"></i> <span id="bedrockLegendLabel">سنگ‌بستر</span></span></div>
+          </div>
+          <div class="aquifer3d-toolbar" role="group" aria-label="کنترل نمای سه‌بعدی">
+            <button type="button" data-camera="in" disabled aria-label="بزرگ‌نمایی">+ بزرگ‌نمایی</button>
+            <button type="button" data-camera="out" disabled aria-label="کوچک‌نمایی">− کوچک‌نمایی</button>
+            <button type="button" data-camera="top" disabled>نمای بالا</button>
+            <button type="button" data-camera="reset" disabled>بازنشانی نما</button>
+            <button type="button" data-interaction="rotate" aria-pressed="true">چرخش</button>
+            <button type="button" data-interaction="pan" aria-pressed="false">جابجایی با ماوس / قلم</button>
+            <output id="zoomLabel" aria-live="polite">۱۰۰٪</output>
+            <span>چرخ ماوس: زوم · راست‌کلیک و کشیدن: جابجایی · دو انگشت: زوم و جابجایی</span>
           </div>
           <div class="aquifer3d-scene-grid">
             <article class="aquifer3d-scene aquifer3d-scene-before">
-              <div class="aquifer3d-scene-heading"><span class="aquifer3d-scene-step">۱ / پیش‌تر</span><h3>شهریور سال مبنا</h3><p>سطح آب و ضخامت اشباع در آغاز مقایسه</p></div>
-              <div class="aquifer3d-canvas-wrap"><canvas id="beforeCanvas" width="900" height="660" role="img" aria-label="مدل سه‌بعدی آبخوان در شهریور سال مبنا"></canvas></div>
-              <div class="aquifer3d-scene-caption">در نمای آغازین شمال بالا و شرق راست است. با کشیدن تصویر زاویه را تغییر دهید؛ دوبار کلیک جهت آغازین را برمی‌گرداند.</div>
+              <div class="aquifer3d-scene-heading"><h3>افت سطح آب نسبت به سنگ‌بستر</h3><p>حجم‌های نیمه‌شفاف؛ اتصال کفِ نمایشی به سطح مبنا در مرز</p><div class="aquifer3d-scene-actions"><button type="button" data-video-kind="geology" disabled aria-live="polite">فیلم دو دور · افت روشن / خاموش</button><button type="button" data-fullscreen="beforeCanvas">تمام‌صفحه</button></div><div class="aquifer3d-layer-options"><label><input type="checkbox" data-scene-layer="bedrock" checked> سنگ‌بستر</label><label><input type="checkbox" data-scene-layer="wells" checked> پیزومترها</label><label class="balance-retained"><input type="checkbox" data-scene-layer="blue" checked> آبی: باقی‌مانده</label><label class="balance-lost"><input type="checkbox" data-scene-layer="red" checked> قرمز: افت</label><label class="balance-gained"><input type="checkbox" data-scene-layer="green" checked> سبز: افزایش</label></div></div>
+              <div class="aquifer3d-canvas-wrap"><canvas id="beforeCanvas" width="900" height="660" tabindex="0" role="img" aria-label="لایه اشباع سه‌بعدی؛ کلیدهای مثبت و منفی برای زوم و کلیدهای جهت برای چرخش"></canvas></div>
+              <div class="aquifer3d-scene-caption" id="saturatedCaption">پس از محاسبه نمایش داده می‌شود.</div>
             </article>
             <article class="aquifer3d-scene aquifer3d-scene-after">
-              <div class="aquifer3d-scene-heading"><span class="aquifer3d-scene-step">۲ / شهریور ۱۴۰۴</span><h3>پس از تغییر سطح آب</h3><p>همان محدوده و مقیاس برای مقایسهٔ مستقیم</p></div>
-              <div class="aquifer3d-canvas-wrap"><canvas id="afterCanvas" width="900" height="660" role="img" aria-label="مدل سه‌بعدی آبخوان در شهریور ۱۴۰۴"></canvas></div>
-              <div class="aquifer3d-scene-caption">قطب‌نمای N/E جهت را پس از چرخاندن نشان می‌دهد. نوار نارنجی فاصلهٔ سطح کنونی تا سطح مبناست.</div>
+              <div class="aquifer3d-scene-heading"><h3>آب باقی‌مانده و از دست رفته</h3><p id="waterViewSubtitle">ستون‌های مربعی روی محدودهٔ آبخوان؛ آبی در پایین، قرمز روی آن</p><div class="aquifer3d-scene-actions"><button type="button" data-video-kind="pixels" disabled aria-live="polite">دانلود فیلم ۳۶۰° · ۲۴ ثانیه</button><button type="button" data-fullscreen="pixelCanvas">تمام‌صفحه</button></div><div class="aquifer3d-water-tabs" role="tablist" aria-label="نوع نمایش آب باقی‌مانده و از دست‌رفته"><button type="button" id="waterPixelTab" role="tab" aria-selected="true" aria-controls="waterPixelPanel" data-water-view="pixels">ستون‌های مکانی</button><button type="button" id="waterMapTab" role="tab" aria-selected="false" aria-controls="waterMapPanel" tabindex="-1" data-water-view="percent">نقشهٔ درصدها (۲D)</button><button type="button" id="waterTotalTab" role="tab" aria-selected="false" aria-controls="waterTotalPanel" tabindex="-1" data-water-view="totals">حجم کل آبخوان</button></div><div class="aquifer3d-layer-options"><span class="balance-retained">■ آب باقی‌مانده در پایان دوره</span><span class="balance-lost">■ آب از دست‌رفته در دوره</span></div></div>
+              <div id="waterPixelPanel" role="tabpanel" aria-labelledby="waterPixelTab"><div class="aquifer3d-canvas-wrap"><canvas id="pixelCanvas" width="900" height="660" tabindex="0" role="img" aria-label="ستون‌های مربعی سه‌بعدی روی آبخوان؛ پایین آبی باقی‌مانده و بالای قرمز از دست‌رفته؛ کشیدن برای چرخش، چرخ موس یا مثبت و منفی برای زوم و کلیک برای جزئیات"></canvas></div></div>
+              <div id="waterMapPanel" role="tabpanel" aria-labelledby="waterMapTab" hidden><div id="waterPercentMap" class="a3-map"></div></div>
+              <div id="waterTotalPanel" role="tabpanel" aria-labelledby="waterTotalTab" hidden><div class="aquifer3d-canvas-wrap"><canvas id="afterCanvas" width="900" height="660" role="img" aria-label="مقایسه تجمیعی حجم کل آب باقی‌مانده و آب از دست‌رفته با مقیاس یکسان؛ اعداد در زیر نمودار"></canvas></div></div>
+              <div class="aquifer3d-water-metrics" aria-live="polite"><span>آب باقی‌مانده <strong id="remainingHeight">—</strong></span><span>آب از دست‌رفته <strong id="lostHeight">—</strong></span><span>افزایش ذخیره در بخش‌های دارای افزایش <strong id="gainedHeight">—</strong></span></div>
+              <div class="aquifer3d-scene-caption" id="waterCaption">برای محاسبهٔ حجم، Sy و کف معتبر لازم است.</div>
             </article>
           </div>
         </section>
 
+        <section class="aquifer3d-card a3-plan-section" id="parameterMaps" hidden aria-labelledby="parameterMapsTitle"><div class="aquifer3d-section-heading"><div><h2 id="parameterMapsTitle">نقشهٔ دوبعدی Sy و سنگ‌بستر</h2><p>سطح درون‌یابی‌شده و خطوط تراز ورودی‌های همین محاسبه</p></div></div><div class="a3-parameter-map a3-map"></div></section>
+        <section id="professionalTools" class="aquifer3d-card a3-professional" hidden aria-label="ابزارهای تحلیل و ارائه"></section>
         <section class="aquifer3d-notes aquifer3d-card" aria-labelledby="aquifer3d-notes-title">
           <div class="aquifer3d-section-heading"><div><p class="aquifer3d-kicker">۰۴ / منشأ و محدودیت</p><h2 id="aquifer3d-notes-title">منابع و روش محاسبه</h2></div></div>
           <div class="aquifer3d-notes-grid">
             <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۱</span><div><h3>منابع و فرض‌ها</h3><p id="sourceNote">مرز GeoJSON آبخوان و سطح آب از داده‌های همین سامانه گرفته می‌شوند. آبدهی ویژه و سنگ‌بستر باید برای آبخوان انتخابی با منبع محلی بررسی شوند.</p><p class="aquifer3d-source-link"><a href="https://pubs.usgs.gov/of/2002/ofr02197/documentation.pdf" target="_blank" rel="noopener noreferrer">توضیح USGS دربارهٔ آبدهی ویژه در آبخوان آزاد ↗</a></p></div></div>
             <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۲</span><div><h3>پوشش داده و روش</h3><p id="coverageNote">مدل پس از انتخاب آبخوان و دوره، تعداد پیزومترهای دارای داده و محدودیت پوشش مکانی را نشان می‌دهد. بدون دادهٔ سنگ‌بستر، نمایش عمق و شکل آبخوان شماتیک است و حجم مطلق آب قابل برآورد نیست.</p></div></div>
           </div>
-          <p class="aquifer3d-method">سال آبی ایران از ۱ مهر تا ۳۱ شهریور است. شهریور ۱۴۰۴ پایان <span dir="ltr">WY 1403</span> محسوب می‌شود. تغییر ذخیره از اختلاف تراز و آبدهی ویژه برآورد می‌شود. حجم آب قابل زهکشی حتی با دادهٔ سنگ‌بستر، برآوردی سناریویی است و مقدار واقعی آب قابل بهره‌برداری را نشان نمی‌دهد.</p>
+          <p class="aquifer3d-method">سال آبی ایران از ۱ مهر تا ۳۱ شهریور است. شهریور هر سال، پایان سال آبیِ نام‌گذاری‌شده با سال قبل است. تغییر ذخیره از اختلاف تراز و آبدهی ویژه برآورد می‌شود. حجم آب قابل زهکشی حتی با دادهٔ سنگ‌بستر، برآوردی سناریویی است و مقدار واقعی آب قابل بهره‌برداری را نشان نمی‌دهد.</p>
         </section>
       </main>
     </div>

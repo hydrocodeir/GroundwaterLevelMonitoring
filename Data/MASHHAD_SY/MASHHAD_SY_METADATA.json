@@ -1,0 +1,231 @@
+{
+  "aquifer": "مشهد",
+  "product_type": "UNVALIDATED_SOIL_INFORMED_AQUIFER_SY_PRIOR",
+  "is_measured_aquifer_sy": false,
+  "is_pumping_test_calibrated": false,
+  "crs": "EPSG:4326",
+  "raster_type": "PixelIsArea",
+  "nodata": -9999.0,
+  "unit": "dimensionless fraction, not percent",
+  "nominal_source_resolution": "1 km; native 30 arcsecond grid preserved",
+  "pixel_size_degrees": [
+    0.008333333333333333,
+    0.008333333333333333
+  ],
+  "shape_rows_cols": [
+    122,
+    176
+  ],
+  "geotransform": [
+    58.48333257039388,
+    0.008333333333333333,
+    0,
+    37.02416712443034,
+    0,
+    -0.008333333333333333
+  ],
+  "mask_rule": "all touched pixels with positive aquifer intersection area; no values elsewhere",
+  "polygon_area_km2": 2526.1878748375902,
+  "valid_area_coverage_fraction": 1.0,
+  "soil_product_depths_m": {
+    "SoilGrids_GASY_layer7": 2.0,
+    "GSDE_GASY_layer8": 2.296
+  },
+  "source_doi": "10.5281/zenodo.14216083",
+  "paper_doi": "10.1038/s41597-025-04742-1",
+  "regional_mean_reference_doi": "10.2166/ws.2025.078",
+  "license": "CC BY 4.0; derived products retain attribution",
+  "raw_method": "Arithmetic mean of two deepest soil GASY products; one available source if the other is missing.",
+  "aquifer_scenario_method": "raw_soil_mean * (0.06 / clipped_area_weighted_mean_raw_soil); no local pumping-test fit.",
+  "regional_mean_target": 0.06,
+  "raw_soil_weighted_mean": 0.0737980486374797,
+  "scale_factor": 0.8130296275818856,
+  "scenario_weighted_mean": 0.060000000000000005,
+  "scenario_range": [
+    0.037533467852026305,
+    0.09998067624719194
+  ],
+  "raw_soil_range": [
+    0.046164944767951965,
+    0.12297298014163971
+  ],
+  "pixels_intersecting_aquifer": 4016,
+  "pixels_missing_both_sources": 0,
+  "source_only_one_count": 0,
+  "mean_absolute_source_difference": 0.03802266493517847,
+  "source_registration_max_offset_degrees": [
+    9.689331054829609e-05,
+    0.0007977803548158136
+  ],
+  "source_slab_sha256": {
+    "SoilGrids": "b5428fd91c3447cd82c5822c3454fd66b632a25318407070204e39f1847bacf7",
+    "GSDE": "900f9300718db3ac6adee96f1b320e77d7c2439804289d8f33a3de92b4c331a4"
+  },
+  "aquifer_geometry_sha256": "734a6ef05f421f09d2ac3446710ad9c850807eae4feef2441dff663de2ce99e9",
+  "limitations": [
+    "Soil texture at 2–2.296 m does not establish the texture of deep water-bearing sediments.",
+    "The 0.06 mean is a regional literature anchor, not a cell-scale validation or calibration.",
+    "Within-pixel variability is unresolved; the grid must not be described as 30 m or borehole-resolved.",
+    "Source differences describe sensitivity to soil datasets, not a 95% confidence interval.",
+    "Parameters are static; no observed temporal evolution of Sy is inferred."
+  ],
+  "csv_record_count": 4380,
+  "csv_boundary_support_count": 716,
+  "csv_sampling": "Raster lookup at interior centres and original boundary vertices; boundary points are not measurements.",
+  "csv_min_max": [
+    0.037533467852026305,
+    0.09998067624719194
+  ],
+  "retrieved_utc": "2026-11-12T04:55:39.130027+00:00",
+  "source_byte_ranges": {
+    "soilgrids_sy_7_integrate.nc": [
+      974313920,
+      995395519
+    ],
+    "GSDE_sy_2-integrate.nc": [
+      9683434124,
+      9704688523
+    ]
+  },
+  "source_global_metadata": {
+    "soilgrids_sy_7_integrate.nc": {
+      "version": 1,
+      "dims": {
+        "lat": 16800,
+        "lon": 43200
+      },
+      "variables": {
+        "lat": {
+          "dims": [
+            "lat"
+          ],
+          "shape": [
+            16800
+          ],
+          "attrs": {
+            "units": "degrees_north"
+          },
+          "type": 5,
+          "size": 67200,
+          "offset": 320
+        },
+        "lon": {
+          "dims": [
+            "lon"
+          ],
+          "shape": [
+            43200
+          ],
+          "attrs": {
+            "units": "degrees_east"
+          },
+          "type": 5,
+          "size": 172800,
+          "offset": 67520
+        },
+        "sy": {
+          "dims": [
+            "lat",
+            "lon"
+          ],
+          "shape": [
+            16800,
+            43200
+          ],
+          "attrs": {
+            "long_name": "soilgrid sy layer 7 integrate",
+            "_FillValue": [
+              -999.0
+            ]
+          },
+          "type": 5,
+          "size": 2903040000,
+          "offset": 240320
+        }
+      },
+      "attributes": {}
+    },
+    "GSDE_sy_2-integrate.nc": {
+      "version": 1,
+      "dims": {
+        "depth": 4,
+        "lat": 16800,
+        "lon": 43200
+      },
+      "variables": {
+        "depth": {
+          "dims": [
+            "depth"
+          ],
+          "shape": [
+            4
+          ],
+          "attrs": {
+            "units": "centimeter",
+            "long_name": "depth"
+          },
+          "type": 5,
+          "size": 16,
+          "offset": 508
+        },
+        "lat": {
+          "dims": [
+            "lat"
+          ],
+          "shape": [
+            16800
+          ],
+          "attrs": {
+            "long_name": "latitude",
+            "units": "degrees_north"
+          },
+          "type": 5,
+          "size": 67200,
+          "offset": 524
+        },
+        "lon": {
+          "dims": [
+            "lon"
+          ],
+          "shape": [
+            43200
+          ],
+          "attrs": {
+            "long_name": "longitude",
+            "units": "degrees_east"
+          },
+          "type": 5,
+          "size": 172800,
+          "offset": 67724
+        },
+        "sy": {
+          "dims": [
+            "depth",
+            "lat",
+            "lon"
+          ],
+          "shape": [
+            4,
+            16800,
+            43200
+          ],
+          "attrs": {
+            "long_name": "GSDE sy 5-8 layer integrate",
+            "_FillValue": [
+              -999.0
+            ]
+          },
+          "type": 5,
+          "size": 4294967295,
+          "offset": 240524
+        }
+      },
+      "attributes": {}
+    }
+  },
+  "dashboard_validation": {
+    "csv_accepted_points": 4380,
+    "dashboard_cells_inside": 259,
+    "cells_inside_csv_hull": 259
+  }
+}

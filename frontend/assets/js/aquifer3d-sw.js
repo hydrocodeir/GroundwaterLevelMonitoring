@@ -1,4 +1,4 @@
-const CACHE_NAME = "aquifer3d-offline-v13";
+const CACHE_NAME = "aquifer3d-offline-v22";
 const CORE_FILES = [
   "/",
   "/dashboard-compute.py",
@@ -23,6 +23,8 @@ const CORE_FILES = [
   "/assets/css/aquifer3d.css",
   "/assets/js/aquifer3d.js",
   "/assets/js/aquifer3d-render.js",
+  "/assets/js/aquifer3d-tools.js",
+  "/assets/js/aquifer3d-maps.js",
   "/assets/js/aquifer3d-worker.js",
   "/assets/js/aquifer3d_compute.py",
   "/assets/pyodide/pyodide.mjs",
@@ -42,6 +44,7 @@ const CORE_FILES = [
   "/data/LOCATION.csv",
   "/data/DATA.csv",
   "/data/NEYSHABUR_BEDROCK_DEPTH.csv",
+  "/data/MASHHAD_BEDROCK_MSL.csv",
   "/data/NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv",
   "/data/NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json"
 ];

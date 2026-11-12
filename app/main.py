@@ -40,6 +40,11 @@ templates.env.globals["asset_version"] = max(
     (ROOT / "frontend" / "assets" / "js" / "app.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "comparison.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "aquifer3d.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-render.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-tools.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-maps.js").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "js" / "aquifer3d_compute.py").stat().st_mtime_ns,
+    (ROOT / "frontend" / "assets" / "css" / "aquifer3d.css").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "dashboard-worker.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "aquifer3d-worker.js").stat().st_mtime_ns,
     (ROOT / "frontend" / "assets" / "js" / "pyodide-runtime.js").stat().st_mtime_ns,
@@ -106,7 +111,7 @@ def aquifer_3d(request: Request) -> HTMLResponse:
 
 @app.get("/data/{filename}")
 def aquifer_3d_source_data(filename: str) -> FileResponse:
-    if filename not in {"AQUIFER.geojson", "MAHDOUDE.geojson", "LOCATION.csv", "DATA.csv", "Monthly_Precipitation.csv", "Monthly_NDVI.csv", "Monthly_AET.csv", "Warm_Season_Irrigated_Area.csv", "NEYSHABUR_BEDROCK_DEPTH.csv", "NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv.metadata.json"}:
+    if filename not in {"AQUIFER.geojson", "MAHDOUDE.geojson", "LOCATION.csv", "DATA.csv", "Monthly_Precipitation.csv", "Monthly_NDVI.csv", "Monthly_AET.csv", "Warm_Season_Irrigated_Area.csv", "MASHHAD_BEDROCK_MSL.csv", "NEYSHABUR_BEDROCK_DEPTH.csv", "NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv", "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv.metadata.json"}:
         raise HTTPException(status_code=404, detail="فایل پیدا نشد")
     return FileResponse(ROOT / "Data" / filename)
 

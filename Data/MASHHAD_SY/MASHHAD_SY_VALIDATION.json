@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "independent_readers": [
+    "Pillow TIFF float reader",
+    "GDAL gdalinfo"
+  ],
+  "raster_size": [
+    176,
+    122
+  ],
+  "raster_valid_pixels": 4016,
+  "csv_records": 4380,
+  "max_csv_vs_tiff_absolute_difference": 8.179492944071498e-09,
+  "csv_dashboard_hull_validation": {
+    "csv_accepted_points": 4380,
+    "dashboard_cells_inside": 259,
+    "cells_inside_csv_hull": 259
+  },
+  "checks": [
+    "EPSG:4326 recognized by GDAL",
+    "north-up geotransform",
+    "PixelIsArea",
+    "Float32 and NoData",
+    "fractional Sy strictly between zero and one",
+    "every CSV row matches its raster pixel",
+    "both soil sources cover all aquifer intersection area",
+    "no missing-parameter fill required"
+  ],
+  "file_sha256": {
+    "MASHHAD_SY_AUDIT.csv": "08d94780f0f908a6bc3bd5d3788140643c8fbe326d7510d458c9cbf18ff86f97",
+    "MASHHAD_SY_METADATA.json": "268487f6e7f16cab94ed3c34ea75f77670b35b0c1814d5d5b3a106ce4256c936",
+    "MASHHAD_SY_PREVIEW.png": "a79b03aa0d597c2050613d840c6cf307610131b7f013474e357169a17b28e41a",
+    "MASHHAD_SY_PRIOR.csv": "7e2eb0a30982a283258d1b90c8a50b6c71b044efda7abac8c11776f535acfc35",
+    "MASHHAD_SY_PRIOR.tif": "b859f7cccf0daea6ccb8559bcb1b6786be059469ef63808598197e6f468b43fb",
+    "MASHHAD_SY_SOIL_REFERENCE.tif": "d00e63678c57fcb810c161fe5651a21d61bf6eb2c096552ad6a94d47b1c49f43"
+  }
+}

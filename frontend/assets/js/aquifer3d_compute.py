@@ -16,7 +16,6 @@ from collections import defaultdict
 
 
 RADIUS_M = 6371008.8
-CURRENT_YEAR = 1404
 CURRENT_MONTH = 6
 GRID_SIZE = 38
 KARAT_MAX_BEDROCK_DEPTH_M = 300.0
@@ -26,6 +25,8 @@ _readings = {}
 _prepared = {}
 _figure_depth = []
 _figure_boundary_rule = None
+_mashhad_bedrock_text = ""
+_last_analysis = None
 
 
 def _normal(value):
@@ -46,8 +47,12 @@ def _number(value):
         return None
 
 
-def initialize(geojson_text, locations_text, measurements_text, figure_depth_text=""):
+def initialize(geojson_text, locations_text, measurements_text, figure_depth_text="", mashhad_bedrock_text=""):
     global _features, _locations, _readings, _prepared, _figure_depth, _figure_boundary_rule
+    global _mashhad_bedrock_text
+    global _last_analysis
+    _last_analysis = None
+    _mashhad_bedrock_text = mashhad_bedrock_text
     _features = json.loads(geojson_text)["features"]
     _locations = []
     for row in csv.DictReader(io.StringIO(locations_text)):
@@ -155,10 +160,16 @@ def prepare(feature_index):
     wells = [well for well in _locations
              if west <= well["lon"] <= east and south <= well["lat"] <= north
              and _contains(polygons, well["lon"], well["lat"])]
+    keys = {well['key'] for well in wells}
+    counts = defaultdict(int)
+    for key, year, month in _readings:
+        if key in keys and month == CURRENT_MONTH:
+            counts[year] += 1
+    current_year = max((year for year, count in counts.items() if count >= 3), default=0)
     current = {well["key"]: well for well in wells
-               if (well["key"], CURRENT_YEAR, CURRENT_MONTH) in _readings}
+               if (well["key"], current_year, CURRENT_MONTH) in _readings}
     years = sorted({year for (key, year, month) in _readings
-                    if month == CURRENT_MONTH and year < CURRENT_YEAR and key in current})
+                    if month == CURRENT_MONTH and year < current_year and key in current})
     available = []
     for year in years:
         count = sum((key, year, CURRENT_MONTH) in _readings for key in current)
@@ -167,10 +178,11 @@ def prepare(feature_index):
                               "water_year": year - 1})
     summary = {"index": index, "name": feature["properties"].get("AQUIFER", ""),
                "mahdoude": feature["properties"].get("MAHDOUDE", ""),
-               "well_count": len(wells), "current_count": len(current),
+               "well_count": len(wells), "current_count": len(current), "current_year":current_year or None,
                "years": available, "area_km2": round(_area(polygons) / 1e6, 2)}
     _prepared[index] = {"summary": summary, "polygons": polygons,
-                        "extent": (west, south, east, north), "current": current}
+                        "extent": (west, south, east, north), "current": current,
+                        "ground_points": [(w["lon"], w["lat"], w["ground"]) for w in wells]}
     return summary
 
 
@@ -395,20 +407,386 @@ def _convex_hull(points):
     return lower[:-1] + upper[:-1]
 
 
-def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m=65.0):
+def _sy_points(text):
+    """Strict WGS84 point input; never silently discard a bad coefficient."""
+    if not text or not text.strip():
+        return []
+    reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+    reader.fieldnames = [name.strip().lower() for name in (reader.fieldnames or [])]
+    names = set(reader.fieldnames)
+    lon_key = "longitude" if "longitude" in names else "lon"
+    lat_key = "latitude" if "latitude" in names else "lat"
+    if not {lon_key, lat_key, "sy"}.issubset(names):
+        raise ValueError("فایل Sy باید ستون‌های longitude,latitude,Sy یا lon,lat,Sy داشته باشد.")
+    points = {}
+    for line, row in enumerate(reader, 2):
+        lon, lat, value = (_number(row.get(key)) for key in (lon_key, lat_key, "sy"))
+        if (None in (lon, lat, value) or not -180 <= lon <= 180
+                or not -90 <= lat <= 90 or not 0 < value < 1):
+            raise ValueError(f"ردیف {line} فایل Sy نامعتبر است؛ مختصات جغرافیایی و Sy بین صفر و یک لازم است.")
+        if (lon, lat) in points and points[(lon, lat)] != value:
+            raise ValueError(f"ردیف {line}: دو Sy متفاوت برای یک مختصات ثبت شده است.")
+        points[(lon, lat)] = value
+    result = [(lon, lat, value) for (lon, lat), value in points.items()]
+    if len(_convex_hull(result)) < 3:
+        raise ValueError("فایل Sy به دست‌کم سه نقطهٔ غیرهم‌خط نیاز دارد.")
+    return result
+
+
+def _plan_maps(display, spatial_sy, coefficient, has_floor):
+    """Physical (unraised) floor, Sy and baseline-relative storage on clipped squares."""
+    from shapely.geometry import Polygon, box
+    from shapely.ops import unary_union
+    shape = unary_union([Polygon(p[0], p[1:]) for p in display['polygons']])
+    west, south, east, north = shape.bounds
+    sx, sy = 111320 * math.cos(math.radians((south+north)/2)), 111320
+    side = max((east-west)*sx, (north-south)*sy) / 32
+    dx, dy = side/sx, side/sy
+    points, cols, rows = display['points'], display['cols'], display['rows']
+    x0, y0 = points[0][:2]
+    x1, y1 = points[-1][:2]
+
+    def height(lon, lat, column):
+        x = max(0, min(cols-1-1e-8, (lon-x0)/(x1-x0)*(cols-1)))
+        y = max(0, min(rows-1-1e-8, (lat-y0)/(y1-y0)*(rows-1)))
+        i, j = int(x), int(y)
+        u, v = x-i, y-j
+        return (points[j*cols+i][column]*(1-u)*(1-v) + points[j*cols+i+1][column]*u*(1-v)
+                + points[(j+1)*cols+i][column]*(1-u)*v + points[(j+1)*cols+i+1][column]*u*v)
+
+    cells = []
+    for j in range(math.ceil((north-south)/dy)):
+        for i in range(math.ceil((east-west)/dx)):
+            cell = shape.intersection(box(west+i*dx, south+j*dy, west+(i+1)*dx, south+(j+1)*dy))
+            if cell.is_empty or cell.area < 1e-14:
+                continue
+            p = cell.representative_point()
+            lon, lat = p.x, p.y
+            before, after, bottom = [height(lon, lat, k) for k in (2,3,4)]
+            value = _idw(spatial_sy, lon, lat, (south+north)/2) if spatial_sy else coefficient
+            valid = has_floor and value is not None
+            old = max(0, before-bottom)*value if valid else None
+            now = max(0, after-bottom)*value if valid else None
+            lost = max(0, old-now) if valid else None
+            gained = max(0, now-old) if valid else None
+            baseline_defined = valid and old > 1e-10  # numerical zero, in metres of equivalent water
+            area = cell.area*sx*sy
+            parts = [cell] if cell.geom_type == 'Polygon' else list(getattr(cell,'geoms',[]))
+            rings = [[list(r.coords) for r in [part.exterior, *part.interiors]]
+                     for part in parts if part.geom_type == 'Polygon']
+            cells.append({'lon':lon, 'lat':lat, 'remaining_m':now, 'lost_m':lost,
+                          'before_m':old, 'gained_m':gained,
+                          'remaining_pct':100*now/old if baseline_defined else None,
+                          'lost_pct':100*lost/old if baseline_defined else None,
+                          'gained_pct':100*gained/old if baseline_defined else None,
+                          'sy':value, 'before_msl':before, 'after_msl':after,
+                          'bedrock_msl':bottom if has_floor else None,
+                          'saturated_m':max(0,after-bottom) if has_floor else None,
+                          'before_mcm':old*area/1e6 if valid else None,
+                          'remaining_mcm':now*area/1e6 if valid else None,
+                          'lost_mcm':lost*area/1e6 if valid else None,
+                          'area_m2':area, 'polygons':rings, 'column':i, 'row':j})
+    fields = {}
+    for key, available in [('bedrock_msl', has_floor), ('sy', coefficient is not None or bool(spatial_sy))]:
+        if not available:
+            continue
+        values = [(p[4] if key == 'bedrock_msl' else
+                   _idw(spatial_sy, p[0], p[1], (south+north)/2) if spatial_sy else coefficient)
+                  for p in points]
+        cell_values = [c[key] for c in cells]
+        fields[key] = {'min':min(cell_values), 'max':max(cell_values),
+                       'contours':_surface_contours(points, cols, rows, values, shape)}
+    return {'cells':cells, 'side_m':side, 'fields':fields,
+            'polygons':display['polygons'], 'extent':[west,south,east,north],
+            'percentage_reference':'baseline_storage', 'zero_baseline':'undefined'}
+
+
+def _surface_contours(points, cols, rows, values, shape):
+    """March triangles, then clip/merge isolines; levels follow the input range."""
+    from shapely.geometry import LineString
+    from shapely.ops import unary_union, linemerge
+    low, high = min(values), max(values)
+    if math.isclose(low, high, rel_tol=1e-12, abs_tol=1e-14):
+        return []
+    raw = (high-low)/8
+    magnitude = 10**math.floor(math.log10(raw))
+    step = next(n for n in (1, 2, 2.5, 5, 10) if n*magnitude >= raw)*magnitude
+    levels = [step*k for k in range(math.floor(low/step)+1, math.ceil(high/step))]
+    contours = []
+    for level in levels:
+        segments = []
+        for j in range(rows-1):
+            for i in range(cols-1):
+                a = j*cols+i
+                for ids in ((a,a+1,a+cols+1), (a,a+cols+1,a+cols)):
+                    hits = []
+                    for u,v in zip(ids, (ids[1],ids[2],ids[0])):
+                        if (values[u] <= level < values[v]) or (values[v] <= level < values[u]):
+                            t = (level-values[u])/(values[v]-values[u])
+                            hits.append(tuple(points[u][k]+t*(points[v][k]-points[u][k]) for k in (0,1)))
+                    if len(hits) == 2 and hits[0] != hits[1]:
+                        segments.append(LineString(hits))
+        if not segments:
+            continue
+        lines = unary_union(segments).intersection(shape)
+        if lines.is_empty:
+            continue
+        if lines.geom_type == 'MultiLineString':
+            lines = linemerge(lines)
+        def paths(geometry):
+            if geometry.geom_type == 'LineString':
+                return [list(geometry.coords)] if geometry.length > 0 else []
+            return [path for part in getattr(geometry, 'geoms', []) for path in paths(part)]
+        contours.append({'value':level, 'paths':paths(lines)})
+    return contours
+
+
+def _pixel_water_mesh(display, spatial_sy, coefficient, has_floor, plan_maps=None):
+    """Use exactly the same physical cells as the 2D percentage maps."""
+    if not has_floor or (coefficient is None and not spatial_sy):
+        return None
+    from shapely.geometry import Polygon
+    from shapely.ops import triangulate
+    plan_maps = plan_maps or _plan_maps(display, spatial_sy, coefficient, has_floor)
+    shell = {'blue': [], 'red': [], 'green': [], 'floor': [], 'outlines': []}
+    vertices, cells = [], plan_maps['cells']
+    for cell in cells:
+        lon,lat,now,lost = [cell[k] for k in ('lon','lat','remaining_m','lost_m')]
+        vertices.append([lon,lat,0,0,0,0,now+lost])
+        parts = [Polygon(p[0],p[1:]) for p in cell['polygons']]
+        for part in parts:
+            if part.geom_type != 'Polygon':
+                continue
+            for ring in [part.exterior, *part.interiors]:
+                xy = list(ring.coords)
+                for (ax,ay),(bx,by) in zip(xy,xy[1:]):
+                    shell['outlines'].extend([[ax,ay,0],[bx,by,0]])
+            # Clip boundary squares exactly; interior cells remain square.
+            tops = [t for t in triangulate(part) if part.covers(t)]
+            for kind, low, high in [('blue',0,now), ('red',now,now+lost)]:
+                if high-low < 1e-10:
+                    continue
+                for tri in tops:
+                    xy = list(tri.exterior.coords)[:3]
+                    shell[kind].append([[x,y,high]+([now] if kind=='red' else []) for x,y in xy])
+                    shell[kind].append([[x,y,low]+([now] if kind=='red' else []) for x,y in reversed(xy)])
+                for ring in [part.exterior, *part.interiors]:
+                    xy = list(ring.coords)
+                    for (ax,ay),(bx,by) in zip(xy,xy[1:]):
+                        a,b,c,d = [ax,ay,low],[bx,by,low],[bx,by,high],[ax,ay,high]
+                        if kind=='red':
+                            for point in (a,b,c,d):
+                                point.append(now)
+                        shell[kind].extend([[a,b,c],[a,c,d]])
+                        shell['outlines'].extend([[ax,ay,high],[bx,by,high]])
+    # Extent includes cell corners rather than only their representative points.
+    west,south,east,north = plan_maps['extent']
+    vertices.extend([[west,south,0,0,0,0,0],[east,north,0,0,0,0,0]])
+    return {'shell':shell, 'vertices':vertices, 'cells':cells, 'side_m':plan_maps['side_m']}
+
+
+def _volume_mesh(display, spatial_sy, coefficient, has_floor):
+    """Display mesh clipped to polygon rings; never changes analytical volumes.
+
+    Heights are sampled from the original display grid. Near the rim, ONLY the
+    geological view's floor approaches the baseline. Equivalent-water thickness
+    uses the original floor and locally interpolated Sy, never the lifted floor.
+    """
+    from shapely.geometry import Polygon, MultiPoint, GeometryCollection, Point
+    from shapely.ops import triangulate, unary_union
+    polygons = [Polygon(p[0], p[1:]) for p in display["polygons"]]
+    shape = unary_union(polygons)
+    if not shape.is_valid:
+        raise ValueError("مرز آبخوان برای ساخت حجم سه‌بعدی معتبر نیست.")
+    points, cols, rows = display["points"], display["cols"], display["rows"]
+    west, south = points[0][:2]
+    east, north = points[-1][:2]
+    center_lat = (south + north) / 2
+    sx = 111320 * math.cos(math.radians(center_lat))
+    sy_m = 111320
+    # Simplification is bounded to about 5 metres and affects only rendering.
+    tolerance = 5 / max(sx, sy_m)
+    shape = shape.simplify(tolerance, preserve_topology=True)
+    nodes = MultiPoint([p[:2] for p in points if shape.covers(Point(p[:2]))])
+    source = GeometryCollection([shape.boundary, nodes])
+    faces = []
+
+    def add_clipped(piece, depth=0):
+        if piece.is_empty or piece.area < 1e-16:
+            return
+        if piece.geom_type != "Polygon":
+            for part in getattr(piece, "geoms", []):
+                add_clipped(part, depth)
+            return
+        coords = list(piece.exterior.coords)[:-1]
+        if len(coords) == 3 and not piece.interiors:
+            faces.append(coords)
+            return
+        if depth > 8:
+            raise ValueError("ساخت شبکهٔ بسته در مرز آبخوان ناموفق بود.")
+        for triangle in triangulate(piece):
+            if piece.covers(triangle):
+                faces.append(list(triangle.exterior.coords)[:-1])
+            elif triangle.intersects(piece):
+                add_clipped(triangle.intersection(piece), depth + 1)
+
+    for triangle in triangulate(source):
+        if shape.covers(triangle):
+            faces.append(list(triangle.exterior.coords)[:-1])
+        elif shape.intersects(triangle):
+            add_clipped(shape.intersection(triangle))
+    area = sum(Polygon(face).area for face in faces)
+    if not math.isclose(area, shape.area, rel_tol=1e-7, abs_tol=1e-12):
+        raise ValueError("پوشش شبکهٔ سه‌بعدی با مرز آبخوان سازگار نیست.")
+    # Use the simplified display rings for exact rim coincidence in both views.
+    parts = [shape] if shape.geom_type == "Polygon" else list(shape.geoms)
+    rings = [[list(r.coords) for r in [p.exterior, *p.interiors]] for p in parts]
+    boundary = _boundary_index(rings, center_lat)
+    transition_m = max((east-west)*sx/(cols-1), (north-south)*sy_m/(rows-1))
+
+    def height(lon, lat, column):
+        x = max(0, min(cols-1-1e-8, (lon-west)/(east-west)*(cols-1)))
+        y = max(0, min(rows-1-1e-8, (lat-south)/(north-south)*(rows-1)))
+        i, j = int(x), int(y)
+        u, v = x-i, y-j
+        return (points[j*cols+i][column]*(1-u)*(1-v) + points[j*cols+i+1][column]*u*(1-v)
+                + points[(j+1)*cols+i][column]*(1-u)*v + points[(j+1)*cols+i+1][column]*u*v)
+
+    vertices, lookup, triangles = [], {}, []
+    for face in faces:
+        indices = []
+        for lon, lat in face:
+            key = (round(lon, 11), round(lat, 11))
+            if key not in lookup:
+                before, after, original = [height(lon, lat, k) for k in (2, 3, 4)]
+                distance = _boundary_distance_m(boundary, lon, lat)
+                t = max(0, min(1, distance / transition_m))
+                t = t*t*(3-2*t)
+                # At the rim this equals baseline exactly. The adjustment fades
+                # within one computational-cell width; no original row is edited.
+                bottom = before + (original-before)*t
+                value = _idw(spatial_sy, lon, lat, center_lat) if spatial_sy else coefficient
+                old = max(0, before-original)*value if has_floor and value is not None else None
+                now = max(0, after-original)*value if has_floor and value is not None else None
+                lookup[key] = len(vertices)
+                vertices.append([lon, lat, before, after, bottom, old, now])
+            indices.append(lookup[key])
+        triangles.append(indices)
+    # Single-use edges are the actual outer/hole boundary, never cell walls.
+    edges = {}
+    for a, b, c in triangles:
+        for u, v in [(a,b), (b,c), (c,a)]:
+            key = tuple(sorted((u,v)))
+            edges[key] = edges.get(key, 0) + 1
+    if any(count > 2 for count in edges.values()):
+        raise ValueError("لبهٔ نامعتبر در شبکهٔ سه‌بعدی.")
+    boundary_edges = [list(edge) for edge, count in edges.items() if count == 1]
+    return {"vertices": vertices, "triangles": triangles,
+            "boundary": boundary_edges,
+            "geology": _volume_shells(vertices, triangles, boundary_edges, False),
+            "water": _volume_shells(vertices, triangles, boundary_edges, True),
+            "transition_m": transition_m, "boundary_tolerance_m": 5}
+
+
+def _volume_shells(vertices, triangles, boundary, equivalent):
+    """Closed shells of retained, lost and gained water; no internal cell walls.
+
+    Each base triangle is split at head/floor and gain/loss intersections before
+    thickness clamping. Red and green must never occupy the same XY region.
+    Rows are [lon, lat, floor, baseline, final]. Output triangles are XYZ only.
+    """
+    if equivalent and any(v[5] is None or v[6] is None for v in vertices):
+        return None
+    rows = [[v[0], v[1], 0, v[5], v[6]] if equivalent else
+            [v[0], v[1], v[4], v[2], v[3]] for v in vertices]
+    shells = {"blue": [], "red": [], "green": [], "floor": [], "outlines": []}
+    planes = [lambda p: p[3]-p[2], lambda p: p[4]-p[2], lambda p: p[3]-p[4]]
+
+    def mix(a, b, t):
+        return [x + (y-x)*t for x, y in zip(a, b)]
+
+    def clip(poly, gap, sign):
+        result = []
+        a = poly[-1]
+        for b in poly:
+            ga, gb = gap(a)*sign, gap(b)*sign
+            if (ga >= 0) != (gb >= 0):
+                result.append(mix(a, b, ga/(ga-gb)))
+            if gb >= 0:
+                result.append(b)
+            a = b
+        return result
+
+    def heights(p):
+        low, old, now = p[2], max(p[2],p[3]), max(p[2],p[4])
+        return {"blue": (low, min(old,now)), "red": (now, max(old,now)),
+                "green": (old, max(old,now))}
+
+    def fan(poly, key, upper, reverse=False):
+        layer = [[p[0],p[1],heights(p)[key][int(upper)]] + ([heights(p)[key][0]] if key=='red' else []) for p in poly]
+        for i in range(1,len(layer)-1):
+            tri = [layer[0],layer[i],layer[i+1]]
+            shells[key].append(tri[::-1] if reverse else tri)
+
+    for indices in triangles:
+        tri = [rows[i] for i in indices]
+        shells["floor"].append([[p[0],p[1],p[2]] for p in tri])
+        parts = [tri]
+        for gap in planes:
+            split = []
+            for poly in parts:
+                values = [gap(p) for p in poly]
+                if min(values) < -1e-9 and max(values) > 1e-9:
+                    split.extend([clip(poly,gap,1),clip(poly,gap,-1)])
+                else:
+                    split.append(poly)
+            parts = [p for p in split if len(p)>=3]
+        for poly in parts:
+            for key in ("blue","red","green"):
+                if max(heights(p)[key][1]-heights(p)[key][0] for p in poly) < 1e-8:
+                    continue
+                fan(poly,key,True)
+                fan(poly,key,False,True)
+    for u,v in boundary:
+        a,b=rows[u],rows[v]
+        cuts={0.,1.}
+        for gap in planes:
+            ga,gb=gap(a),gap(b)
+            if ga*gb < 0:
+                cuts.add(ga/(ga-gb))
+        cuts=sorted(cuts)
+        for ta,tb in zip(cuts,cuts[1:]):
+            p,q=mix(a,b,ta),mix(a,b,tb)
+            for key in ("blue","red","green"):
+                pl,ph=heights(p)[key]; ql,qh=heights(q)[key]
+                if max(ph-pl,qh-ql)<1e-8:
+                    continue
+                x,y,z,w=[p[0],p[1],pl],[q[0],q[1],ql],[q[0],q[1],qh],[p[0],p[1],ph]
+                if key=='red':
+                    for point,anchor in [(x,pl),(y,ql),(z,ql),(w,pl)]:
+                        point.append(anchor)
+                shells[key].extend([[x,y,z],[x,z,w]])
+            for k in (2,3,4):
+                shells["outlines"].extend([[p[0],p[1],max(p[2],p[k])],[q[0],q[1],max(q[2],q[k])]])
+    return shells
+
+
+def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m=65.0, sy_text=""):
     summary = prepare(feature_index)
+    current_year = summary['current_year']
     year = int(baseline_year)
     if year not in {item["year"] for item in summary["years"]}:
         raise ValueError("برای شهریورِ سال انتخاب‌شده دست‌کم سه پیزومتر مشترک وجود ندارد.")
-    coefficient = _number(sy)
-    if coefficient is not None and not 0 < coefficient < 1:
+    spatial_sy = _sy_points(sy_text)
+    coefficient = None if spatial_sy else _number(sy)
+    if not spatial_sy and sy not in (None, "") and (coefficient is None or not 0 < coefficient < 1):
         raise ValueError("آبدهی ویژه باید عددی بین صفر و یک باشد.")
     prepared = _prepared[int(feature_index)]
     polygons, extent = prepared["polygons"], prepared["extent"]
     common = []
     for key, well in prepared["current"].items():
         before_depth = _readings.get((key, year, CURRENT_MONTH))
-        after_depth = _readings.get((key, CURRENT_YEAR, CURRENT_MONTH))
+        after_depth = _readings.get((key, current_year, CURRENT_MONTH))
         if before_depth is not None and after_depth is not None:
             common.append((well["lon"], well["lat"],
                            well["ground"] - before_depth,
@@ -419,6 +797,10 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
     west, south, east, north = extent
     center_lat = (south + north) / 2
     uploaded_bedrock = _bedrock_points(bedrock_text, polygons, extent)
+    builtin_mashhad = []
+    if _normal(summary["name"]) == _normal("مشهد") and not uploaded_bedrock:
+        builtin_mashhad = _bedrock_points(_mashhad_bedrock_text, polygons, extent)
+    elevation_bedrock = uploaded_bedrock or builtin_mashhad
     is_neyshabur = (_normal(summary["name"]) == _normal("نیشابور") and
                     _normal(summary["mahdoude"]) == _normal("نیشابور"))
     is_karat = (_normal(summary["name"]) == _normal("کرات") and
@@ -435,7 +817,7 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
             raise ValueError("ضخامت فرضی کرات باید بین ۲۰ و ۳۰۰ متر باشد.")
         current_heads = [
             (well["lon"], well["lat"],
-             well["ground"] - _readings[(key, CURRENT_YEAR, CURRENT_MONTH)])
+             well["ground"] - _readings[(key, current_year, CURRENT_MONTH)])
             for key, well in prepared["current"].items()
         ]
         current_grounds = [
@@ -443,11 +825,15 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
             for well in prepared["current"].values()
         ]
     bedrock_source = ("uploaded" if uploaded_bedrock else
+                      "mashhad_msl" if builtin_mashhad else
                       "figure_s4" if figure_depth else
                       "karat_scenario" if scenario_thickness is not None else
                       "schematic")
     depth_hull = _convex_hull(figure_depth) if figure_depth else []
-    hull = _convex_hull(uploaded_bedrock) if uploaded_bedrock else depth_hull
+    hull = _convex_hull(elevation_bedrock) if elevation_bedrock else depth_hull
+    sy_hull = _convex_hull(spatial_sy) if spatial_sy else []
+    coefficients = []
+    sy_supported = 0
     well_hull = _convex_hull(common)
     points = []
     sampled = []
@@ -467,9 +853,15 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
                 points.append([lon, lat, None, None, None, False])
                 continue
             before, after, ground = _common_surfaces(common, lon, lat, center_lat)
-            if uploaded_bedrock:
-                bottom = _idw(uploaded_bedrock, lon, lat, center_lat)
+            coefficients.append(_idw(spatial_sy, lon, lat, center_lat) if spatial_sy else coefficient)
+            if sy_hull and _ring_contains(sy_hull, lon, lat):
+                sy_supported += 1
+            if elevation_bedrock:
+                bottom = _idw(elevation_bedrock, lon, lat, center_lat)
             elif figure_depth:
+                # Fixed ground reference, independent of the selected year and
+                # common-well subset. This is an interpolated estimate, not DEM.
+                ground = _idw(prepared["ground_points"], lon, lat, center_lat)
                 raw_depth = _contour_idw(figure_depth, lon, lat, center_lat)
                 depth = raw_depth
                 if figure_rule:
@@ -480,7 +872,7 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
                 bottom = ground - depth
             elif scenario_thickness is not None:
                 # One fixed hypothetical floor for every baseline year: the
-                # 1404 surface uses all current wells, including those absent
+                # Latest supported September uses all current wells, including those absent
                 # from a selected historical comparison. The cap is depth
                 # below the same fixed, all-current-well ground surface.
                 current_head = _idw(current_heads, lon, lat, center_lat)
@@ -503,8 +895,10 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
             sampled.append((before, after, bottom))
     if not sampled:
         raise ValueError("شبکه محاسباتی داخل مرز آبخوان قرار نگرفت.")
+    if spatial_sy and sy_supported != len(sampled):
+        raise ValueError("نقاط Sy کل شبکهٔ آبخوان را پوشش نمی‌دهند؛ نقاط پیرامون محدوده را هم وارد کنید.")
     coverage = supported / len(sampled) if hull else 0
-    if uploaded_bedrock and coverage < 0.98:
+    if elevation_bedrock and coverage < 0.98:
         raise ValueError("نقاط سنگ‌بستر کل آبخوان را پوشش نمی‌دهند؛ شبکه باید تا پیرامون مرز ادامه یابد.")
     schematic_base = min(min(a, b) for a, b, _ in sampled) - max(
         20.0, (max(max(a, b) for a, b, _ in sampled) -
@@ -516,19 +910,22 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
     area_m2 = summary["area_km2"] * 1e6
     mean_before = sum(row[0] for row in sampled) / len(sampled)
     mean_after = sum(row[1] for row in sampled) / len(sampled)
-    change_mcm = ((mean_after - mean_before) * coefficient * area_m2 / 1e6
-                  if coefficient is not None else None)
+    has_sy = coefficient is not None or bool(spatial_sy)
+    cell_area_km2 = area_m2 / len(sampled) / 1e6
+    change_mcm = (cell_area_km2 * sum((row[1] - row[0]) * value
+                  for row, value in zip(sampled, coefficients)) if has_sy else None)
     volume_before = volume_after = None
     sensitivity_20m = None
     dry_cells = 0
-    if bedrock_source != "schematic" and coefficient is not None:
-        cell_scale = coefficient * area_m2 / len(sampled) / 1e6
-        volume_before = cell_scale * sum(
-            max(0.0, before - bottom) for before, _, bottom in sampled)
-        volume_after = cell_scale * sum(
-            max(0.0, after - bottom) for _, after, bottom in sampled)
+    if bedrock_source != "schematic" and has_sy:
+        volume_before = cell_area_km2 * sum(
+            max(0.0, row[0] - row[2]) * value for row, value in zip(sampled, coefficients))
+        volume_after = cell_area_km2 * sum(
+            max(0.0, row[1] - row[2]) * value for row, value in zip(sampled, coefficients))
         dry_cells = sum(after <= bottom for _, after, bottom in sampled)
         change_mcm = volume_after - volume_before
+    if bedrock_source != "schematic" and coefficient is not None:
+        cell_scale = coefficient * cell_area_km2
         if bedrock_source == "karat_scenario":
             def scenario_volume(thickness, phase_index):
                 return cell_scale * sum(
@@ -574,12 +971,78 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
         step = max(1, math.ceil(len(ring) / 260))
         outlines.append([[p[0], p[1]] for p in ring[::step]])
     declines = sum(after < before for _, _, before, after, _, _ in common)
+    water_points, water_values = [], []
+    sy_iter = iter(coefficients)
+    for point in points:
+        lon, lat, before, after, bottom, inside = point
+        value = next(sy_iter) if inside else None
+        valid = inside and has_sy and bedrock_source != "schematic"
+        old = max(0, before - bottom) * value if valid else None
+        now = max(0, after - bottom) * value if valid else None
+        water_points.append([lon, lat, old, now, 0 if valid else None, bool(valid)])
+        if valid:
+            water_values.append((old, now))
+    equivalent = None
+    if water_values:
+        equivalent = {
+            "remaining_m": sum(b for a, b in water_values) / len(water_values),
+            "lost_m": sum(max(0, a - b) for a, b in water_values) / len(water_values),
+            "gained_m": sum(max(0, b - a) for a, b in water_values) / len(water_values),
+        }
+    # Display-only padding lets the renderer clip smooth surfaces at the actual
+    # polygon, including holes, instead of erecting walls at occupied grid cells.
+    # These extra samples never contribute to area, storage or coverage metrics.
+    display_points = []
+    for j in range(-1, GRID_SIZE + 1):
+        lat = south + (j + .5) * (north - south) / GRID_SIZE
+        for i in range(-1, GRID_SIZE + 1):
+            lon = west + (i + .5) * (east - west) / GRID_SIZE
+            point = points[j * GRID_SIZE + i] if 0 <= i < GRID_SIZE and 0 <= j < GRID_SIZE else None
+            if point and point[5]:
+                display_points.append(point[:5])
+                continue
+            before, after, ground = _common_surfaces(common, lon, lat, center_lat)
+            if elevation_bedrock:
+                bottom = _idw(elevation_bedrock, lon, lat, center_lat)
+            elif figure_depth:
+                ground = _idw(prepared["ground_points"], lon, lat, center_lat)
+                depth = _contour_idw(figure_depth, lon, lat, center_lat)
+                if figure_rule:
+                    distance = _boundary_distance_m(figure_boundary, lon, lat)
+                    depth = _edge_depth(depth, distance, figure_rule, lon, lat, center_lat)
+                bottom = ground - depth
+            elif scenario_thickness is not None:
+                bottom = max(_idw(current_heads, lon, lat, center_lat) - scenario_thickness,
+                             _idw(current_grounds, lon, lat, center_lat) - KARAT_MAX_BEDROCK_DEPTH_M)
+            else:
+                bottom = schematic_base
+            display_points.append([lon, lat, before, after, bottom])
+    water_balance = None
+    if equivalent:
+        retained = sum(min(a, b) for a, b in water_values) / len(water_values)
+        water_balance = {
+            "before_m": sum(a for a, b in water_values) / len(water_values),
+            "after_m": equivalent["remaining_m"], "retained_m": retained,
+            "lost_m": equivalent["lost_m"], "gained_m": equivalent["gained_m"],
+            "lost_mcm": equivalent["lost_m"] * summary["area_km2"],
+            "gained_mcm": equivalent["gained_m"] * summary["area_km2"],
+        }
+    display_grid = {"cols": GRID_SIZE + 2, "rows": GRID_SIZE + 2,
+                    "points": display_points, "polygons": polygons}
+    volume_mesh = _volume_mesh(display_grid, spatial_sy, coefficient, bedrock_source != "schematic")
+    plan_maps = _plan_maps(display_grid, spatial_sy, coefficient, bedrock_source != "schematic")
+    pixel_water = _pixel_water_mesh(display_grid, spatial_sy, coefficient, bedrock_source != "schematic", plan_maps)
     result = {
         "aquifer": {"name": summary["name"], "mahdoude": summary["mahdoude"],
                     "area_km2": summary["area_km2"]},
-        "dates": {"before": f"{year}-06", "after": "1404-06",
-                  "before_water_year": year - 1, "after_water_year": 1403},
+        "dates": {"before": f"{year}-06", "after": f"{current_year}-06",
+                  "before_water_year": year - 1, "after_water_year": current_year-1},
         "wells": {"common": len(common), "declined": declines,
+                  "points": [{"name": well["name"], "lon": well["lon"], "lat": well["lat"],
+                              "before": well["ground"] - _readings[(key, year, CURRENT_MONTH)],
+                              "after": well["ground"] - _readings[(key, current_year, CURRENT_MONTH)]}
+                             for key, well in prepared["current"].items()
+                             if (key, year, CURRENT_MONTH) in _readings],
                   "before_mean_depth_m": sum(row[4] for row in common) / len(common),
                   "after_mean_depth_m": sum(row[5] for row in common) / len(common)},
         "metrics": {"mean_head_decline_m": mean_before - mean_after,
@@ -607,22 +1070,110 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
                         capped_cells / len(sampled) * 100 if scenario_thickness is not None else None),
                     "sensitivity_20m": sensitivity_20m,
                     "dry_cell_count": dry_cells,
+                    "equivalent_water": equivalent,
+                    "water_balance": water_balance,
+                    "sy_mode": "spatial" if spatial_sy else "constant",
+                    "sy_min": min(coefficients) if has_sy else None,
+                    "sy_max": max(coefficients) if has_sy else None,
                     "sy": coefficient},
+        "pixel_water": pixel_water,
+        "plan_maps": plan_maps,
+        "water_grid": {"cols": GRID_SIZE, "rows": GRID_SIZE, "points": water_points,
+                       "outlines": outlines, "bedrock_real": True,
+                       "bedrock_source": "equivalent_water"},
+        "display_grid": display_grid,
+        "volume_mesh": volume_mesh,
         "grid": {"cols": GRID_SIZE, "rows": GRID_SIZE, "points": points,
                  "outlines": outlines,
-                 "bedrock_real": bedrock_source in ("uploaded", "figure_s4"),
+                 "bedrock_real": bedrock_source in ("uploaded", "figure_s4", "mashhad_msl"),
                  "bedrock_source": bedrock_source},
         "method": ("IDW²، ۸ چاه نزدیک، پیزومترهای مشترک دو شهریور؛ شبکه ۳۸×۳۸" +
                    ("؛ عمق سنگ کفِ برگرفته از شکل S4 و ارتفاع زمین چاه‌ها درون‌یابی شده‌اند"
                     + ("؛ قید فرضی سنگ‌کف نزدیک سطح در مرز و گذار نرم به عمق داخلی" if figure_rule else "")
                     if bedrock_source == "figure_s4" else
-                    "؛ سنگ‌کف فرضی کرات از تراز آب درون‌یابی‌شدهٔ تمام چاه‌های شهریور ۱۴۰۴ منهای ضخامت سناریویی ساخته می‌شود، عمق آن زیر زمین محلی حداکثر ۳۰۰ متر است و با سال مبنا ثابت می‌ماند"
+                    f"؛ سنگ‌کف فرضی کرات از تراز آب درون‌یابی‌شدهٔ تمام چاه‌های شهریور {current_year} منهای ضخامت سناریویی ساخته می‌شود، عمق آن زیر زمین محلی حداکثر ۳۰۰ متر است و با سال مبنا ثابت می‌ماند"
                     if bedrock_source == "karat_scenario" else ""))
     }
     return result
 
 
+def cross_section(start, end, count=241):
+    """Sample the original input floor, preserving gaps outside polygon/holes."""
+    if not _last_analysis:
+        raise ValueError("ابتدا مدل آبخوان را محاسبه کنید.")
+    if len(start) != 2 or len(end) != 2 or any(_number(v) is None for v in start+end):
+        raise ValueError("مختصات خط مقطع معتبر نیست.")
+    start,end=list(map(float,start)),list(map(float,end))
+    data = _last_analysis
+    grid = data['display_grid']
+    points, cols, rows = grid['points'], grid['cols'], grid['rows']
+    west,south = points[0][:2]
+    east,north = points[-1][:2]
+    if any(not (west <= p[0] <= east and south <= p[1] <= north) for p in [start,end]):
+        raise ValueError("خط مقطع باید داخل کادر آبخوان باشد.")
+    sx = 111320*math.cos(math.radians((start[1]+end[1])/2))
+    length = math.hypot((end[0]-start[0])*sx,(end[1]-start[1])*111320)
+    if length < 1:
+        raise ValueError("طول مقطع باید دست‌کم یک متر باشد.")
+    count=max(2,min(int(count),501))
+    positions={i/(count-1) for i in range(count)}
+    # Explicit crossing samples preserve even holes narrower than the regular spacing.
+    from shapely.geometry import Polygon, LineString
+    from shapely.ops import unary_union
+    shape=unary_union([Polygon(p[0],p[1:]) for p in grid['polygons']])
+    route=LineString([start,end])
+    crossings=shape.boundary.intersection(route)
+    def mark_crossings(geometry):
+        if geometry.is_empty:
+            return
+        if hasattr(geometry,'geoms'):
+            for part in geometry.geoms:
+                mark_crossings(part)
+        elif geometry.geom_type=='Point':
+            t=route.project(geometry,normalized=True)
+            positions.update(max(0,min(1,t+offset)) for offset in (-1e-7,0,1e-7))
+        elif geometry.geom_type=='LineString':
+            from shapely.geometry import Point
+            for coord in [geometry.coords[0],geometry.coords[-1]]:
+                mark_crossings(Point(coord))
+    mark_crossings(crossings)
+    result=[]
+    for t in sorted(positions):
+        lon,lat = [start[k]+(end[k]-start[k])*t for k in range(2)]
+        values=None
+        if _contains(grid['polygons'],lon,lat):
+            x=max(0,min(cols-1-1e-8,(lon-west)/(east-west)*(cols-1)))
+            y=max(0,min(rows-1-1e-8,(lat-south)/(north-south)*(rows-1)))
+            i,j=int(x),int(y)
+            u,v=x-i,y-j
+            values=[sum(p[k]*weight for p,weight in [
+                (points[j*cols+i],(1-u)*(1-v)),(points[j*cols+i+1],u*(1-v)),
+                (points[(j+1)*cols+i],(1-u)*v),(points[(j+1)*cols+i+1],u*v)]) for k in (2,3,4)]
+        result.append({'distance_m':length*t,'lon':lon,'lat':lat,'levels':values})
+    return {'samples':result,'length_m':length,'bedrock_source':data['grid']['bedrock_source']}
+
+
+def well_details(feature_index, name, lon, lat):
+    prepare(feature_index)
+    candidates=[w for w in _prepared[feature_index]['current'].values() if w['name']==name]
+    if not candidates:
+        raise ValueError("پیزومتر در آبخوان انتخابی پیدا نشد.")
+    well=min(candidates,key=lambda w:(w['lon']-lon)**2+(w['lat']-lat)**2)
+    records=sorted([{'year':y,'month':m,'water_year':y if m>=7 else y-1,
+                     'level':well['ground']-depth,'depth':depth,'ordinal':y*12+m}
+                    for (key,y,m),depth in _readings.items() if key==well['key']],
+                   key=lambda r:r['ordinal'])
+    annual=[]
+    for wy in sorted({r['water_year'] for r in records}):
+        months=[r for r in records if r['water_year']==wy]
+        annual.append({'water_year':wy,'months':len(months),
+                       'mean_msl':sum(r['level'] for r in months)/len(months),
+                       'observed_decline_m':months[0]['level']-months[-1]['level'] if len(months)>1 else None})
+    return {'name':well['name'],'ground_msl':well['ground'],'records':records,'annual':annual}
+
+
 def call_json(command, argument_json="{}"):
+    global _last_analysis
     arguments = json.loads(argument_json)
     if command == "catalog":
         result = catalog()
@@ -631,7 +1182,12 @@ def call_json(command, argument_json="{}"):
     elif command == "analyze":
         result = analyze(arguments["feature_index"], arguments["baseline_year"],
                          arguments.get("sy"), arguments.get("bedrock_text", ""),
-                         arguments.get("karat_thickness_m", 65.0))
+                         arguments.get("karat_thickness_m", 65.0), arguments.get("sy_text", ""))
+        _last_analysis = result
+    elif command == 'cross_section':
+        result = cross_section(arguments['start'],arguments['end'])
+    elif command == 'well_details':
+        result = well_details(arguments['feature_index'],arguments['name'],arguments['lon'],arguments['lat'])
     else:
         raise ValueError("دستور ناشناخته است.")
     return json.dumps(result, ensure_ascii=False, separators=(",", ":"))

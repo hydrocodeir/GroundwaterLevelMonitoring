@@ -1,0 +1,328 @@
+{
+  "report_version": "1.0",
+  "snapshot_date": "2026-11-12",
+  "snapshot_date_persian": "1405-08-21",
+  "language": "fa-IR",
+  "purpose": "Documentation snapshot; hashes identify local inputs and code, not field validation.",
+  "hydrological_calendar": "Persian water year: Mehr through Shahrivar; named by starting year",
+  "git_head": "12ba06ed82912fb333f20491a9f64325f1021277",
+  "git_worktree_has_changes": true,
+  "render": {
+    "chapters": 15,
+    "tables": 12,
+    "figures": 2,
+    "engine": "Playwright Chromium",
+    "network_requests": "blocked",
+    "html_has_embedded_fonts_and_figures": true
+  },
+  "referenced_files": [
+    {
+      "path": ".tmp/BedRock.geojson",
+      "bytes": 78583,
+      "sha256": "6d826396c92ee9f3da7f60c2da4d28f1ae4a0df7e7b6291002b61399c046a94f"
+    },
+    {
+      "path": "app/data_service.py",
+      "bytes": 183684,
+      "sha256": "f989dbbde64a6c3439aca9ae2d479698b34e850cea1f3da41f63bb3d440852c7"
+    },
+    {
+      "path": "Data/AQUIFER.geojson",
+      "bytes": 1073331,
+      "sha256": "285679190899e9e740c9369f17dfb05deb745c932bc0898c71a981dae2a050e0"
+    },
+    {
+      "path": "Data/DATA.csv",
+      "bytes": 28014269,
+      "sha256": "5230e7c925e91fdce58c3a051203949b7d4733564c99cb567b35c0a08bbff4ad"
+    },
+    {
+      "path": "Data/LOCATION.csv",
+      "bytes": 91232,
+      "sha256": "80b33043f7ab11fbfddbc8ee7ff77de5aacf75cc314d54ca75f7368219409b12"
+    },
+    {
+      "path": "Data/MAHDOUDE.geojson",
+      "bytes": 7393037,
+      "sha256": "1e9e9a1f6016f565340727f3dac3ce95a0ef0c23408956a0d9c397126c34aa1d"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_BOUNDARY.geojson",
+      "bytes": 75350,
+      "sha256": "f2deb6403244ca20561beb748649dc041891b4386f4d2eb4476bfd601bff242a"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_DEPTH_SOURCE.csv",
+      "bytes": 63174,
+      "sha256": "528615868a2346cf2293a36aa787b27c0d20e092a4ef06242628ddc5e3a167aa"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_MODEL_VALIDATION.json",
+      "bytes": 25176,
+      "sha256": "979b985e0826e408a27eb94c0e25bb43d5607918e14d4b20ab62b3b90d24942d"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_MSL.audit.csv",
+      "bytes": 1684429,
+      "sha256": "3bb656aaf62de82fd5862baba9c944f360501039eb02eb79f261ef7bb3bcb867"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_MSL.csv",
+      "bytes": 490235,
+      "sha256": "3ad5a3c00b3db34d0f273c29948b3f0e69f2da6897b2229c34502b92af4e0746"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_MSL.csv.metadata.json",
+      "bytes": 33444,
+      "sha256": "2b8391c660c3b62b935a1c387b2c0501dfb5ae2350b4dbf3ce511a4788dc3659"
+    },
+    {
+      "path": "Data/MASHHAD_BEDROCK_MSL.README.md",
+      "bytes": 9607,
+      "sha256": "490883ad6ac06e1c1df74aca005097ccf32eacd959cec706ce2c489089eb801f"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_AUDIT.csv",
+      "bytes": 805770,
+      "sha256": "08d94780f0f908a6bc3bd5d3788140643c8fbe326d7510d458c9cbf18ff86f97"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_METADATA.json",
+      "bytes": 6088,
+      "sha256": "268487f6e7f16cab94ed3c34ea75f77670b35b0c1814d5d5b3a106ce4256c936"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_PREVIEW.png",
+      "bytes": 225283,
+      "sha256": "a79b03aa0d597c2050613d840c6cf307610131b7f013474e357169a17b28e41a"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_PRIOR.csv",
+      "bytes": 166463,
+      "sha256": "7e2eb0a30982a283258d1b90c8a50b6c71b044efda7abac8c11776f535acfc35"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_PRIOR.tif",
+      "bytes": 88728,
+      "sha256": "b859f7cccf0daea6ccb8559bcb1b6786be059469ef63808598197e6f468b43fb"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_SOIL_REFERENCE.tif",
+      "bytes": 88728,
+      "sha256": "d00e63678c57fcb810c161fe5651a21d61bf6eb2c096552ad6a94d47b1c49f43"
+    },
+    {
+      "path": "Data/MASHHAD_SY/MASHHAD_SY_VALIDATION.json",
+      "bytes": 1386,
+      "sha256": "fc909760c3bdc12e997c447cd77e69bf8e644d87856b35141113ac5ec1eea043"
+    },
+    {
+      "path": "Data/MASHHAD_SY/README.fa.md",
+      "bytes": 9534,
+      "sha256": "70c2c3ca2bbcef000fc863008554fa9b237a6585a591a3e1bdd327795c742564"
+    },
+    {
+      "path": "Data/Monthly_AET.csv",
+      "bytes": 226350,
+      "sha256": "41b58a07a7db1c61ba97834c89a134010ea45c3c1ebf52efa7ef29a081db59d7"
+    },
+    {
+      "path": "Data/Monthly_AET.csv.metadata.json",
+      "bytes": 286,
+      "sha256": "1aabef80aa5f004682d26aa3377e122ae100bb307798a96318562844ffec5fcd"
+    },
+    {
+      "path": "Data/Monthly_NDVI.csv",
+      "bytes": 493277,
+      "sha256": "3696054019890195dc1a097b024b668a354bb2d09c8b0223b96d670c60170646"
+    },
+    {
+      "path": "Data/Monthly_NDVI.csv.metadata.json",
+      "bytes": 279,
+      "sha256": "bdca92caeae7f97aa9267bcf41302b29f15b95311f42b389dc3ed2b03f7aec8a"
+    },
+    {
+      "path": "Data/Monthly_Precipitation.csv",
+      "bytes": 5598591,
+      "sha256": "32a75c1e19007989890b9bd655fc098c589b15a2e1c13c58d21ead62314c5490"
+    },
+    {
+      "path": "Data/NEYSHABUR_BEDROCK_DEPTH.csv",
+      "bytes": 529999,
+      "sha256": "23e557b5c0841d62aca73355e22113f33b36576af6a72abd815855f4318d7610"
+    },
+    {
+      "path": "Data/NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json",
+      "bytes": 5341,
+      "sha256": "580c2e5f95c256506eea5899a55a357525522d5f10cf63f870e9f75c248ec2eb"
+    },
+    {
+      "path": "Data/NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv",
+      "bytes": 6190,
+      "sha256": "3a1b0940feb3af4da6ee0b905e6eb67abd3ae15ade1668a886303728474263c1"
+    },
+    {
+      "path": "Data/NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv.metadata.json",
+      "bytes": 1767,
+      "sha256": "eec4c291e6729d9e95a310f27e7ce3e3e7afdf1edc1f72e1968838843e2807d2"
+    },
+    {
+      "path": "Data/Warm_Season_Irrigated_Area.csv",
+      "bytes": 56737,
+      "sha256": "40956f8c0594cae830f9d8792a35c91a215a3cbcb01a8fad86fade1ab6f23f02"
+    },
+    {
+      "path": "Data/Warm_Season_Irrigated_Area.csv.metadata.json",
+      "bytes": 572,
+      "sha256": "6cd76301779d2e978ed14917073e04e407d0a1b49a39a660fd3fcbeb5113f4d1"
+    },
+    {
+      "path": "docs/reports/assets/mashhad-bedrock-validation.png",
+      "bytes": 253176,
+      "sha256": "6669d32ce20dd486f5ceec6f7053e4f861d5c4cce2c6fe717e758c37e77f0504"
+    },
+    {
+      "path": "docs/reports/assets/mashhad-sy-preview.png",
+      "bytes": 225283,
+      "sha256": "a79b03aa0d597c2050613d840c6cf307610131b7f013474e357169a17b28e41a"
+    },
+    {
+      "path": "frontend/assets/fonts/vazirmatn-arabic-400.woff2",
+      "bytes": 21088,
+      "sha256": "e31830d3a52e0259b176326385d82bc469581a9898046300de46e5c00f6b7064"
+    },
+    {
+      "path": "frontend/assets/fonts/vazirmatn-arabic-500.woff2",
+      "bytes": 21792,
+      "sha256": "d3bc3b18900b56552fe1e02f899a22a4fc34203f6fb65218d482afaa6deb46a0"
+    },
+    {
+      "path": "frontend/assets/fonts/vazirmatn-arabic-700.woff2",
+      "bytes": 21728,
+      "sha256": "aa79f9419fa0f5efcf301158b7405d188c4d434c86c32efad1e8669752feb344"
+    },
+    {
+      "path": "frontend/assets/fonts/vazirmatn-latin-400.woff2",
+      "bytes": 16068,
+      "sha256": "a650d62e37f036d53367b383e7c723c2efd426baf74ee8ccb95b634974955f49"
+    },
+    {
+      "path": "frontend/assets/fonts/vazirmatn-latin-500.woff2",
+      "bytes": 16356,
+      "sha256": "2068010db5eca825c06ed04c20eb6f675f4903aa12a74815040b19934c93c1cf"
+    },
+    {
+      "path": "frontend/assets/fonts/vazirmatn-latin-700.woff2",
+      "bytes": 16420,
+      "sha256": "a1d13d1cf4cd1ec6af4623ccdacff9cc7beedd6d9cbc4944b56faf59da95478b"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d-render.js",
+      "bytes": 34609,
+      "sha256": "79e21f7ae9ac2651b223210ba10cfbcb2c568f3ed85dd5a66a7dfee02d536195"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d-sw.js",
+      "bytes": 3936,
+      "sha256": "6bbc39a97942492a5ea3ef829e1f3cf831303e6356ae58bc05b19bac975710b3"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d-tools.js",
+      "bytes": 36396,
+      "sha256": "a5a718cfcf8f93a2528210310bcbdf26d6648d9fb48f325eb7b821806c1daa5f"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d-worker.js",
+      "bytes": 2960,
+      "sha256": "d98a3618b25b2fea2d82e727c5e7dc0cdd4824335432322f2ac6729a8fefc608"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d.js",
+      "bytes": 41239,
+      "sha256": "cebc8a063fa08df962b99ab9a542ba738f366a51520487aa6ecf076d54f5fd66"
+    },
+    {
+      "path": "frontend/assets/js/aquifer3d_compute.py",
+      "bytes": 55778,
+      "sha256": "061bda383eeaf9712a02268fe796cf6852e74362b7002fcd0483462f0f5520b4"
+    },
+    {
+      "path": "frontend/assets/js/dashboard-worker.js",
+      "bytes": 3457,
+      "sha256": "98f700d4b1479f20af07b7a1239b0e6b77ffa4d161758037b9b631b5ed13dfd9"
+    },
+    {
+      "path": "scripts/build_hydrogeology_report.py",
+      "bytes": 13752,
+      "sha256": "066c080507a7454b691fcf97306b58e08c4283644c662e3b9ec0f99a26d2e706"
+    },
+    {
+      "path": "scripts/build_mashhad_sy.py",
+      "bytes": 8770,
+      "sha256": "ea6e791e9cfa7b77863f2aa50c7cd5d701c9bca01c764211bc9fd7a5a84575e9"
+    },
+    {
+      "path": "scripts/correct_neyshabur_bedrock.py",
+      "bytes": 11760,
+      "sha256": "1535de82d7f133636ba6cbcc285c2dc7404df7a1c90812195853924fde535e5e"
+    },
+    {
+      "path": "scripts/digitize_neyshabur_bedrock.py",
+      "bytes": 10563,
+      "sha256": "3f8a9b4b964c341f7658c3a50d8315b6e2856891320bdbd112deba5afd4514f7"
+    },
+    {
+      "path": "scripts/export_mashhad_bedrock.py",
+      "bytes": 8217,
+      "sha256": "d8a4a16503c45b11a3ac78ba5ab6c8ff924022dd50d64975f914e6120453b993"
+    },
+    {
+      "path": "scripts/export_monthly_aet.py",
+      "bytes": 14860,
+      "sha256": "b1feac0d8df35e4f911bdda4bda80c63f7e23b9d903ec437d5cdb868e0e628eb"
+    },
+    {
+      "path": "scripts/export_monthly_ndvi.py",
+      "bytes": 15797,
+      "sha256": "c657e3dc5b213e44c45e2e9bfceb03120511d26753d04a7bb0b07eab9ab33b32"
+    },
+    {
+      "path": "scripts/export_warm_season_irrigated_area.py",
+      "bytes": 22234,
+      "sha256": "60aa480fed2ac550d970523b272f7c5f4e6f0894bfa54443ffc76f5bfc5a289f"
+    },
+    {
+      "path": "scripts/mashhad_bedrock_compute.py",
+      "bytes": 22601,
+      "sha256": "198ead89ed956ab077be04328cebddc74b47bc5075447bf519d86b00373a27e0"
+    },
+    {
+      "path": "scripts/mashhad_bedrock_surface.py",
+      "bytes": 14862,
+      "sha256": "760e86e074cf514d277eea89195db045e86ee9f2094b35ae1ca0f17272fce64b"
+    },
+    {
+      "path": "scripts/mashhad_sy_compute.py",
+      "bytes": 17969,
+      "sha256": "e86198d246ff342ee60198a71a55c79fab12630a3a69da175579c78fa4e4fcbb"
+    }
+  ],
+  "deliverables": [
+    {
+      "path": "docs/reports/HYDROGEOLOGY_METHODS_ASSUMPTIONS.fa.md",
+      "bytes": 68992,
+      "sha256": "245e912ed6d50f1ce8e644f2f680d0bc2db18baf9574c7a5aa8764cefdd51a9c"
+    },
+    {
+      "path": "docs/reports/HYDROGEOLOGY_METHODS_ASSUMPTIONS.fa.html",
+      "bytes": 873638,
+      "sha256": "de30235ab26557591b8029d903a2a8fda29459b4162e5b07a3b88f71c7cd6058"
+    },
+    {
+      "path": "output/pdf/HYDROGEOLOGY_METHODS_ASSUMPTIONS_FA.pdf",
+      "bytes": 997759,
+      "sha256": "97a892627227eb65a181bcd33c13c30d3db67ec8cd320029880d55b5401696bd"
+    }
+  ],
+  "note": "No credentials, environment files or user-uploaded external data are included."
+}

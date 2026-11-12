@@ -72,3 +72,105 @@
 @media(max-width:720px){.aquifer3d-shell{padding:16px 14px 40px}.aquifer3d-intro{display:block;margin:38px 0 30px}.aquifer3d-intro h1{font-size:29px}.aquifer3d-date-card{display:inline-block;margin-top:22px}.aquifer3d-section-heading{align-items:flex-start;flex-direction:column;gap:8px}.aquifer3d-scene-grid,.aquifer3d-notes-grid{grid-template-columns:1fr}.aquifer3d-legend{margin-top:4px}.aquifer3d-canvas-wrap canvas{height:390px}}
 @media(max-width:520px){.aquifer3d-brand strong{font-size:11px}.aquifer3d-brand small{font-size:9px}.aquifer3d-brand-mark{width:41px;height:41px}.aquifer3d-back{padding:8px;font-size:10px}.aquifer3d-form-grid{grid-template-columns:1fr}.aquifer3d-field small{min-height:auto}.aquifer3d-action-row{align-items:stretch;flex-direction:column;gap:9px}.aquifer3d-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.aquifer3d-metric{min-height:148px;padding:13px}.aquifer3d-canvas-wrap canvas{height:320px}.aquifer3d-scene-heading{padding:16px}.aquifer3d-config,.aquifer3d-notes{padding:18px}}
 @media(prefers-reduced-motion:reduce){.aquifer3d-page *{scroll-behavior:auto!important;transition:none!important}}
+
+/* Keep the working view quiet; controls stay beside the plots. */
+.aquifer3d-page [hidden]{display:none!important}
+.aquifer3d-canvas-wrap canvas.aquifer3d-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;background:transparent}
+.aquifer3d-layer-options{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:11px;margin-top:10px;min-height:30px}
+.aquifer3d-layer-options label{display:flex;align-items:center;gap:6px;min-height:34px;cursor:pointer}
+.aquifer3d-layer-options input{accent-color:#14637b;width:16px;height:16px}
+.balance-lost{color:#b43e48}.balance-retained{color:#216ab0}.balance-gained{color:#168044}
+.aquifer3d-canvas-wrap #afterCanvas{cursor:default;touch-action:auto}
+.aquifer3d-water-tabs{display:flex;gap:4px;margin-top:12px;border-bottom:1px solid #dce8ee}
+.aquifer3d-water-tabs button{min-height:44px;padding:8px 12px;border:0;border-bottom:3px solid transparent;background:transparent;color:#536b7b;font:500 12px Vazirmatn,sans-serif;cursor:pointer}
+.aquifer3d-water-tabs button[aria-selected=true]{color:#14637b;border-bottom-color:#14637b;background:#f0f6f9}
+.aquifer3d-water-tabs button:focus-visible{outline:2px solid #14637b;outline-offset:-2px}
+.aquifer3d-canvas-wrap::before{display:none}
+.aquifer3d-card,.aquifer3d-scene{border-radius:10px;box-shadow:none}
+.aquifer3d-kicker,.aquifer3d-metric-icon{display:none}
+.aquifer3d-build-button{background:#14637b;box-shadow:none}
+.aquifer3d-build-button:hover{transform:none}
+.aquifer3d-form-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.aquifer3d-field small,.aquifer3d-scene-heading p,.aquifer3d-metric small{color:#536b7b;font-size:11px}
+.aquifer3d-metric{min-height:120px;border-radius:8px;box-shadow:none}
+.aquifer3d-toolbar,.aquifer3d-scene-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.aquifer3d-toolbar{margin-bottom:12px;padding:12px;border:1px solid #dce8ef;border-radius:8px;background:#fff}
+.aquifer3d-toolbar button,.aquifer3d-scene-actions button,.aquifer3d-scene-actions select{min-height:44px;padding:8px 12px;border:1px solid #bbceda;border-radius:6px;background:#fff;color:#163f55;font:500 12px Vazirmatn,sans-serif;cursor:pointer}
+.aquifer3d-toolbar button:hover,.aquifer3d-scene-actions button:hover{background:#edf5f8}
+.aquifer3d-toolbar button:disabled{opacity:.5;cursor:default}
+.aquifer3d-toolbar output{min-width:58px;text-align:center;font-size:13px;font-variant-numeric:tabular-nums}
+.aquifer3d-toolbar>span{font-size:11px;color:#536b7b;margin-inline-start:auto}
+.aquifer3d-scene-actions{margin-top:12px;font-size:11px}
+.aquifer3d-scene-actions button{margin-inline-start:auto}
+.aquifer3d-scene-before .aquifer3d-scene-heading,.aquifer3d-scene-after .aquifer3d-scene-heading{background:#fff;min-height:155px}
+.aquifer3d-scene-caption{color:#465f70;font-size:11px}
+.aquifer3d-water-metrics{display:flex;flex-wrap:wrap;justify-content:space-around;gap:12px;padding:14px;background:#f4f9fa;font-size:11px}
+.aquifer3d-water-metrics strong{display:block;margin-top:5px;font-size:16px;color:#0c6765}
+.aquifer3d-water-metrics>span:nth-child(2) strong{color:#a4481c}
+.aquifer3d-water-metrics>span:first-child strong{color:#206598}
+.aquifer3d-water-metrics>span:nth-child(2) strong{color:#ad434d}
+.aquifer3d-water-metrics>span:last-child{flex-basis:100%;border-top:1px solid #dce8ee;padding-top:10px;text-align:center;color:#536b7b}
+.aquifer3d-water-metrics>span:last-child strong{display:inline;margin-inline-start:8px;color:#168044;font-size:13px}
+.aquifer3d-scene:fullscreen{display:flex;flex-direction:column;background:white;border-radius:0;overflow:auto}
+.aquifer3d-scene:fullscreen .aquifer3d-canvas-wrap{flex:1;min-height:250px}
+.aquifer3d-scene:fullscreen canvas{height:100%;min-height:55vh}
+@media(max-width:900px){.aquifer3d-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.aquifer3d-form-grid{grid-template-columns:1fr}.aquifer3d-toolbar>span{width:100%}.aquifer3d-toolbar button{flex:1 0 40%}}
+.a3-professional{margin-top:20px;padding:20px;color:#27465c}
+.a3-tool-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px}
+.a3-tool-heading h2{font-size:18px}.a3-tool-heading span{font-size:12px;color:#536b7b}
+.a3-tool-tabs,.a3-actions{display:flex;flex-wrap:wrap;gap:8px}
+.a3-tool-tabs{border-bottom:1px solid #dce8ee;margin-bottom:16px}
+.a3-professional button,.a3-professional select,.a3-professional input{min-height:44px;border:1px solid #b8cbd7;border-radius:5px;padding:8px 12px;font:inherit;background:white;color:#27465c;max-width:100%}
+.a3-professional button{cursor:pointer}.a3-professional button:hover{background:#edf5f8}.a3-professional button:disabled{opacity:.5;cursor:default}
+.a3-tool-tabs button{border:0;border-bottom:3px solid transparent;border-radius:0}
+.a3-tool-tabs button[aria-selected=true]{border-color:#14637b;color:#14637b;background:#f0f6f9}
+.a3-professional :focus-visible{outline:2px solid #14637b;outline-offset:3px}
+.a3-tool-panel p{font-size:12px;line-height:1.9;margin:8px 0 16px}
+.a3-section-layout{display:grid;grid-template-columns:minmax(240px,1fr) minmax(0,1.6fr);gap:20px;align-items:start}
+.a3-professional svg{display:block;width:100%;background:#fbfdfe;border:1px solid #e1e9ef;border-radius:6px;font:12px Vazirmatn,Tahoma,sans-serif;direction:ltr;overflow:visible}
+#a3SectionMap{touch-action:none}#a3SectionMap circle{cursor:grab}#a3SectionChart{min-height:240px}
+.a3-actions{margin-top:12px}.a3-professional label{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px}
+@media(max-width:800px){.a3-section-layout{grid-template-columns:1fr}.a3-professional{padding:14px}.a3-professional svg{font-size:13px}}
+.a3-compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.a3-compare-grid>div{min-width:0}.a3-compare-grid h3{font-size:14px;margin-bottom:10px}
+.a3-presentation-bar{position:fixed;inset:0 0 auto;z-index:10000;padding:12px 24px;background:white;border-bottom:1px solid #b8cbd7;display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:#173e56}
+.a3-presentation-bar[hidden]{display:none}.a3-presentation-bar span{font-size:12px}.a3-presentation-bar button{min-height:44px;background:white;border:1px solid #b8cbd7;padding:8px 12px;color:#173e56;border-radius:5px;cursor:pointer;font:inherit}
+body.a3-presenting{background:#f1f6fa}body.a3-presenting .aquifer3d-shell{max-width:none;padding:110px 20px 20px}
+body.a3-presenting .site-header,body.a3-presenting .page-heading,body.a3-presenting .aquifer3d-config,body.a3-presenting .aquifer3d-summary,body.a3-presenting .aquifer3d-notes,body.a3-presenting .aquifer3d-scenes>.aquifer3d-section-heading{display:none!important}
+body.a3-presenting .aquifer3d-scene-grid{grid-template-columns:1fr}
+body.a3-presenting .aquifer3d-canvas-wrap canvas{height:60vh}
+body.a3-presenting[data-a3-slide=geology] .aquifer3d-scene-after,body.a3-presenting[data-a3-slide=pixels] .aquifer3d-scene-before{display:none}
+body.a3-presenting[data-a3-slide=geology] .a3-professional,body.a3-presenting[data-a3-slide=pixels] .a3-professional{display:none}
+body.a3-presenting[data-a3-slide=compare] .aquifer3d-scenes,body.a3-presenting[data-a3-slide=section] .aquifer3d-scenes{display:none}
+body.a3-presenting .a3-professional>.a3-tool-heading,body.a3-presenting .a3-professional>.a3-tool-tabs{display:none}
+@media(max-width:720px){.a3-compare-grid{grid-template-columns:1fr}.a3-presentation-bar{padding:8px;gap:6px}body.a3-presenting .aquifer3d-shell{padding-top:160px}}
+.a3-saved-list{margin-top:16px}.a3-saved-row{display:flex;gap:8px;margin-bottom:8px}.a3-saved-row button:first-child{flex:1;text-align:start}
+.a3-film-steps{display:grid;gap:14px;margin-top:18px}.a3-film-steps fieldset{display:flex;flex-wrap:wrap;gap:10px;align-items:center;min-width:0;border:1px solid #dce8ee;border-radius:6px;padding:12px}
+.a3-film-steps legend{padding:0 8px;font-size:12px}.a3-film-steps input[type=number]{width:82px}.a3-film-steps input[type=checkbox]{min-height:20px;width:18px}.a3-film-steps select{max-width:220px}.a3-film-steps input[placeholder]{flex:1;min-width:130px;max-width:280px}
+.a3-detail-dialog{width:min(1000px,94vw);max-height:90vh;overflow:auto;border:1px solid #b8cbd7;border-radius:8px;padding:22px;color:#27465c;background:white;font:13px Vazirmatn,Tahoma,sans-serif}
+.a3-detail-dialog::backdrop{background:#173e5677}.a3-detail-dialog h3{font-size:19px;margin:18px 0}.a3-detail-dialog button,.a3-pinned-card>button{min-height:44px;border:1px solid #b8cbd7;border-radius:5px;background:white;padding:8px 12px;font:inherit;color:#27465c;cursor:pointer}
+.a3-detail-dialog svg{display:block;width:100%;font:12px Tahoma,sans-serif;direction:ltr}.a3-detail-dialog p{line-height:1.9}
+.a3-facts{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin:18px 0}.a3-facts dt{color:#536b7b}.a3-facts dd{margin:0;font-weight:600;text-align:end;font-variant-numeric:tabular-nums}
+.a3-table-wrap{max-height:300px;overflow:auto}.a3-table-wrap table{border-collapse:collapse;width:100%;font-size:12px}.a3-table-wrap td,.a3-table-wrap th{padding:8px;border-bottom:1px solid #dce8ee;text-align:start}.a3-table-wrap th{position:sticky;top:0;background:#eef5f8}
+.a3-pinned-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}.a3-pinned-card{border:1px solid #dce8ee;border-radius:6px;padding:14px;min-width:0}
+@media(max-width:700px){.a3-pinned-grid{grid-template-columns:1fr}.a3-detail-dialog{padding:14px}.a3-facts{font-size:12px}.a3-film-steps select{max-width:100%}}
+.a3-section-layout>div{min-width:0}.a3-chart-scroll{max-width:100%;overflow-x:auto}.a3-chart-scroll svg{min-width:620px}.a3-scroll-hint{display:none}
+@media(max-width:700px){.a3-scroll-hint{display:block;color:#536b7b}}
+
+/* Physical plan maps share the active Pyodide result with the 3D views. */
+.aquifer3d-toolbar button[aria-pressed=true]{background:#14637b;color:#fff;border-color:#14637b}
+.aquifer3d-canvas-wrap canvas[data-drag-mode=pan]{cursor:move}
+.a3-plan-section{padding:22px;margin-top:24px}.a3-plan-section[hidden]{display:none}
+.a3-map{min-width:0;padding:14px;background:#fff;color:#27465c}
+.a3-map-controls,.a3-map-navigation,.a3-map-exports{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.a3-map-controls{margin-bottom:12px;gap:12px}.a3-map-controls label{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.a3-map button,.a3-map select{min-height:44px;border:1px solid #bbceda;border-radius:5px;background:#fff;padding:7px 11px;font:12px Vazirmatn,Tahoma,sans-serif;color:#27465c}
+.a3-map button{cursor:pointer}.a3-map button:hover{background:#edf5f8}.a3-map button:disabled{opacity:.5;cursor:wait}
+.a3-map button:focus-visible,.a3-map select:focus-visible,.a3-plan-svg:focus-visible{outline:2px solid #14637b;outline-offset:3px}
+.a3-map input[type=checkbox]{width:17px;height:17px;accent-color:#14637b}.a3-map-controls [hidden]{display:none}
+.a3-map-navigation{margin-inline-start:auto}.a3-plan-svg{display:block;width:100%;height:auto;max-height:76vh;border:1px solid #dce8ee;border-radius:6px;background:#fff;direction:ltr;font-family:Vazirmatn,Tahoma,sans-serif;touch-action:none;cursor:grab;user-select:none}
+.a3-plan-svg:active{cursor:grabbing}.a3-plan-svg [data-cell]{cursor:crosshair}.a3-map-detail{min-height:58px;padding:10px 12px;background:#f1f7fa;border-radius:5px;font-size:12px;line-height:1.9;margin-top:10px}
+.a3-map-note{font-size:11px;line-height:1.9;margin:12px 0;color:#536b7b}.a3-map-exports{padding-top:10px;border-top:1px solid #e0eaf0}.a3-map-exports span{font-size:11px}
+.aquifer3d-water-tabs{flex-wrap:wrap}
+@media(min-width:900px){.a3-parameter-map .a3-plan-svg{max-height:800px}}
+@media(max-width:600px){.a3-plan-section{padding:14px}.a3-map{padding:8px}.a3-map-navigation{width:100%;margin:0}.a3-map select{max-width:190px}.a3-map-exports button{flex:1 1 42%}.a3-map-detail{min-height:80px}}
