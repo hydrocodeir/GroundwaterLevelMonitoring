@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>قالب دادهٔ کیفیت آب زیرزمینی</title>
+<style>@font-face{font-family:Vazirmatn;src:url('../fonts/vazirmatn-arabic-400.woff2')}*{box-sizing:border-box}body{margin:0;background:#f3f6f8;color:#244559;font:14px Vazirmatn,Tahoma,sans-serif;line-height:2}main{max-width:960px;margin:30px auto;padding:24px;background:#fff;border:1px solid #d9e4e9;border-radius:8px}h1{font-size:22px;margin-top:0}h2{font-size:17px;margin-top:24px}a{color:#176b7b}nav{display:flex;gap:10px;flex-wrap:wrap}nav a{padding:8px 12px;border:1px solid #abc7d0;border-radius:5px;text-decoration:none}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:9px;text-align:right;border-bottom:1px solid #dce5eb}code{direction:ltr;unicode-bidi:embed;display:inline-block;font:12px Consolas,monospace}.notice{border-inline-start:3px solid #b68e4c;padding:8px 12px;background:#fffaf0}.scroll{overflow:auto}@media(max-width:600px){main{margin:0;padding:16px;border:0}h1{font-size:19px}}</style>
+<main><h1>قالب دادهٔ کیفیت آب زیرزمینی</h1>
+<nav aria-label="دانلود فایل‌ها"><a href="quality-template.csv" download>قالب خالی طول و عرض جغرافیایی</a><a href="quality-template-utm.csv" download>قالب خالی UTM</a><a href="quality-example.csv" download>نمونهٔ تکمیل‌شدهٔ آموزشی</a></nav>
+<p class="notice">همهٔ عددهای فایل نمونه ساختگی‌اند و فقط روش پرکردن جدول را نشان می‌دهند. فایل خالی را با مشاهدات آبخوان خودتان پر کنید؛ نمونه به‌صورت خودکار وارد محاسبات نمی‌شود.</p>
+<h2>هر ردیف یک نمونه در یک موقعیت و تاریخ است</h2>
+<p>نام ستون‌ها را تغییر ندهید. از اعداد انگلیسی، نقطه برای اعشار و جداکنندهٔ کاما استفاده کنید. در Excel فایل را با نوع <code>CSV UTF-8 (Comma delimited)</code> ذخیره کنید. برای نمونه‌های چند تاریخِ یک چاه، ردیف‌های جدا با همان مختصات واقعی و ثابت ثبت کنید.</p>
+<div class="scroll"><table><thead><tr><th>ستون</th><th>الزام</th><th>تعریف و واحد</th></tr></thead><tbody>
+<tr><td><code>longitude</code></td><td>در قالب جغرافیایی</td><td>طول جغرافیایی بر حسب درجهٔ اعشاری، WGS84؛ محدودهٔ ۱۸۰- تا ۱۸۰</td></tr>
+<tr><td><code>latitude</code></td><td>در قالب جغرافیایی</td><td>عرض جغرافیایی بر حسب درجهٔ اعشاری، WGS84؛ محدودهٔ ۹۰- تا ۹۰</td></tr>
+<tr><td><code>utm_x</code></td><td>در قالب UTM</td><td>مختصات شرقی بر حسب متر</td></tr>
+<tr><td><code>utm_y</code></td><td>در قالب UTM</td><td>مختصات شمالی بر حسب متر</td></tr>
+<tr><td><code>zone</code></td><td>در قالب UTM</td><td>شمارهٔ زون، عدد صحیح ۱ تا ۶۰؛ مبنا WGS84 و نیم‌کرهٔ شمالی است. مختصات با مبنای دیگر را ابتدا تبدیل کنید.</td></tr>
+<tr><td><code>ec</code></td><td>الزامی</td><td>هدایت الکتریکی مثبت، تصحیح‌شده به ۲۵ درجه، بر حسب µS/cm. اگر داده mS/cm یا dS/m است، مقدار را در ۱۰۰۰ ضرب کنید. واحد را داخل سلول ننویسید.</td></tr>
+<tr><td><code>sar</code></td><td>اختیاری</td><td>نسبت جذب سدیم آزمایشگاهی. اگر اندازه‌گیری نشده، سلول خالی بماند؛ صفر جایگزین دادهٔ ناموجود نیست. برای غربالگری توأم EC/SAR کشاورزی لازم است.</td></tr>
+<tr><td><code>year_persian</code></td><td>الزامی</td><td>سال شمسی واقعیِ نمونه‌برداری؛ عدد صحیح، مانند ۱۴۰۲. این ستون شمارهٔ سال آبی نیست.</td></tr>
+<tr><td><code>month_persian</code></td><td>الزامی</td><td>ماه شمسی واقعیِ نمونه‌برداری، عدد صحیح ۱ تا ۱۲. تاریخ آزمایشگاه را جای تاریخ نمونه‌برداری ننویسید.</td></tr>
+</tbody></table></div>
+<p>یکی از دو قالب مختصات را انتخاب کنید؛ UTM را در ستون طول/عرض وارد نکنید. برای نمونه، شهریور ۱۴۰۳ در سال آبی ۱۴۰۲ قرار می‌گیرد و مهر ۱۴۰۳ در سال آبی ۱۴۰۳. برنامه این گروه‌بندی را از سال و ماه نمونه‌برداری انجام می‌دهد.</p>
+<h2>حداقل دادهٔ مفید برای تحلیل</h2>
+<p>برای نقشهٔ کیفیت، نمونه‌ها باید در محدودهٔ آبخوان باشند و پراکندگی مکانی کافی داشته باشند. برای محاسبهٔ روند زمانی EC، سابقهٔ همان موقعیت‌ها در دست‌کم سه سال آبی و پوشش کافیِ دوره، همراه مشاهده در سال پایان کیفیت لازم است؛ چند چاه در یک سال جای سابقهٔ زمانی را نمی‌گیرند. دورهٔ تحلیل و پوشش معتبر در گزارش محاسبه مشخص می‌شوند.</p>
+<p>ستون عمق الزامی نیست. وقتی عمق نمونه‌برداری معلوم نیست، نقشه نمایندهٔ کیفیت آب نمونه‌برداری‌شده است و تعمیم آن به عمق، فرض سناریو باقی می‌ماند. EC به‌تنهایی سلامت شرب یا سازگاری همهٔ محصولات را تأیید نمی‌کند.</p>
+<h2>ورود به داشبورد</h2>
+<ol><li>آبخوان را انتخاب کنید.</li><li>فایل تکمیل‌شده را در «لایه‌های ورودی ← شوری و کیفیت آب» یا بخش «کیفیت آب» انتخاب کنید.</li><li>پنجرهٔ کیفیت و آستانه‌ها را بررسی و محاسبهٔ کیفیت را اجرا کنید.</li><li>در «عمر سناریویی»، محدودیت شوری و مبنای تغییر آن را انتخاب کنید.</li></ol>
+</main></html>

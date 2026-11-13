@@ -18,9 +18,11 @@ def audit_quality(text, aquifers):
     from pyproj import Transformer
     from shapely.geometry import shape, Point
     rows=list(csv.DictReader(io.StringIO(text.lstrip('\ufeff'))))
-    required={'utm_x','utm_y','zone','ec','سال','ماه'}
-    if not rows or not required.issubset({k.strip() for k in rows[0] if k}):
-        raise ValueError('CSV کیفیت باید مطابق WaterQ.csv شامل utm_x, utm_y, zone, ec، سال و ماه باشد.')
+    headers={k.strip() for k in (rows[0] if rows else {}) if k}
+    coordinates=({'utm_x','utm_y','zone'}<=headers or {'longitude','latitude'}<=headers or {'lon','lat'}<=headers)
+    dates=({'سال','ماه'}<=headers or {'year_persian','month_persian'}<=headers)
+    if not rows or 'ec' not in headers or not coordinates or not dates:
+        raise ValueError('CSV کیفیت باید EC، مختصات UTM یا طول/عرض جغرافیایی و سال/ماه فارسی نمونه‌برداری داشته باشد.')
     raw_fields=list(rows[0])
     normalized=[]
     rejected=Counter()
@@ -28,7 +30,12 @@ def audit_quality(text, aquifers):
     for n,row in enumerate(rows,2):
         row={k.strip():str(v or '').strip() for k,v in row.items() if k}
         x,y,ec,zone=[number(row.get(k)) for k in ('utm_x','utm_y','ec','zone')]
-        year,month=[number(row.get(k)) for k in ('سال','ماه')]
+        year=number(row.get('سال') or row.get('year_persian'));month=number(row.get('ماه') or row.get('month_persian'))
+        lon=number(row.get('longitude') or row.get('lon'));lat=number(row.get('latitude') or row.get('lat'))
+        if lon is not None and lat is not None and -180<=lon<=180 and -90<=lat<=90:
+            zone=max(1,min(60,int((lon+180)/6)+1))
+            x,y=Transformer.from_crs(4326,32600+zone,always_xy=True).transform(lon,lat)
+
         if None in (x,y,ec,zone,year,month) or ec<=0 or not 1<=month<=12 or not 1<=zone<=60:
             rejected['invalid_required_values']+=1
             continue
@@ -170,8 +177,8 @@ def estimate_quality(analysis, records, raster_bytes=b'', geology_text='', optio
     from shapely.geometry import Polygon, Point
     from shapely.ops import unary_union
     options=options or {}
-    if not analysis.get('pixel_water'):
-        raise ValueError('برای برآورد حجم کیفی ابتدا کف معتبر و Sy را وارد کنید.')
+    shared=sp_config(analysis['spatial']) if analysis.get('spatial') else None
+    volume_known=analysis.get('metrics',{}).get('drainable_after_mcm') is not None and bool(analysis.get('pixel_water'))
     shape=unary_union([Polygon(p[0],p[1:]) for p in analysis['display_grid']['polygons']])
     local=[r for r in records if shape.covers(Point(r['lon'],r['lat']))]
     if not local:
@@ -212,6 +219,13 @@ def estimate_quality(analysis, records, raster_bytes=b'', geology_text='', optio
     sets={'idw':(None,None),'trend_idw':(base_x,cell_xy/10000)}
     if raster.shape[1]:sets['gee_idw']=(np.column_stack([base_x,raster]),np.column_stack([cell_xy/10000,cell_raster]))
     if rocks.shape[1]:sets['geology_gee_idw']=(np.column_stack([base_x,raster,rocks]),np.column_stack([cell_xy/10000,cell_raster,cell_rocks]))
+    if shared:sets={shared['method']:(None,None)}
+    def shared_predict(source_ll,values,targets):
+        sampler,audit=sp_sampler([{'lon':float(p[0]),'lat':float(p[1]),'value':float(v)} for p,v in zip(source_ll,values)],['value'],shared)
+        if not audit['available']:raise ValueError('برای روش مکانی منتخب کیفیت، پراکندگی نقاط کافی نیست؛ روش یا داده‌ها را در داده‌های آبخوان بررسی کنید.')
+        result=[sampler(float(p[0]),float(p[1])) for p in targets]
+        if any(v['values'] is None for v in result):raise ValueError('روش مکانی کیفیت مقدار معتبر تولید نکرد.')
+        return np.array([v['values']['value'] for v in result]),result,audit
     blocks=np.floor(xy/10000).astype(int)
     fold=(blocks[:,0]*73856093+blocks[:,1]*19349663)%5
     oof={k:np.full(len(y),np.nan) for k in sets}
@@ -221,7 +235,7 @@ def estimate_quality(analysis, records, raster_bytes=b'', geology_text='', optio
         if train.sum()<8:raise ValueError('پراکندگی نقاط برای اعتبارسنجی بلوکی کافی نیست.')
         test_distances.extend(cKDTree(xy[train]).query(xy[test])[0].tolist())
         for key,(x,_) in sets.items():
-            oof[key][test]=(idw_predict(xy[train],y[train],xy[test]) if x is None else
+            oof[key][test]=(shared_predict(ll[train],y[train],ll[test])[0] if shared else idw_predict(xy[train],y[train],xy[test]) if x is None else
                             regression_residual(xy[train],y[train],xy[test],x[train],x[test]))
     scores={k:{'rmse_log':float(np.sqrt(np.mean((y-p)**2))),
                'mae_ec':float(np.mean(np.abs(np.exp(y)-np.exp(np.clip(p,-20,20))))),
@@ -229,32 +243,40 @@ def estimate_quality(analysis, records, raster_bytes=b'', geology_text='', optio
     chosen=min(scores,key=lambda k:scores[k]['rmse_log'])
     x,target=sets[chosen]
     prediction=idw_predict(xy,y,cell_xy) if x is None else regression_residual(xy,y,cell_xy,x,target)
+    spatial_details=None;spatial_audit=None
+    if shared:prediction,spatial_details,spatial_audit=shared_predict(ll,y,cell_ll)
     residual=y-oof[chosen]
     error_low,error_high=np.quantile(residual,[.1,.9])
     radius=float(np.quantile(test_distances,.9))
     hull=Polygon(ll[ConvexHull(ll).vertices])
     nearest=cKDTree(xy).query(cell_xy)[0]
     supported=[hull.covers(Point(p)) and d<=radius for p,d in zip(cell_ll,nearest)]
+    source_supported=[bool(value) for value in supported]
+    if shared:supported=[v['values'] is not None for v in spatial_details]
     sar_values=np.array([r['sar'] if r['sar'] is not None else np.nan for r in sites])
     valid_sar=np.isfinite(sar_values)&(sar_values>=0)
     sar=(np.expm1(idw_predict(xy[valid_sar],np.log1p(sar_values[valid_sar]),cell_xy)) if valid_sar.sum()>=3 else np.full(len(raw_cells),np.nan))
+    if shared and valid_sar.sum():
+        sar_sampler,sar_audit=sp_sampler([{'lon':float(p[0]),'lat':float(p[1]),'value':float(v)} for p,v in zip(ll[valid_sar],np.log1p(sar_values[valid_sar]))],['value'],shared)
+        sar=np.array([max(0,math.expm1(min(20,v['values']['value']))) if v['values'] else np.nan for v in [sar_sampler(c['lon'],c['lat']) for c in raw_cells]])
     drinking=float(options.get('drinking_ec',1500))
     irrigation=float(options.get('irrigation_ec',3000))
     ratio=float(options.get('depth_ratio',1))
     if not all(math.isfinite(v) and v>0 for v in (drinking,irrigation,ratio)):
         raise ValueError('آستانه‌ها و نسبت EC عمقی باید مثبت و متناهی باشند.')
-    total=float(analysis['metrics']['drainable_after_mcm'])
-    pixel_total=sum(c['remaining_mcm'] for c in raw_cells)
+    total=float(analysis['metrics']['drainable_after_mcm']) if volume_known else 0.
+    pixel_total=sum(c['remaining_mcm'] or 0 for c in raw_cells)
     multiplier=total/pixel_total if pixel_total>0 else 0
     cells=[]
     totals={k:0. for k in ('drinking','irrigation','unknown','irrigation_unknown','drinking_low','drinking_high','irrigation_low','irrigation_high')}
     scenarios={str(r):{'drinking_mcm':0.,'irrigation_mcm':0.} for r in (.5,1,2,4)}
     for index,original in enumerate(raw_cells):
-        cell=original.copy();v=cell['remaining_mcm']*multiplier
+        cell=original.copy();v=(cell['remaining_mcm'] or 0)*multiplier
         ec=float(math.exp(max(-20,min(20,prediction[index]))))
         lower=irrigation_lower_ec(float(sar[index])) if np.isfinite(sar[index]) else None
-        cell.update({'quality_supported':bool(supported[index]),'quality_nearest_m':float(nearest[index]),'quality_volume_mcm':v,
+        cell.update({'quality_supported':bool(supported[index]),'quality_nearest_m':float(nearest[index]),'quality_volume_mcm':v if volume_known else None,
                      'quality_ec':ec if supported[index] else None,'quality_sar':float(sar[index]) if np.isfinite(sar[index]) and supported[index] else None})
+        if shared:cell.update(quality_spatial_method=shared['method'],quality_spatial_estimated=not source_supported[index],quality_spline_overshoot=spatial_details[index]['overshoot'],quality_source_supported=source_supported[index])
         if not supported[index]:
             totals['unknown']+=v;totals['irrigation_unknown']+=v
             cell.update({'quality_usable_pct':None,'quality_drinking_pct':None,'quality_zone':'outside_validated_support'})
@@ -286,7 +308,11 @@ def estimate_quality(analysis, records, raster_bytes=b'', geology_text='', optio
     for key in ('quality_ec','quality_sar','quality_usable_pct','quality_drinking_pct','quality_zone_code'):
         values=[c[key] for c in cells if c.get(key) is not None]
         if values:fields[key]={'min':min(values),'max':max(values),'contours':[]}
-    report={'aquifer':analysis['aquifer'],'volume_dates':analysis['dates'],'quality_water_year':end,'window_years':window,
+    if not volume_known:
+        totals={k:None for k in totals};scenarios={k:{p:None for p in v} for k,v in scenarios.items()}
+    report={'sar_available_sites':int(valid_sar.sum()),'volume_available':volume_known,'aquifer':analysis['aquifer'],'volume_dates':analysis['dates'],'quality_water_year':end,'window_years':window,
+            'spatial':spatial_audit,
+            'pixel_grid':{k:analysis['plan_maps'].get(k) for k in ('side_m','cell_width_m','cell_height_m','spacing_lon','spacing_lat','grid_cols','grid_rows','metric_basis','reference_latitude')},
             'volume_model':{'sy_mode':analysis['metrics']['sy_mode'],'sy':analysis['metrics']['sy'],
                             'sy_min':analysis['metrics']['sy_min'],'sy_max':analysis['metrics']['sy_max'],
                             'bedrock_source':analysis['grid']['bedrock_source'],'common_wells':analysis['wells']['common'],
@@ -296,14 +322,13 @@ def estimate_quality(analysis, records, raster_bytes=b'', geology_text='', optio
             'newest_available_quality_water_year':latest,'quality_volume_year_gap':analysis['dates']['after_water_year']-end,
             'records_in_window':len(recent),'sites':len(sites),'thresholds':{'drinking_ec_uScm':drinking,'irrigation_ec_uScm':irrigation},
             'vertical_model':{'bottom_top_ec_ratio':ratio,'reference':'geometric_mid_depth_proxy','calibrated_from_depth_samples':False},
-            'total_remaining_mcm':total,'volumes_mcm':totals,'depth_sensitivity':scenarios,
-            'validation':{'method':str(len(np.unique(fold)))+' folds of 10km spatial blocks; all repeated site observations aggregated before split','fold_count':int(len(np.unique(fold))),'scores':scores,'selected':chosen,'residual_log_q10_q90':[float(error_low),float(error_high)],'support_radius_m':radius,'note':'Model-selection CV and EC sensitivity, not an independent 95% CI or validation of depth assumptions'},
+            'total_remaining_mcm':total if volume_known else None,'volumes_mcm':totals,'depth_sensitivity':scenarios,
+            'validation':{'method':str(len(np.unique(fold)))+' folds of 10km spatial blocks; all repeated site observations aggregated before split','fold_count':int(len(np.unique(fold))),'scores':scores,'selected':chosen,'support_radius_m':radius,'full_aquifer':bool(shared),'source_supported_cells':sum(source_supported),'spatially_estimated_cells':sum(not s for s in source_supported) if shared else 0,'residual_log_q10_q90':[float(error_low),float(error_high)],'note':('User-selected spatial method, spatial-block CV diagnostic only; not independent validation or an extrapolation confidence interval.' if shared else 'Model-selection CV and EC sensitivity, not an independent 95% CI or validation of depth assumptions')},
             'covariates':{'raster_fields':cov.names,'lithology_codes':list(cov.rocks),'invalid_public_geology_geometries_repaired':cov.repaired,'geology_repair':'Shapely make_valid before clipping; original source retained unchanged'},
-            'limitations':['EC-only drinking salinity screen; not potability certification','Agriculture: EC ceiling plus avoidance of FAO severe EC/SAR infiltration restriction; not crop-specific yield or full water suitability','Vertical allocation is a scenario; surface imagery does not measure deep EC','Volumes are potential drainable storage, not sustainable abstraction','Outside convex hull or validated-distance support remains unknown; unknown is never assigned fresh water','Depth-scenario and EC-error ranges are sensitivity ranges, not statistical confidence intervals'],
+            'limitations':['EC-only drinking salinity screen; not potability certification','Agriculture: EC ceiling plus avoidance of FAO severe EC/SAR infiltration restriction; not crop-specific yield or full water suitability','Vertical allocation is a scenario; surface imagery does not measure deep EC','Volumes are potential drainable storage, not sustainable abstraction',('Full aquifer spatial estimates use the selected method; outside observed hull/CV radius is explicitly estimated, not validated fresh water.' if shared else 'Outside convex hull or validated-distance support remains unknown; unknown is never assigned fresh water'),'Depth-scenario and EC-error ranges are sensitivity ranges, not statistical confidence intervals'],
             'public_source_metadata':source_metadata,
             'units_assumed':{'ec':'uS/cm, treated as EC25; source temperature correction not documented','utm':'WGS84 north; original datum not documented'}}
-    return {'report':report,'sites':sites,'plan_maps':{'cells':cells,'fields':fields,'extent':analysis['plan_maps']['extent'],
-                'side_m':analysis['plan_maps']['side_m'],'polygons':analysis['plan_maps']['polygons'],
+    return {'report':report,'sites':sites,'plan_maps':{**{k:v for k,v in analysis['plan_maps'].items() if k not in ('cells','fields')},'cells':cells,'fields':fields,
                 'percentage_reference':'quality_compatible_fraction_of_current_saturated_column'}}
 
 
@@ -317,8 +342,9 @@ def quality_archive(result,tiff_writer):
     stream=io.StringIO();writer=csv.DictWriter(stream,fieldnames=fields);writer.writeheader()
     writer.writerows({k:c.get(k) for k in fields} for c in cells)
     geojson={'type':'FeatureCollection','metadata':report,'features':[{'type':'Feature','properties':{k:v for k,v in c.items() if k!='polygons'},'geometry':{'type':'MultiPolygon','coordinates':c['polygons']}} for c in cells]}
-    w,s,e,n=maps['extent'];side=maps['side_m']
-    dx=side/(111320*math.cos(math.radians((s+n)/2)));dy=side/111320
+    w,s,e,n=maps['extent']
+    dx=maps.get('spacing_lon') or maps.get('cell_width_m',maps.get('side_m'))/(111320*math.cos(math.radians((s+n)/2)))
+    dy=maps.get('spacing_lat') or maps.get('cell_height_m',maps.get('side_m'))/111320
     cols,rows=math.ceil((e-w)/dx),math.ceil((n-s)/dy)
     target=io.BytesIO()
     with zipfile.ZipFile(target,'w',zipfile.ZIP_DEFLATED) as archive:
@@ -332,7 +358,7 @@ def quality_archive(result,tiff_writer):
                 value=cell.get(key)
                 if key=='quality_zone':value=cell['quality_zone_code']
                 if value is not None:image[rows-1-cell['row'],cell['column']]=value
-            description={'variable':key,'report':report,'boundary_pixels':'All intersecting squares retained; use accompanying clipped GeoJSON for exact boundary','zone_codes':{'0':'low salinity','1':'moderate salinity','2':'severe salinity','3':'infiltration constraint','4':'unknown support'}}
+            description={'variable':key,'report':report,'pixel_grid':{k:maps.get(k) for k in ('cell_width_m','cell_height_m','spacing_lon','spacing_lat','metric_basis')},'boundary_pixels':'All intersecting cells retained; use accompanying clipped GeoJSON for exact boundary','zone_codes':{'0':'low salinity','1':'moderate salinity','2':'severe salinity','3':'infiltration constraint','4':'unknown support'}}
             archive.writestr(key+'.tif',tiff_writer(image,w,s+rows*dy,dx,dy,description))
     return base64.b64encode(target.getvalue()).decode('ascii')
 
@@ -341,6 +367,25 @@ def quality_methods_report(result):
     """Persian methods and numerical snapshot, generated alongside layers in Pyodide."""
     r=result['report'];v=r['volumes_mcm'];validation=r['validation'];model=r['volume_model']
     rows='\n'.join(f"| {name} | {s['rmse_log']:.4f} | {s['mae_ec']:.0f} | {s['rmse_ec']:.0f} |" for name,s in validation['scores'].items())
+    if r.get('spatial'):
+        return f'''# کیفیت آبخوان {r['aquifer']['name']}
+
+روش مکانی مشترک انتخاب‌شده در داده‌های آبخوان: **{r['spatial']['method']}**؛ پوشش محاسبه، تمام پلیگون همان آبخوان است. دورهٔ کیفیت: سال آبی {r['quality_water_year']}، پنجرهٔ {r['window_years']} سال؛ تعداد موقعیت‌ها: {r['sites']}.
+
+EC در مقیاس لگاریتمی و SAR در مقیاس log1p با همان روش IDW، تیسن یا Spline صفحهٔ نازک محاسبه می‌شوند. تیسن مقدار نزدیک‌ترین نقطه را می‌گیرد؛ IDW میانگین وزن‌دار فاصله است؛ Spline با مختصات محلی کیلومتری و هموارسازی {r['spatial']['spline_smoothing']} برازش می‌شود. برای بیش از ۶۴ نقطه، Spline محلی با ۶۴ همسایه است. روش به‌صورت خودکار عوض نمی‌شود.
+
+بیرون پوش محدب یا فاصلهٔ اعتبارسنجی، برآورد مکانی است و معتبرشدن مشاهده تلقی نمی‌شود. {validation['spatially_estimated_cells']} پیکسل با quality_spatial_estimated مشخص شده‌اند. مرز و حفره‌های آبخوان در هندسهٔ پیکسل‌ها حفظ می‌شوند. ورودی ناموجود با صفر پر نشده است؛ نبود SAR کافی، محدودیت EC/SAR کشاورزی را نامشخص نگه می‌دارد.
+
+| روش منتخب | RMSE لگاریتم EC | MAE EC | RMSE EC |
+|---|---|---|---|
+{rows}
+
+اعتبارسنجی شامل {validation['fold_count']} گروه بلوک مکانی است. روش از انتخاب کاربر می‌آید؛ انتخاب مدل خودکار انجام نشده است. خطای گروه‌های حذف‌شده، خطای برون‌یابی در کل آبخوان یا فاصلهٔ اطمینان ۹۵٪ نیست. ضرایب تصحیح سوگیری یا دادهٔ شوری عمقی از این روش تولید نمی‌شوند.
+
+حد شوری شرب: {r['thresholds']['drinking_ec_uScm']} و کشاورزی: {r['thresholds']['irrigation_ec_uScm']} µS/cm. نسبت عمقی EC: {r['vertical_model']['bottom_top_ec_ratio']}، یک فرض سناریو است. EC به‌تنهایی سلامت آب شرب یا تناسب همهٔ محصولات را تأیید نمی‌کند. حجم‌ها در گزارش JSON هستند؛ حجم‌های شرب و کشاورزی همپوشانی دارند و با هم جمع نمی‌شوند.
+
+تمام برازش، اعتبارسنجی و تولید خروجی در Pyodide مرورگر اجرا شده است. فایل انتخابی کاربر و مرز آبخوان مبنا هستند. شناسنامهٔ JSON و لایهٔ CSV/GeoJSON شامل روش، منشأ برآورد و ابعاد پیکسل‌اند.
+'''
     depth='\n'.join(f"| {ratio} | {s['drinking_mcm']:.0f} | {s['irrigation_mcm']:.0f} |" for ratio,s in r['depth_sensitivity'].items())
     return f'''# برآورد حجم با محدودیت شوری آبخوان {r['aquifer']['name']}
 

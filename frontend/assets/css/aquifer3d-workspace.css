@@ -135,3 +135,10 @@ body.a3-presenting .a3-workspace-layout{display:block!important}body.a3-presenti
 @media(max-width:600px){.a3-camera-view-label{flex-direction:column;align-items:stretch}.a3-camera-view-label select{width:100%;min-height:44px}}
 
 .a3-scene-context{grid-column:1/-1;display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:0 2px}.a3-scene-context small{font-size:10px;color:#647b88}.a3-map-controls .hydro-city-toggle{font-size:11px}
+
+#a3Settings [data-input-template]{align-self:start;min-height:36px;padding:6px 10px;border:1px solid #d7e4e9;border-radius:5px;background:#f5f9fa;color:#176b7b;font:11px Vazirmatn,Tahoma,sans-serif;cursor:pointer}@media(max-width:600px){#a3Settings [data-input-template]{min-height:44px}}
+.a3-quality-file-field{grid-column:span 2;min-width:0}.a3-quality-file-field>label{grid-column:auto!important}
+.a3-quality-template-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:4px}
+.a3-quality-template-actions a{display:inline-flex;align-items:center;min-height:36px;font-size:11px;color:#176b7b;text-decoration:underline;text-underline-offset:3px}
+.a3-quality-template-actions a:focus-visible{outline:2px solid #148692;outline-offset:2px}
+@media(max-width:600px){.a3-quality-file-field{grid-column:1/-1}.a3-quality-template-actions a{min-height:44px}}

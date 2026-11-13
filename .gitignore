@@ -16,3 +16,6 @@ ee-hydrocode.json
 .tmp/map-layers-qa/
 
 .tmp/compact-dashboard-qa/
+.tmp/lifetime-qa/
+.tmp/lifetime-qa-server*.log
+.tmp/manager-flow/

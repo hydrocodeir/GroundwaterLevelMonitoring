@@ -1,0 +1,36 @@
+{
+  "passed": true,
+  "default_grid": {
+    "side_m": 4000,
+    "cell_width_m": 4000,
+    "cell_height_m": 4000,
+    "spacing_lon": 0.04470809791887288,
+    "spacing_lat": 0.035932446999640676,
+    "grid_cols": 33,
+    "grid_rows": 28,
+    "metric_basis": "local equirectangular; nominal metres at polygon mean latitude",
+    "reference_latitude": 36.513924988372004
+  },
+  "custom_grid": {
+    "side_m": null,
+    "cell_width_m": 2000,
+    "cell_height_m": 6000,
+    "spacing_lon": 0.02235404895943644,
+    "spacing_lat": 0.05389867049946101,
+    "grid_cols": 65,
+    "grid_rows": 19,
+    "metric_basis": "local equirectangular; nominal metres at polygon mean latitude",
+    "reference_latitude": 36.513924988372004
+  },
+  "display_years": [
+    0,
+    25,
+    50,
+    75,
+    100,
+    125,
+    137
+  ],
+  "page_errors": [],
+  "data_uploads": []
+}

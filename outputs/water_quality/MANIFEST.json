@@ -59,24 +59,29 @@
       "sha256": "cac3be035e3199deb509887c789e4d79b30c666700e2afdd692c4568bac8f8d8"
     },
     {
+      "path": "frontend/assets/js/aquifer-spatial.py",
+      "bytes": 6901,
+      "sha256": "ba0c3c38b544db8ea537a170c77e1654c59f9cc14c999fddcfc61eb814b600b8"
+    },
+    {
       "path": "frontend/assets/js/aquifer3d-maps.js",
-      "bytes": 26399,
-      "sha256": "8c760f91626469b7b1fdb69523450a53fbd26eca9042cb398a4d9e61e10d21fa"
+      "bytes": 33879,
+      "sha256": "0cb321c4370ca677f9fcfc0453951714227919f1ea6070e745932ceb24fc74ba"
     },
     {
       "path": "frontend/assets/js/aquifer3d-quality.js",
-      "bytes": 10618,
-      "sha256": "d8b3334d028cb1bb9fd23efbcf6d5269b01979f25d3575f5afc10fb9da00eac6"
+      "bytes": 12050,
+      "sha256": "6941c107327332b7b403701f0d131fb320113664dfe2b1c4adc4adba0be994d2"
     },
     {
       "path": "frontend/assets/js/aquifer3d-worker.js",
-      "bytes": 6522,
-      "sha256": "d1a34e9f566d942c1cc3a58636a5a3d4b6068c30170e058c6f88b504e300d008"
+      "bytes": 9200,
+      "sha256": "778d36807057f2c562459b22d833db3854a226b7ee7ce504bc238779f022be16"
     },
     {
       "path": "frontend/assets/js/aquifer3d_compute.py",
-      "bytes": 64175,
-      "sha256": "351b28f0d1dc05ddf9e9d3803b68491734356de6d03f00a6b90dc51fd36ae8a9"
+      "bytes": 67161,
+      "sha256": "1b7238800e1c3fa7c4ade23c85e307012692fe065c04016cc90bc708f2184ffc"
     },
     {
       "path": "scripts/fetch_waterq_sources.py",
@@ -85,8 +90,8 @@
     },
     {
       "path": "scripts/package_quality_report.py",
-      "bytes": 4183,
-      "sha256": "5b0e74c57ab21d99ef57d8738a4cf1942da692f7d3afea3c82318071ca522269"
+      "bytes": 4261,
+      "sha256": "5595a86e8d8ff56faa68d0d6c9abcee7f08ffd6d2e505b41657b7a2d59f1c5ab"
     },
     {
       "path": "scripts/render_quality_preview.py",
@@ -100,8 +105,8 @@
     },
     {
       "path": "scripts/waterq_compute.py",
-      "bytes": 37493,
-      "sha256": "db14916c14029625d83bfc827cf46034a0d4c47cfc719741b1723f003e012d35"
+      "bytes": 44460,
+      "sha256": "18d79cb74e8de192397b9e3fb3bad965642a55c9a1302bc09dd27c60cd9080e6"
     }
   ],
   "outputs": [

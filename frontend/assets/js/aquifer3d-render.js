@@ -4,8 +4,33 @@
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const fmt = (v, d = 1) => Number.isFinite(v)?new Intl.NumberFormat('fa-IR', { maximumFractionDigits: d }).format(v):'—';
 const yearFmt=v=>new Intl.NumberFormat('fa-IR',{useGrouping:false,maximumFractionDigits:0}).format(v);
-function syReference(data){const m=data.metrics;return m.sy_mode==='spatial'?'CSV مکانی انتخاب‌شده':data.aquifer.name.includes('مشهد')&&Math.abs(m.sy-.06)<1e-8?'Water Supply (2025)':data.aquifer.name.includes('نیشابور')&&Math.abs(m.sy-.051)<1e-8?'ضریب ذخیرهٔ یزدانی و منصوریان؛ استفاده به‌جای Sy فرض مدل است':'مقدار انتخابی کاربر';}
+function syReference(data){return data.metrics.sy_mode==='spatial'?'CSV مکانی کاربر':'مقدار واردشدهٔ کاربر';}
 const COLORS = { blue: [.06, .43, .78, .30], red: [.95, .25, .31, .19], green: [.10, .68, .36, .30] };
+
+function insideRing(x,y,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside;}
+
+/** Isolated camera for lifetime colouring; head and storage geometry stay unchanged. */
+export function mountLifetimeScene(canvas,data,cells,palette,onZoom=()=>{}){
+  const camera={yaw:.6,pitch:.65,zoom:1,panX:0,panY:0};let panning=false,drag=null;
+  const scene=createScene(canvas,data,true,camera,{bedrock:true,blue:true,red:false,green:false},true,{lifeCells:cells,lifePalette:palette});
+  const render=()=>{scene.render();onZoom(camera.zoom);};
+  const points=new Map();let pinch=null;
+  function down(e){e.preventDefault();window.HydroHelp?.hide();canvas.setPointerCapture(e.pointerId);points.set(e.pointerId,[e.clientX,e.clientY]);drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,pickable:e.button===0,moved:false,pan:panning||e.button===1||e.button===2||e.shiftKey};if(points.size===2){drag.moved=true;const[a,b]=[...points.values()];pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);}}
+  function move(e){if(!points.has(e.pointerId)){scene.hover(e);return;}const old=points.get(e.pointerId);points.set(e.pointerId,[e.clientX,e.clientY]);if(points.size===2){const[a,b]=[...points.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pinch)camera.zoom=clamp(camera.zoom*d/pinch,.4,8);pinch=d;camera.panX+=(e.clientX-old[0])/canvas.clientWidth/2;camera.panY+=(e.clientY-old[1])/canvas.clientHeight/2;}else if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved ||=Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>4;if(drag.pan){camera.panX+=dx/canvas.clientWidth;camera.panY+=dy/canvas.clientHeight;}else{camera.yaw+=dx*.008;camera.pitch=clamp(camera.pitch-dy*.006,.04,Math.PI/2);}drag.x=e.clientX;drag.y=e.clientY;}render();}
+  function up(e){points.delete(e.pointerId);pinch=null;if(e.type==='pointerup'&&drag?.pickable&&!drag.moved)scene.hover(e,true);drag=null;}
+  function wheel(e){e.preventDefault();camera.zoom=clamp(camera.zoom*Math.exp(-e.deltaY*.001),.4,8);render();}
+  function key(e){const k=e.key;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-','0'].includes(k)){e.preventDefault();if(k.startsWith('Arrow')){camera.panX+=(k==='ArrowRight'?.04:k==='ArrowLeft'?-.04:0);camera.panY+=(k==='ArrowDown'?.04:k==='ArrowUp'?-.04:0);}else if(k==='0')reset();else camera.zoom=clamp(camera.zoom*(k==='+'?1.2:1/1.2),.4,8);render();}}
+  function reset(){Object.assign(camera,{yaw:.6,pitch:.65,zoom:1,panX:0,panY:0});}
+  const prevent=e=>e.preventDefault(),leave=()=>window.HydroHelp?.hideTransient();
+  const events={pointerdown:down,pointermove:move,pointerup:up,pointercancel:up,wheel,keydown:key,contextmenu:prevent,pointerleave:leave};
+  Object.entries(events).forEach(([name,fn])=>canvas.addEventListener(name,fn,{passive:false}));
+  const resize=()=>{scene.resize();render();};const observer=new ResizeObserver(resize);observer.observe(canvas);resize();
+  const cleanup=()=>{observer.disconnect();Object.entries(events).forEach(([name,fn])=>canvas.removeEventListener(name,fn));scene.dispose();};
+  cleanup.pan=value=>{panning=value;canvas.style.cursor=value?'grab':'move';};
+  cleanup.control=key=>{if(key==='reset')reset();else camera.zoom=clamp(camera.zoom*(key==='in'?1.25:.8),.4,8);render();};
+  cleanup.preset=key=>{const presets={north:[Math.PI,.55],south:[0,.55],east:[-Math.PI/2,.55],west:[Math.PI/2,.55],top:[0,Math.PI/2],oblique:[.6,.65]};if(presets[key]){[camera.yaw,camera.pitch]=presets[key];camera.panX=camera.panY=0;render();}};
+  return cleanup;
+}
 
 function createScene(canvas, data, equivalent, camera, layers, pixel = false, options = {}) {
   const gl = canvas.getContext('webgl', { antialias: true, alpha: !!options.transparent, preserveDrawingBuffer: true });
@@ -31,7 +56,7 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
     (lat - (north + south) / 2) * 111320 / span, (z - (minZ + maxZ) / 2) * verticalScale];
   let width = 1, height = 1, ratio = 1, selected = null, projectedWells = [], projectedCities=[], lostContext = false;
   const info=options.annotations?null:document.createElement('p');
-  if(info){info.dataset.helpCopy='';info.className='a3-scene-metadata';info.textContent=`${equivalent?'ارتفاع معادل آب':'تراز MSL'}: ${fmt(minZ)} تا ${fmt(maxZ)} متر\nاغراق قائم: ${fmt(span*verticalScale)}×${pixel?`\nضلع سلول: ${fmt(data.pixel_water.side_m)} متر`:''}${!equivalent?`\nمیانگین تغییر تراز: ${fmt(data.metrics.mean_head_decline_m,2)} متر`:''}`;canvas.parentElement.append(info);}
+  if(info){info.dataset.helpCopy='';info.className='a3-scene-metadata';info.textContent=`${equivalent?'ارتفاع معادل آب':'تراز MSL'}: ${fmt(minZ)} تا ${fmt(maxZ)} متر\nاغراق قائم: ${fmt(span*verticalScale)}×${pixel?`\nابعاد پیکسل: ${fmt(data.pixel_water?.cell_width_m??data.pixel_water?.side_m)} × ${fmt(data.pixel_water?.cell_height_m??data.pixel_water?.side_m)} متر`:''}${!equivalent?`\nمیانگین تغییر تراز: ${fmt(data.metrics.mean_head_decline_m,2)} متر`:''}`;canvas.parentElement.append(info);}
   const buffers = [];
   const vertex = `attribute vec3 aPosition; attribute vec4 aColor;
     uniform vec3 uCamera; uniform vec2 uPan; uniform float uAspect; uniform float uPointSize;
@@ -64,13 +89,19 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
   const transparent = buffer([]);
   const faces = [];
   for (const kind of ['blue', 'red', 'green']) {
-    for (const tri of shell?.[kind] || []) {
+    for (const [faceIndex,tri] of (shell?.[kind] || []).entries()) {
       const vertices = tri.map(p=>normal(displayPoint(p,kind)));
       const [a,b,c] = vertices;
       const u = b.map((v,i) => v-a[i]), v = c.map((w,i) => w-a[i]);
       const n = [u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
       const shade = pixel ? .7 + .3*Math.abs(n[2])/(Math.hypot(...n)||1) : .9 + .1 * Math.abs(n[2]) / (Math.hypot(...n) || 1);
-      const baseColor = pixel ? (kind==='blue'?[.13,.48,.74,1]:[.87,.37,.41,1]) : COLORS[kind];
+      let baseColor = pixel ? (kind==='blue'?[.13,.48,.74,1]:[.87,.37,.41,1]) : COLORS[kind];
+      if(options.lifeCells){
+        const lon=tri.reduce((s,p)=>s+p[0],0)/3,lat=tri.reduce((s,p)=>s+p[1],0)/3;
+        const cell=options.lifeCells[data.pixel_water.face_cells?.[kind]?.[faceIndex]]||options.lifeCells.find(c=>c.polygons.some(p=>insideRing(lon,lat,p[0])&&!p.slice(1).some(r=>insideRing(lon,lat,r))));
+        const hex=options.lifePalette[cell?.life_band]||'#d8dee2';
+        baseColor=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).concat(1);
+      }
       const color = baseColor.map((value,i) => i < 3 ? value * shade : value);
       faces.push({ kind, center: [0,1,2].map(i => (a[i]+b[i]+c[i])/3), values: vertices.flatMap(p => [...p,...color]) });
     }
@@ -136,7 +167,7 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
     hud.fillText(`اغراق قائم: ${fmt(span*verticalScale)}×`,16,height-13);
     if(declineScale>1){hud.fillStyle='#b43e48';hud.fillText(`بزرگ‌نمایی ضخامت افت: ×${fmt(declineScale)} · حجم‌ها واقعی‌اند`,16,height-55);hud.fillStyle='#27465c';}
     if(!equivalent&&window.HydroCities?.enabled&&data.urban_overlay?.length)hud.fillText('شهرها: GHSL / JRC · OpenStreetMap',16,height-(declineScale>1?77:55),Math.max(100,width-32));
-    if (pixel) hud.fillText(`ضلع سلول: ${fmt(data.pixel_water.side_m)} متر · برای جزئیات روی ستون کلیک کنید`,16,58,Math.max(100,width-30));
+    if (pixel) hud.fillText(`ابعاد پیکسل: ${fmt(data.pixel_water?.cell_width_m??data.pixel_water?.side_m)} × ${fmt(data.pixel_water?.cell_height_m??data.pixel_water?.side_m)} متر · برای جزئیات روی ستون کلیک کنید`,16,58,Math.max(100,width-30));
     if (!equivalent) {
       const change = data.metrics.mean_head_decline_m;
       hud.fillText(`میانگین ${change>=0?'افت':'افزایش'}: ${fmt(Math.abs(change),2)} متر`,16,58);
@@ -162,20 +193,21 @@ function createScene(canvas, data, equivalent, camera, layers, pixel = false, op
   }
   function pick(event) {
     const r=canvas.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;
-    const candidates = pixel ? (data.pixel_water?.cells || []).map(cell=>({well:cell,p:project(normal([cell.lon,cell.lat,cell.remaining_m+cell.lost_m*declineScale]))})) : projectedWells;
+    const candidates = pixel ? (data.pixel_water?.cells || []).map(cell=>({well:cell,p:project(normal([cell.lon,cell.lat,cell.remaining_m+(options.lifeCells?0:cell.lost_m*declineScale)]))})) : projectedWells;
     const near=candidates.map(w=>({...w,d:Math.hypot(w.p[0]-x,w.p[1]-y)})).sort((a,b)=>a.d-b.d)[0];
     selected=near?.d<18?near.well:null;
-    if(selected)options.onPick?.({kind:pixel?'cell':'well',value:selected});
+    if(selected){if(pixel)hover(event,true);else options.onPick?.({kind:'well',value:selected});}
     else hover(event,true);
   }
   function hover(event,sticky=false){
+    if(pixel&&!sticky)return;
     const r=canvas.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;
     const nearest=list=>list.map(item=>({...item,d:Math.hypot(item.p[0]-x,item.p[1]-y)})).sort((a,b)=>a.d-b.d)[0];
     const city=nearest(projectedCities);
     if(city?.d<12){window.HydroHelp?.showFor(canvas,`${city.city.name}\n${city.city.source||'GHSL / JRC'}`,event,sticky);return;}
-    const candidates=pixel?(data.pixel_water?.cells||[]).map(cell=>({well:cell,p:project(normal([cell.lon,cell.lat,cell.remaining_m+cell.lost_m*declineScale]))})):layers.wells?projectedWells:[];
+    const candidates=pixel?(data.pixel_water?.cells||[]).map(cell=>({well:cell,p:project(normal([cell.lon,cell.lat,cell.remaining_m+(options.lifeCells?0:cell.lost_m*declineScale)]))})):layers.wells?projectedWells:[];
     const hit=nearest(candidates);
-    if(hit?.d<14){const v=hit.well,text=pixel?`آب باقی‌مانده: ${fmt(v.remaining_mcm,3)} میلیون مترمکعب\nآب از دست‌رفته: ${fmt(v.lost_mcm,3)} میلیون مترمکعب`:`${v.name}\nتراز مبنا: ${fmt(v.before)} متر MSL\nتراز پایان: ${fmt(v.after)} متر MSL\n${v.before>=v.after?'افت':'افزایش'}: ${fmt(Math.abs(v.before-v.after))} متر`;window.HydroHelp?.showFor(canvas,text,event,sticky);}
+    if(hit?.d<(sticky?18:14)){const v=hit.well,life=options.lifeCells?.find(c=>Math.abs(c.lon-v.lon)<1e-7&&Math.abs(c.lat-v.lat)<1e-7);const text=pixel?{title:life?'عمر سناریویی پیکسل':'جزئیات پیکسل',sections:[...(life?[{title:'سناریو',rows:[['زمان تا محدودیت',Number.isFinite(life.life_years)?fmt(life.life_years)+' سال':life.life_status==='beyond'?'بیش از افق':'نامشخص'],['روند تراز',fmt(life.life_trend_m_year,3)+' متر/سال'],['روش مکانی',({idw:'IDW',spline:'Spline',thiessen:'تیسن'})[life.life_spatial_method]||'—']],...(life.life_unknown_reasons?.length?{bullets:life.life_unknown_reasons.map(r=>window.HydroHelp.reasonLabel(r))}:{})}]:[]),{title:'آب و موقعیت',rows:[['طول / عرض',fmt(v.lon,5)+' / '+fmt(v.lat,5)],['آب باقی‌مانده',fmt(v.remaining_mcm,3)+' میلیون مترمکعب'],['آب از دست‌رفته',fmt(v.lost_mcm,3)+' میلیون مترمکعب'],['Sy',fmt(v.sy,4)],['کف اصلی',fmt(v.bedrock_msl,2)+' متر MSL']]}]}:`${v.name}\nتراز مبنا: ${fmt(v.before)} متر MSL\nتراز پایان: ${fmt(v.after)} متر MSL\n${v.before>=v.after?'افت':'افزایش'}: ${fmt(Math.abs(v.before-v.after))} متر`;window.HydroHelp?.showFor(canvas,text,event,sticky);}
     else window.HydroHelp?.hideTransient();
   }
   function contextLost(e){e.preventDefault();lostContext=true;render();}

@@ -1,0 +1,169 @@
+{
+  "passed": true,
+  "methods": {
+    "idw": {
+      "quality": {
+        "method": "5 folds of 10km spatial blocks; all repeated site observations aggregated before split",
+        "fold_count": 5,
+        "scores": {
+          "idw": {
+            "rmse_log": 0.6050167509742013,
+            "mae_ec": 768.6838556884061,
+            "rmse_ec": 1224.7516355343687
+          }
+        },
+        "selected": "idw",
+        "support_radius_m": 9156.490196491764,
+        "full_aquifer": true,
+        "source_supported_cells": 169,
+        "spatially_estimated_cells": 56,
+        "residual_log_q10_q90": [
+          -0.6622805704812069,
+          0.7667713700368507
+        ],
+        "note": "User-selected spatial method, spatial-block CV diagnostic only; not independent validation or an extrapolation confidence interval."
+      },
+      "management_spatial": {
+        "method": "idw",
+        "spline_smoothing": 0,
+        "power": 2,
+        "neighbors": 8,
+        "coverage": "aquifer",
+        "point_count": 45,
+        "kernel": null,
+        "coordinate_metric": "local kilometres at mean source latitude",
+        "spline_neighbors": null,
+        "scope": "full selected aquifer polygon; queries are clipped by the caller",
+        "missing_source": "No invented source values; spatial estimates identified separately.",
+        "available": true,
+        "reference_latitude": 36.5693521332
+      },
+      "subsidence": {
+        "method": "idw",
+        "spline_smoothing": 0,
+        "power": 2,
+        "neighbors": 8,
+        "coverage": "aquifer",
+        "point_count": 4,
+        "kernel": null,
+        "coordinate_metric": "local kilometres at mean source latitude",
+        "spline_neighbors": null,
+        "scope": "full selected aquifer polygon; queries are clipped by the caller",
+        "missing_source": "No invented source values; spatial estimates identified separately.",
+        "available": true,
+        "reference_latitude": 36.42943941727762
+      },
+      "quality_unknown_pct": 0
+    },
+    "spline": {
+      "quality": {
+        "method": "5 folds of 10km spatial blocks; all repeated site observations aggregated before split",
+        "fold_count": 5,
+        "scores": {
+          "spline": {
+            "rmse_log": 0.7264454245719928,
+            "mae_ec": 853.52462790734,
+            "rmse_ec": 1299.8688505141006
+          }
+        },
+        "selected": "spline",
+        "support_radius_m": 9156.490196491764,
+        "full_aquifer": true,
+        "source_supported_cells": 169,
+        "spatially_estimated_cells": 56,
+        "residual_log_q10_q90": [
+          -0.7871333002628921,
+          1.049805202067327
+        ],
+        "note": "User-selected spatial method, spatial-block CV diagnostic only; not independent validation or an extrapolation confidence interval."
+      },
+      "management_spatial": {
+        "method": "spline",
+        "spline_smoothing": 0,
+        "power": 2,
+        "neighbors": 8,
+        "coverage": "aquifer",
+        "point_count": 45,
+        "kernel": "thin_plate_spline",
+        "coordinate_metric": "local kilometres at mean source latitude",
+        "spline_neighbors": null,
+        "scope": "full selected aquifer polygon; queries are clipped by the caller",
+        "missing_source": "No invented source values; spatial estimates identified separately.",
+        "available": true,
+        "reference_latitude": 36.5693521332
+      },
+      "subsidence": {
+        "method": "spline",
+        "spline_smoothing": 0,
+        "power": 2,
+        "neighbors": 8,
+        "coverage": "aquifer",
+        "point_count": 4,
+        "kernel": "thin_plate_spline",
+        "coordinate_metric": "local kilometres at mean source latitude",
+        "spline_neighbors": null,
+        "scope": "full selected aquifer polygon; queries are clipped by the caller",
+        "missing_source": "No invented source values; spatial estimates identified separately.",
+        "available": true,
+        "reference_latitude": 36.42943941727762
+      },
+      "quality_unknown_pct": 0
+    },
+    "thiessen": {
+      "quality": {
+        "method": "5 folds of 10km spatial blocks; all repeated site observations aggregated before split",
+        "fold_count": 5,
+        "scores": {
+          "thiessen": {
+            "rmse_log": 0.7469697578758953,
+            "mae_ec": 892.9,
+            "rmse_ec": 1365.6268166600103
+          }
+        },
+        "selected": "thiessen",
+        "support_radius_m": 9156.490196491764,
+        "full_aquifer": true,
+        "source_supported_cells": 169,
+        "spatially_estimated_cells": 56,
+        "residual_log_q10_q90": [
+          -0.9010798289970063,
+          0.8765002266013112
+        ],
+        "note": "User-selected spatial method, spatial-block CV diagnostic only; not independent validation or an extrapolation confidence interval."
+      },
+      "management_spatial": {
+        "method": "thiessen",
+        "spline_smoothing": 0,
+        "power": 2,
+        "neighbors": 8,
+        "coverage": "aquifer",
+        "point_count": 45,
+        "kernel": null,
+        "coordinate_metric": "local kilometres at mean source latitude",
+        "spline_neighbors": null,
+        "scope": "full selected aquifer polygon; queries are clipped by the caller",
+        "missing_source": "No invented source values; spatial estimates identified separately.",
+        "available": true,
+        "reference_latitude": 36.5693521332
+      },
+      "subsidence": {
+        "method": "thiessen",
+        "spline_smoothing": 0,
+        "power": 2,
+        "neighbors": 8,
+        "coverage": "aquifer",
+        "point_count": 215,
+        "kernel": null,
+        "coordinate_metric": "local kilometres at mean source latitude",
+        "spline_neighbors": 64,
+        "scope": "full selected aquifer polygon; queries are clipped by the caller",
+        "missing_source": "No invented source values; spatial estimates identified separately.",
+        "available": true,
+        "reference_latitude": 36.51970434715581
+      },
+      "quality_unknown_pct": 0
+    }
+  },
+  "page_errors": [],
+  "data_uploads": []
+}

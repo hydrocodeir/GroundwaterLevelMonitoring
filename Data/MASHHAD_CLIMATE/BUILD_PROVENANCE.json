@@ -1,0 +1,19 @@
+{
+  "plan_signature": "3883bcd360417ad4edc1ff9bc0fa61b5238cfe7ca9fe7844bd78fb4c046b9269",
+  "retrieved_utc": "2026-11-13T18:45:59.640107+00:00",
+  "code_sha256": {
+    "scripts/export_mashhad_climate.py": "b6d05440aabdb9e2f3792521db5f88a26ebbbd072b56ce080381d639941bcb8e",
+    "scripts/climate_gee_compute.py": "481dbcc4f09e0e2f1b6054fc3e818dc9a9d9f268e9bbd2190d2b88b974583e35"
+  },
+  "dependencies": {
+    "jdatetime": "3a59544e5d01c66e610d253cef8edfd50750c73b0fccddf77f48897ce63be3ec",
+    "jalali_core": "2d8257b41cc7ff8c33ffddc1d7f7eb3fa36d85b0cbcc03c1907cd2148cbc226b"
+  },
+  "files_sha256": {
+    "MASHHAD_CLIMATE_WY.csv": "b97c4e17e31d4c195cfd8dadd59d9edae40b60ca7095687cacbc694d7b22df74",
+    "MASHHAD_CLIMATE_AUDIT.csv": "d7a551e56b65513c99bd77cc4c53282a33e1305837c17bcce7812d2013ddf091",
+    "MASHHAD_CLIMATE_METADATA.json": "4412e478a8622a4650e374f5d88f28060df50b7007d617a365f847c7bb2a6e28",
+    "MASHHAD_CLIMATE_BOUNDARY.geojson": "feff352a75f42ccc7ca8b683dcc61141b803a80f25cdea8500f80e2b888d239a",
+    "README.fa.md": "bb99f1c15ed45e7c048c29bb3ff6354fe69ad5f4b78e60553f9997502cd5920c"
+  }
+}

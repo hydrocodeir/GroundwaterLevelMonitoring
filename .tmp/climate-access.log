@@ -1,0 +1,2 @@
+{"dataset": "UCSB-CHG/CHIRPS/DAILY", "first": "1981-01-01", "last": "2026-09-30", "projection": {"crs": "EPSG:4326", "transform": [0.05, 0, -180, 0, -0.05, 50], "type": "Projection"}}
+{"dataset": "ECMWF/ERA5_LAND/DAILY_AGGR", "first": "1950-01-02", "last": "2026-11-05", "projection": {"crs": "EPSG:4326", "transform": [0.1, 0, -180.05, 0, -0.1, 90.05], "type": "Projection"}}

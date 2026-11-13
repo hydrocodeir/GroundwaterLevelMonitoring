@@ -38,7 +38,7 @@ function plot(root,forecasts,report,volume=false){
   svg.append(node('text',{x:width-20,y:23,'text-anchor':'end','font-size':13,'font-weight':600},volume?'حجم بخش دارای روند':'تغییر تراز نسبت به زمان پایان'),node('text',{x:width-20,y:43,'text-anchor':'end','font-size':11},volume?'میلیون مترمکعب':'متر'),node('text',{x:width/2,y:242,'text-anchor':'middle','font-size':11},'افق آینده (سال آبی)'));
 }
 
-export function mountManagementTools({data,request,featureIndex}){
+export function mountManagementTools({data,request,featureIndex,sourceFile=null}){
   const root=document.getElementById('managementTools');root.hidden=false;
   root.innerHTML=`<div class="aquifer3d-section-heading"><div><h2>اولویت اقدام و آیندهٔ آبخوان</h2><p>غربالگری مکانی، ادامهٔ روند مشاهداتی و زمان رسیدن به آستانهٔ انتخابی</p></div></div>
   <div class="a3-management-inputs">
@@ -56,7 +56,7 @@ export function mountManagementTools({data,request,featureIndex}){
     <label>حداقل شهریور مشاهده‌شده<input data-m-input="min_observations" type="number" min="3" value="5"></label>
     <label>حداقل سهم سال‌های دارای مشاهده (۰ تا ۱)<input data-m-input="coverage" type="number" min="0" max="1" step="0.05" value="0.5"></label>
     <label>حداقل شهریور هم‌دورهٔ فرونشست<input data-m-input="subsidence_min_observations" type="number" min="3" value="3"><small>روند این نقشه جداگانه در دورهٔ همان لایه برازش می‌شود.</small></label>
-    <label>شعاع پشتیبانی مکانی (کیلومتر)<input data-m-input="support_km" type="number" min="0.001" step="any" placeholder="خودکار از فاصلهٔ نقاط"><small>خالی: دو برابر میانهٔ فاصله تا نزدیک‌ترین نقطه؛ درون پوش محدب.</small></label>
+    <label>شعاع تشخیص پوشش منبع (کیلومتر)<input data-m-input="support_km" type="number" min="0.001" step="any" placeholder="خودکار از فاصلهٔ نقاط"><small>فقط برای تشخیص منشأ برآورد؛ نقشه با روش منتخب داده‌های آبخوان تا مرز آبخوان ادامه دارد.</small></label>
     <label>همسایه‌های IDW<input data-m-input="neighbors" type="number" min="3" max="100" value="8"></label>
     <label>توان IDW<input data-m-input="power" type="number" min="0.1" max="10" step="0.1" value="2"></label>
     <label>معیار تغییرشکل (mm/year)<input data-m-input="subsidence_limit" type="number" min="0" step="any" placeholder="خودکار از توزیع نرخ مثبت"><small>خالی: همان صدک نسبی؛ حد آسیب سازه نیست.</small></label>
@@ -65,7 +65,7 @@ export function mountManagementTools({data,request,featureIndex}){
     <label>فاصلهٔ مجاز مشاهدات آب از مرز دوره (ماه)<input data-m-input="endpoint_tolerance_months" type="number" min="0" max="24" value="1"><small>برای مقایسهٔ تجمعی؛ نبود مشاهدهٔ کافی، نامشخص می‌ماند.</small></label>
   </div></details>
   <details class="a3-management-settings" data-m-source-details><summary>لایهٔ مستقل فرونشست / تغییرشکل زمین <span data-m-source-name>وارد نشده</span></summary>
-    <p>برای نشست تجمعی، ستون <code>cumulative_mm</code> و برای نرخ، <code>rate_mm_year</code> استفاده می‌شود. نوع داده و مبنای سال را مشخص کنید. CSV تبدیل‌شده از TIFF، شمارهٔ سطر و ستون را نگه می‌دارد تا NoData با درون‌یابی پر نشود. لایهٔ پروژه بر اساس موقعیت آبخوان خودکار انتخاب می‌شود؛ فایل انتخابی شما جایگزین آن است.</p>
+    <p>برای نشست تجمعی، ستون <code>cumulative_mm</code> و برای نرخ، <code>rate_mm_year</code> استفاده می‌شود. نوع داده و مبنای سال را مشخص کنید. CSV تبدیل‌شده از TIFF، شمارهٔ سطر و ستون را نگه می‌دارد تا NoData با درون‌یابی پر نشود. فقط فایل انتخابی خودتان خوانده می‌شود.</p>
     <div class="a3-management-inputs"><label>فایل فرونشست<input type="file" accept=".csv,.geojson,.json,text/csv,application/json" data-m-source></label>
     <label>نوع مقادیر<select data-m-sub="value_kind"><option value="rate">نرخ سالانه</option><option value="cumulative">نشست تجمعی دوره</option></select></label>
     <label>مبنای سال دوره<select data-m-sub="calendar_basis"><option value="water_year">سال آبی (مهر تا شهریور)</option><option value="persian">سال شمسی (فروردین تا اسفند)</option></select></label>
@@ -76,7 +76,7 @@ export function mountManagementTools({data,request,featureIndex}){
     <label>قرارداد علامت<select data-m-sub="direction"><option value="down">مثبت = نشست / دورشدن در LOS</option><option value="up">منفی = نشست / دورشدن در LOS</option></select></label>
     <label><span data-m-start-label>سال آبی شروع</span><input data-m-sub="start_water_year" type="number" placeholder="یا ستون تاریخ در فایل"></label>
     <label><span data-m-end-label>سال آبی پایان</span><input data-m-sub="end_water_year" type="number" placeholder="یا ستون تاریخ در فایل"></label></div>
-    <div class="a3-actions"><button type="button" data-m-template>الگوی CSV</button><button type="button" data-m-project hidden>استفاده از لایهٔ پروژه</button><button type="button" data-m-project-csv hidden>دریافت CSV پروژه</button><button type="button" data-m-remove>حذف لایه از تحلیل</button></div><p data-m-source-status role="status"></p>
+    <div class="a3-actions"><button type="button" data-m-template>الگوی CSV دوره‌ای</button><button type="button" data-m-template-annual>الگوی نرخ سالانه</button><button type="button" data-m-remove>حذف لایه از تحلیل</button></div><p data-m-source-status role="status"></p>
   </details>
   <div class="a3-actions"><button type="button" data-m-run>محاسبه و به‌روزرسانی</button><span data-m-status role="status" aria-live="polite">در حال آماده‌سازی تحلیل مدیریتی…</span></div>
   <div data-m-results hidden><div class="a3-management-cards"></div><p class="a3-management-caution">مسیر آینده، ادامهٔ روند گذشته است؛ اثر کاهش برداشت یا تغییر اقلیم در آن شبیه‌سازی نشده است. دامنهٔ رنگی حساسیت شیب است و احتمال یا فاصلهٔ اطمینان ۹۵٪ نیست.</p>
@@ -98,7 +98,7 @@ export function mountManagementTools({data,request,featureIndex}){
   const stageLayout=managementStage(root);
   const thresholdButton=document.createElement('button');thresholdButton.type='button';thresholdButton.textContent='تعیین یا تغییر آستانه';thresholdButton.onclick=()=>{settingsLayout.details.open=true;$('[data-m-input=threshold]').focus();};$('[data-m-view=critical]').append(thresholdButton);
   const storageKey=`aquifer-management:${JSON.stringify([data.aquifer.mahdoude,data.aquifer.name,data.plan_maps.extent])}`;
-  let disposed=false,sequence=0,timer,result=null,mapCleanup=null,quality=null,active='priority',subsidence={text:'',file_name:''},projectSource=null;
+  let disposed=false,sequence=0,sourceSequence=0,readingSource=false,timer,result=null,mapCleanup=null,quality=null,active='priority',subsidence={text:'',file_name:''};
   try{const saved=JSON.parse(localStorage.getItem(storageKey)||'{}');all('[data-m-input]').forEach(input=>{if(saved[input.dataset.mInput]!==undefined)input.value=saved[input.dataset.mInput];});}catch{/* Defaults remain visible. */}
   function settings(){return Object.fromEntries(all('[data-m-input]').map(input=>[input.dataset.mInput,input.value]));}
   function subSettings(){return Object.fromEntries(all('[data-m-sub]').map(input=>[input.dataset.mSub,input.value]));}
@@ -107,21 +107,6 @@ export function mountManagementTools({data,request,featureIndex}){
     subsidence={...saved,origin};
     all('[data-m-sub]').forEach(input=>{if(saved[input.dataset.mSub]!==undefined&&saved[input.dataset.mSub]!==null)input.value=saved[input.dataset.mSub];});
     $('[data-m-source-name]').textContent=saved.file_name;periodLabels();
-  }
-  async function loadProject(){
-    const response=await fetch('/subsidence/sources.json',{cache:'no-cache'});if(!response.ok)return;
-    const registry=await response.json(),extent=data.plan_maps.extent;
-    const entry=registry.sources?.find(s=>s.extent_wgs84?.length===4&&s.extent_wgs84[0]<=extent[2]&&s.extent_wgs84[2]>=extent[0]&&s.extent_wgs84[1]<=extent[3]&&s.extent_wgs84[3]>=extent[1]);
-    if(!entry)return;
-    for(const path of [entry.csv_url,entry.metadata_url])if(new URL(path,location.origin).origin!==location.origin)throw new Error('منبع پروژه باید محلی باشد.');
-    const [csv,meta]=await Promise.all([fetch(entry.csv_url),fetch(entry.metadata_url)]);if(!csv.ok||!meta.ok)throw new Error('دریافت لایهٔ پروژه ناموفق بود.');
-    const [text,m]=await Promise.all([csv.text(),meta.json()]);
-    if(disposed)return;
-    projectSource={text,file_name:m.csv_file,source_id:entry.id,value_kind:m.quantity,component:m.component,direction:m.direction,
-      calendar_basis:m.calendar_basis,start_water_year:m.start_year,end_water_year:m.end_year,duration_years:m.duration_years,
-      unit:m.unit,period_precision:m.period_precision,raster_grid:m.raster_grid,csv_sha256:m.csv_sha256,
-      source_sha256:m.source_sha256,source_statistics:m.statistics};
-    $('[data-m-project]').hidden=false;$('[data-m-project-csv]').hidden=false;
   }
   function table(target,headers,rows){const table=document.createElement('table'),head=document.createElement('thead'),line=document.createElement('tr');headers.forEach(text=>{const th=document.createElement('th');th.textContent=text;line.append(th);});head.append(line);table.append(head);const body=document.createElement('tbody');for(const values of rows){const tr=document.createElement('tr');values.forEach(text=>{const td=document.createElement('td');td.textContent=text;tr.append(td);});body.append(tr);}table.append(body);target.replaceChildren(table);}
   function drawMap(){
@@ -147,7 +132,7 @@ export function mountManagementTools({data,request,featureIndex}){
       management_future_volume:{label:`حجم در افق ${fmt(h,0)} سال`,unit:'میلیون مترمکعب در پیکسل',palette:['#f2dfcf','#9fc9d3','#1d6888']}
     };
     const keys=active==='priority'?['management_priority','management_decline','management_ec']:active==='critical'?['management_critical_band','management_decline']:active==='subsidence'?(cumulative?['management_overlap','management_subsidence_cumulative','management_groundwater_cumulative','management_subsidence','management_subsidence_coverage_pct']:['management_overlap','management_subsidence','management_subsidence_decline']):['management_future_saturated','management_future_head','management_future_volume'];
-    const note=active==='subsidence'?'هم‌مکانی، علت فرونشست را اثبات نمی‌کند. دادهٔ تغییرشکل باید مستقل و هم‌دوره باشد؛ بیرون پشتیبانی نامشخص است.':active==='critical'?'آستانه از انتخاب شما می‌آید؛ عدم عبور با این روند به معنی ایمن‌بودن همیشگی نیست. زمان‌ها سناریویی‌اند.':active==='future'?'کف اصلی و Sy مدل فعال ثابت نگه داشته شده‌اند. حجم فقط برای بخش دارای روند گزارش می‌شود؛ برون‌یابی زیر کف، تراز فیزیکی معتبر نیست.':'این نقشه غربالگری اولویت است؛ معیار نسبی، حد ایمنی نیست و فقدان کیفیت به معنی مناسب‌بودن آب نیست.';
+    const note=active==='subsidence'?'هم‌مکانی، علت فرونشست را اثبات نمی‌کند. دادهٔ تغییرشکل باید مستقل و هم‌دوره باشد؛ تعمیم مکانی در منشأ هر پیکسل ثبت می‌شود.':active==='critical'?'آستانه از انتخاب شما می‌آید؛ عدم عبور با این روند به معنی ایمن‌بودن همیشگی نیست. زمان‌ها سناریویی‌اند.':active==='future'?'کف اصلی و Sy مدل فعال ثابت نگه داشته شده‌اند. حجم فقط برای بخش دارای روند گزارش می‌شود؛ برون‌یابی زیر کف، تراز فیزیکی معتبر نیست.':'این نقشه غربالگری اولویت است؛ معیار نسبی، حد ایمنی نیست و فقدان کیفیت به معنی مناسب‌بودن آب نیست.';
     const period=report.subsidence.periods[0];
     const calendarPeriod=report.subsidence.source_years;
     const caption=active==='subsidence'?(cumulative&&calendarPeriod?`دورهٔ ${report.subsidence.calendar_basis==='persian'?'شمسی':'سال آبی'} ${year(calendarPeriod[0])} تا ${year(calendarPeriod[1])}؛ دقت منبع: سال`:period?`دورهٔ مشترک سال آبی ${year(period[0])} تا ${year(period[1])}`:'لایهٔ مستقل تغییرشکل وارد نشده یا فاقد پوشش است'):`دورهٔ روند: سال آبی ${year(report.trend_start_water_year)} تا ${year(report.trend_end_water_year)}${active==='future'?` | افق ${fmt(h,0)} سال`:''}`;
@@ -161,7 +146,7 @@ export function mountManagementTools({data,request,featureIndex}){
     document.dispatchEvent(new CustomEvent('a3:subsidence-result',{detail:result}));
     settingsLayout.context.textContent=`افق ${r.settings.horizons.map(h=>fmt(h,0)).join('، ')} سال · دورهٔ روند ${fmt(r.settings.lookback,0)} سال`;
     $('.a3-management-cards').replaceChildren();
-    for(const [label,value,note]of [['پیزومترهای دارای روند',`${fmt(r.eligible_wells,0)} از ${fmt(r.well_count,0)}`,`شهریورهای سال آبی ${year(r.trend_start_water_year)} تا ${year(r.trend_end_water_year)}`],['پوشش مکانی روند',`${fmt(r.trend_supported_area_pct)}٪`,'آیندهٔ بخش بیرون پوشش، نامشخص می‌ماند.'],['خطای آزمون زمانی',r.backtest_mae_m===null?'آزمون کافی نیست':`${fmt(r.backtest_mae_m,2)} متر`,`${fmt(r.backtest_predictions,0)} پیش‌بینی مشاهدهٔ بعدی؛ تأیید افق بلندمدت نیست.`],['پوشش مشترک افت و تغییرشکل',`${fmt(r.overlap_supported_area_pct)}٪`,r.subsidence.input_records?'از لایهٔ ورودی مستقل':'لایهٔ فرونشست وارد نشده است.']]){const card=document.createElement('article');for(const[tag,text]of [['span',label],['strong',value],['small',note]]){const node=document.createElement(tag);node.textContent=text;card.append(node);}$('.a3-management-cards').append(card);}
+    for(const [label,value,note]of [['پیزومترهای دارای روند',`${fmt(r.eligible_wells,0)} از ${fmt(r.well_count,0)}`,`شهریورهای سال آبی ${year(r.trend_start_water_year)} تا ${year(r.trend_end_water_year)}`],['پوشش مکانی روند',`${fmt(r.trend_supported_area_pct)}٪`,'خارج پوش نقاط، ادامهٔ روش مکانی منتخب برآورد است؛ محدودیت زمانی و نبود کف یا Sy همچنان معتبرند.'],['خطای آزمون زمانی',r.backtest_mae_m===null?'آزمون کافی نیست':`${fmt(r.backtest_mae_m,2)} متر`,`${fmt(r.backtest_predictions,0)} پیش‌بینی مشاهدهٔ بعدی؛ تأیید افق بلندمدت نیست.`],['پوشش مشترک افت و تغییرشکل',`${fmt(r.overlap_supported_area_pct)}٪`,r.subsidence.input_records?'از لایهٔ ورودی مستقل':'لایهٔ فرونشست وارد نشده است.']]){const card=document.createElement('article');for(const[tag,text]of [['span',label],['strong',value],['small',note]]){const node=document.createElement(tag);node.textContent=text;card.append(node);}$('.a3-management-cards').append(card);}
     $('[data-m-priority-note]').textContent=`معیار افت: ${fmt(r.used_decline_limit_m_year,3)} متر/سال (${r.relative_decline_criterion?`صدک نسبی ${fmt(r.settings.priority_quantile,0)}`:'تعیین‌شده توسط شما'}). پوشش کیفیت ${fmt(r.quality_supported_area_pct)}٪؛ نزدیکی به آستانه در افق ${fmt(r.settings.urgent_years)} سال سنجیده شده است. با محاسبه یا تغییر کیفیت، این نقشه خودکار به‌روز می‌شود.`;
     $('.a3-management-zones').replaceChildren();priorityLabels.forEach((label,i)=>{if(!r.priority_counts[i])return;const item=document.createElement('span'),dot=document.createElement('i');dot.style.background=priorityColors[i];item.append(dot,document.createTextNode(`${label}: ${fmt(r.priority_areas_km2[i])} کیلومتر مربع`));$('.a3-management-zones').append(item);});
     const long=r.forecasts.filter(p=>p.long_extrapolation).map(p=>fmt(p.horizon,0));
@@ -173,38 +158,51 @@ export function mountManagementTools({data,request,featureIndex}){
     table($('[data-m-critical-table]'),['طول / عرض','وضعیت','سال تا آستانه','سال آبی عبور','شیب سریع / کند (سال)'],sorted.map(c=>[`${fmt(c.lon,4)} / ${fmt(c.lat,4)}`,statusLabels[c.management_critical_status],fmt(c.management_critical_years,2),c.management_critical_water_year===null?'—':year(c.management_critical_water_year),`${fmt(c.management_critical_fast,2)} / ${c.management_critical_slow_status==='not_crossed'?'عدم عبور':fmt(c.management_critical_slow,2)}`]));
     const sub=r.subsidence,cumulative=Boolean(sub.cumulative);
     const subLimit=cumulative?r.used_cumulative_subsidence_limit_mm:r.used_subsidence_limit_mm_year;
-    $('[data-m-subsidence-note]').textContent=sub.input_records?`منبع: ${sub.input_file}. ${fmt(sub.inside_records,0)} پیکسل/رکورد داخل آبخوان؛ پوشش معتبر ${fmt(r.subsidence_supported_area_pct)}٪ و ${fmt(sub.aligned_wells,0)} پیزومتر هم‌دوره. معیار ${cumulative?'نشست تجمعی':'نرخ'} ${fmt(subLimit,2)} ${cumulative?'میلی‌متر':'mm/year'} ${r.relative_subsidence_criterion?'نسبی است.':'توسط شما تعیین شده است.'} ${cumulative?`افت آب از اختلاف مشاهدات ابتدا و انتهای پنجرهٔ همان سال‌ها به دست می‌آید؛ تاریخ روز و ماه منبع معلوم نیست و تطبیق تقریبی است. میانگین سالانه فقط تقسیم بر مدت اعلامی ${fmt(sub.duration_years)} سال است.`:''} ${sub.raster_grid?`خانه‌ها میانگین پیکسل‌های معتبر TIFF را نمایش می‌دهند؛ NoData پر نمی‌شود. بیشینهٔ پیکسل اصلی ${fmt(sub.source_statistics?.maximum_signed_mm,1)} میلی‌متر است.`:''} ${sub.component==='los'?'مؤلفهٔ خط دید است؛ قائم تفسیر نکنید.':'مؤلفهٔ قائم معرفی شده است.'}`:'لایهٔ مستقلی برای فرونشست موجود نیست. نشست از افت آب تولید نمی‌شود؛ لایهٔ معتبر را معرفی کنید.';
+    $('[data-m-subsidence-note]').textContent=sub.input_records?`منبع: ${sub.input_file}. ${fmt(sub.inside_records,0)} پیکسل/رکورد داخل آبخوان؛ پوشش معتبر ${fmt(r.subsidence_supported_area_pct)}٪ و ${fmt(sub.aligned_wells,0)} پیزومتر هم‌دوره. معیار ${cumulative?'نشست تجمعی':'نرخ'} ${fmt(subLimit,2)} ${cumulative?'میلی‌متر':'mm/year'} ${r.relative_subsidence_criterion?'نسبی است.':'توسط شما تعیین شده است.'} ${cumulative?`افت آب از اختلاف مشاهدات ابتدا و انتهای پنجرهٔ همان سال‌ها به دست می‌آید؛ تاریخ روز و ماه منبع معلوم نیست و تطبیق تقریبی است. میانگین سالانه فقط تقسیم بر مدت اعلامی ${fmt(sub.duration_years)} سال است.`:''} ${sub.raster_grid?`مقادیر منبع از میانگین پیکسل‌های معتبر TIFF می‌آیند؛ خانه‌های فاقد پوشش با روش منتخب برآورد و با منشأ برآوردی مشخص می‌شوند. بیشینهٔ پیکسل اصلی ${fmt(sub.source_statistics?.maximum_signed_mm,1)} میلی‌متر است.`:''} ${sub.component==='los'?'مؤلفهٔ خط دید است؛ قائم تفسیر نکنید.':'مؤلفهٔ قائم معرفی شده است.'}`:'لایهٔ مستقلی برای فرونشست موجود نیست. نشست از افت آب تولید نمی‌شود؛ لایهٔ معتبر را معرفی کنید.';
     $('[data-m-method]').replaceChildren();for(const text of [`شعاع پشتیبانی: ${fmt(r.support_radius_km,2)} کیلومتر. روش ${r.settings.method}، تعداد همسایه ${fmt(r.settings.neighbors,0)} و توان ${fmt(r.settings.power,1)}.`,...r.notes]){const p=document.createElement('p');p.textContent=text;$('[data-m-method]').append(p);}
     const previous=$('[data-m-horizon]').value;$('[data-m-horizon]').replaceChildren();r.settings.horizons.forEach(h=>$('[data-m-horizon]').add(new Option(`${fmt(h,0)} سال · سال آبی ${year(r.trend_end_water_year+h)}`,String(h))));if(r.settings.horizons.includes(Number(previous)))$('[data-m-horizon]').value=previous;
     $('[data-m-results]').hidden=false;activate(active);
   }
   async function calculate(){
+    if(readingSource||disposed)return;
     clearTimeout(timer);const token=++sequence;$('[data-m-run]').disabled=true;$('[data-m-status]').textContent='در حال محاسبهٔ روند، افق‌ها و اولویت مکانی…';
-    try{const options={...settings(),subsidence:{...subsidence,...subSettings()},quality,computed_at_utc:new Date().toISOString()};
+    try{const options={...settings(),allow_incomplete_subsidence:true,subsidence:{...subsidence,...subSettings()},quality,computed_at_utc:new Date().toISOString()};
       try{localStorage.setItem(storageKey,JSON.stringify(settings()));}catch{/* Computation remains available. */}
-      const answer=await request('management',{feature_index:featureIndex,options});if(disposed||token!==sequence)return;result=answer;render();$('[data-m-status]').textContent='تحلیل مدیریتی با ورودی‌های فعلی به‌روز شد.';
+      const answer=await request('management',{feature_index:featureIndex,options});if(disposed||token!==sequence)return;result=answer;render();$('[data-m-source-status]').textContent=result.report.subsidence.input_error||'';$('[data-m-status]').textContent='تحلیل مدیریتی با ورودی‌های فعلی به‌روز شد.';
     }catch(error){if(!disposed&&token===sequence){result=null;document.dispatchEvent(new CustomEvent('a3:subsidence-result',{detail:null}));$('[data-m-results]').hidden=true;$('[data-m-status]').textContent=error.message;}}
     finally{if(!disposed&&token===sequence)$('[data-m-run]').disabled=false;}
   }
-  function invalidate(){sequence++;result=null;document.dispatchEvent(new CustomEvent('a3:subsidence-result',{detail:null}));mapCleanup?.();mapCleanup=null;$('[data-m-results]').hidden=true;$('[data-m-status]').textContent='ورودی تغییر کرد؛ در حال به‌روزرسانی…';clearTimeout(timer);timer=setTimeout(calculate,450);}
-  function projectSettingsKey(){return storageKey+':project:'+JSON.stringify([projectSource?.csv_sha256,projectSource?.value_kind,projectSource?.component,projectSource?.direction,projectSource?.calendar_basis,projectSource?.start_water_year,projectSource?.end_water_year,projectSource?.duration_years]);}
-  async function saveSource(){try{if(subsidence.text){if(subsidence.origin==='project')localStorage.setItem(projectSettingsKey(),JSON.stringify(subSettings()));else await sourceStorage({...subsidence,...subSettings()});}}catch{if(!disposed)$('[data-m-source-status]').textContent='ذخیرهٔ پایدار لایه ممکن نشد؛ در این نشست قابل استفاده است.';}}
+  function invalidate(){sequence++;result=null;document.dispatchEvent(new CustomEvent('a3:subsidence-result',{detail:null}));mapCleanup?.();mapCleanup=null;$('[data-m-results]').hidden=true;$('[data-m-run]').disabled=true;$('[data-m-status]').textContent=readingSource?'در حال خواندن فایل انتخاب‌شده…':'ورودی تغییر کرد؛ در حال به‌روزرسانی…';clearTimeout(timer);if(!readingSource)timer=setTimeout(calculate,450);}
+  async function saveSource(){try{if(subsidence.text){await sourceStorage({...subsidence,...subSettings()});}}catch{if(!disposed)$('[data-m-source-status]').textContent='ذخیرهٔ پایدار لایه ممکن نشد؛ در این نشست قابل استفاده است.';}}
   all('[data-m-input]').forEach(input=>input.addEventListener(input.tagName==='SELECT'?'change':'input',invalidate));
   all('[data-m-sub]').forEach(input=>input.addEventListener('change',()=>{periodLabels();saveSource();invalidate();}));
   $('[data-m-run]').onclick=calculate;$('[data-m-horizon]').onchange=drawMap;
   all('[data-m-tab]').forEach(button=>{button.onclick=()=>activate(button.dataset.mTab);button.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=all('[data-m-tab]'),i=tabs.indexOf(button),next=e.key==='Home'?tabs[0]:e.key==='End'?tabs.at(-1):tabs[(i+(e.key==='ArrowLeft'?1:tabs.length-1))%tabs.length];activate(next.dataset.mTab,true);};});
   $('[data-m-quality]').onclick=()=>document.getElementById('a3Nav-quality').click();
   $('[data-m-open-source]').onclick=()=>{settingsLayout.details.open=true;const details=$('[data-m-source-details]');details.open=true;details.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});$('[data-m-source]').focus();};
-  $('[data-m-source]').onchange=async()=>{const file=$('[data-m-source]').files[0];if(!file)return;const text=await file.text();if(disposed)return;subsidence={text,file_name:file.name,origin:'upload'};try{localStorage.setItem(storageKey+':source-mode','upload');localStorage.removeItem(storageKey+':source-disabled');}catch{}const header=text.slice(0,500);if(header.includes('cumulative_mm')||header.includes('cumulative_value'))$('[data-m-sub=value_kind]').value='cumulative';else if(header.includes('rate_mm_year')){$('[data-m-sub=value_kind]').value='rate';$('[data-m-sub=calendar_basis]').value='water_year';}periodLabels();$('[data-m-source-name]').textContent=file.name;$('[data-m-source-status]').textContent='مشخصات دوره، علامت و مؤلفهٔ فایل جدید را در همین فرم کنترل کنید.';await saveSource();if(!disposed)invalidate();};
-  $('[data-m-remove]').onclick=async()=>{subsidence={text:'',file_name:''};$('[data-m-source]').value='';$('[data-m-source-name]').textContent='وارد نشده';try{localStorage.setItem(storageKey+':source-disabled','true');await sourceStorage(undefined,true);}catch{/* Current layer is still removed. */}if(!disposed)invalidate();};
-  $('[data-m-project]').onclick=()=>{if(!projectSource)return;applySource(projectSource,'project');try{localStorage.removeItem(storageKey+':source-disabled');localStorage.setItem(storageKey+':source-mode','project');}catch{}invalidate();};
-  $('[data-m-project-csv]').onclick=()=>{if(projectSource)download(new Blob([projectSource.text],{type:'text/csv;charset=utf-8'}),projectSource.file_name);};
+  async function readSource(file){
+    const token=++sourceSequence;readingSource=true;subsidence={text:'',file_name:file.name,origin:'upload'};
+    data.input_files.subsidence=file.name;$('[data-m-source-name]').textContent=file.name;invalidate();
+    document.dispatchEvent(new CustomEvent('a3:user-layer-file',{detail:{kind:'subsidence',file,aquifer:data.aquifer}}));
+    try{
+      const text=await file.text();if(disposed||token!==sourceSequence)return;
+      subsidence={text,file_name:file.name,origin:'upload'};const header=text.slice(0,500);
+      if(header.includes('cumulative_mm')||header.includes('cumulative_value'))$('[data-m-sub=value_kind]').value='cumulative';
+      else if(header.includes('rate_mm_year')){$('[data-m-sub=value_kind]').value='rate';$('[data-m-sub=calendar_basis]').value='water_year';}
+      periodLabels();$('[data-m-source-status]').textContent='مشخصات دوره، علامت و مؤلفهٔ فایل جدید را در همین فرم کنترل کنید.';
+      readingSource=false;invalidate();saveSource();
+    }catch(error){if(!disposed&&token===sourceSequence){readingSource=false;$('[data-m-run]').disabled=false;$('[data-m-source-status]').textContent='خواندن فایل ممکن نشد: '+error.message;}}
+  }
+  $('[data-m-source]').onchange=()=>{const file=$('[data-m-source]').files[0];if(file)readSource(file);};
+  $('[data-m-remove]').onclick=async()=>{sourceSequence++;readingSource=false;subsidence={text:'',file_name:''};data.input_files.subsidence=null;document.dispatchEvent(new CustomEvent('a3:user-layer-file',{detail:{kind:'subsidence',file:null,aquifer:data.aquifer}}));$('[data-m-source]').value='';$('[data-m-source-name]').textContent='وارد نشده';invalidate();try{localStorage.setItem(storageKey+':source-disabled','true');await sourceStorage(undefined,true);}catch{/* Current layer is still removed. */}};
   $('[data-m-template]').onclick=()=>{const cumulative=$('[data-m-sub=value_kind]').value==='cumulative';download(new Blob([cumulative?'longitude,latitude,cumulative_mm,start_year,end_year\r\n':'longitude,latitude,rate_mm_year,start_water_year,end_water_year\r\n'],{type:'text/csv;charset=utf-8'}),'subsidence-template.csv');};
+  $('[data-m-template-annual]').onclick=()=>download(new Blob(['longitude,latitude,water_year,rate_mm_year\r\n'],{type:'text/csv;charset=utf-8'}),'subsidence-annual-rate-template.csv');
   $('[data-m-json]').onclick=()=>{if(result)download(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),`${data.aquifer.name}-management-WY${result.report.trend_end_water_year}.json`);};
   $('[data-m-forecast-csv]').onclick=()=>{if(!result)return;const columns=Object.keys(result.report.forecasts[0]),rows=[['aquifer','reference_water_year','trend_area_pct',...columns],...result.report.forecasts.map(p=>[data.aquifer.name,result.report.trend_end_water_year,result.report.trend_supported_area_pct,...columns.map(k=>p[k]??'')])];download(new Blob(['\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),`${data.aquifer.name}-future-WY${result.report.trend_end_water_year}.csv`);};
   function qualityChanged(event){const q=event.detail;quality=q?{volume_end:data.dates.after,thresholds:q.report.thresholds,quality_water_year:q.report.quality_water_year,input_file:q.report.quality_input_file,cells:q.plan_maps.cells.map(c=>Object.fromEntries(['lon','lat','quality_ec','quality_supported','quality_zone_code'].map(k=>[k,c[k]])))}:null;invalidate();}
   document.addEventListener('a3:quality-result',qualityChanged);
-  (async()=>{let saved;try{saved=await sourceStorage();}catch{}if(disposed)return;try{await loadProject();}catch(error){if(!disposed)$('[data-m-source-status]').textContent=error.message;}if(disposed)return;let preferProject=false;try{preferProject=localStorage.getItem(storageKey+':source-mode')==='project';}catch{}if(saved&&!preferProject)applySource(saved,'upload');else if(projectSource){let disabled=false,overrides={};try{disabled=localStorage.getItem(storageKey+':source-disabled')==='true';overrides=JSON.parse(localStorage.getItem(projectSettingsKey())||'{}');}catch{}if(!disabled)applySource({...projectSource,...overrides},'project');}periodLabels();calculate();})();
+  if(sourceFile){const transfer=new DataTransfer();transfer.items.add(sourceFile);$('[data-m-source]').files=transfer.files;readSource(sourceFile);}
+  else{periodLabels();calculate();}
   let lastPlotWidth=0;const chartResize=new ResizeObserver(entries=>{const w=entries[0].contentRect.width;if(Math.abs(w-lastPlotWidth)>.5){lastPlotWidth=w;paintCharts();}});chartResize.observe(stageLayout.analysis);
-  return ()=>{disposed=true;sequence++;clearTimeout(timer);chartResize.disconnect();mapCleanup?.();document.removeEventListener('a3:quality-result',qualityChanged);root.replaceChildren();root.hidden=true;};
+  return ()=>{disposed=true;sequence++;sourceSequence++;clearTimeout(timer);chartResize.disconnect();mapCleanup?.();document.removeEventListener('a3:quality-result',qualityChanged);root.replaceChildren();root.hidden=true;};
 }

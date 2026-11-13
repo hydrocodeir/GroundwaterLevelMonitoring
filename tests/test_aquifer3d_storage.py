@@ -1,3 +1,4 @@
+from functools import partial
 """Storage accounting, spatial Sy input and fixed bedrock reference regressions."""
 import json
 import pytest
@@ -57,6 +58,7 @@ def test_rising_columns_report_gain_separately():
 
 def test_builtin_mashhad_and_explicit_override():
     model = _model('مشهد')
+    model.analyze = partial(model.analyze,user_layers_only=False)  # Explicit archival converter test.
     model._mashhad_bedrock_text = BEDROCK
     result = model.analyze(0, 1381, .06)
     assert result['grid']['bedrock_source'] == 'mashhad_msl'
@@ -69,6 +71,7 @@ def test_builtin_mashhad_and_explicit_override():
 def test_neyshabur_floor_does_not_move_with_baseline_selection():
     figure = 'lon,lat,bedrock_depth_m\n' + ''.join(f'{x},{y},60\n' for x, y in COORDS)
     model = _model('نیشابور', figure, [80, 100, 120, 140, 180], fifth_current_only=True)
+    model.analyze = partial(model.analyze,user_layers_only=False)  # Explicit archival converter test.
     early = model.analyze(0, 1381, .1)
     later = model.analyze(0, 1389, .1)
     assert early['wells']['common'] != later['wells']['common']
@@ -146,13 +149,14 @@ def test_missing_sy_produces_no_equivalent_volume_shell():
 
 def test_pixel_columns_stack_loss_above_remaining_and_clip_polygon_holes():
     import math
-    from shapely.geometry import Polygon
+    from shapely.geometry import Polygon, Point
     model = _model()
     outer = [[58,36],[58.02,36],[58.02,36.02],[58,36.02],[58,36]]
     hole = [[58.008,36.008],[58.012,36.008],[58.012,36.012],[58.008,36.012],[58.008,36.008]]
     display = {'cols':2, 'rows':2, 'polygons':[[outer,hole]],
                'points':[[x,y,100,80,0] for y in [36,36.02] for x in [58,58.02]]}
-    result = model._pixel_water_mesh(display, [], .1, True)
+    plan = model._plan_maps(display, [], .1, True, 400, 400)
+    result = model._pixel_water_mesh(display, [], .1, True, plan)
     cells = result['cells']
     assert cells and result['side_m'] > 0
     assert all(c['remaining_m'] == pytest.approx(8) and c['lost_m'] == pytest.approx(2) for c in cells)
@@ -164,10 +168,48 @@ def test_pixel_columns_stack_loss_above_remaining_and_clip_polygon_holes():
     assert full
     for color, low, high in [('blue',0,8),('red',8,10)]:
         triangles=result['shell'][color]
+        assert len(result['face_cells'][color]) == len(triangles)
+        for index,tri in zip(result['face_cells'][color],triangles):
+            footprint = Polygon(cells[index]['polygons'][0][0],cells[index]['polygons'][0][1:])
+            # Vertical edges and caps keep their originating cell even on a shared border.
+            assert all(footprint.buffer(1e-10).covers(Point(p[:2])) for p in tri)
         assert min(p[2] for tri in triangles for p in tri) == pytest.approx(low)
         assert max(p[2] for tri in triangles for p in tri) == pytest.approx(high)
         assert all(shape.buffer(1e-10).covers(Polygon([p[:2] for p in tri]))
                    for tri in triangles if len(set(tuple(p[:2]) for p in tri)) == 3)
+
+
+def test_pixel_grid_defaults_and_rectangles_share_geometry_without_changing_physical_storage():
+    model = _model()
+    square = model.analyze(0, 1381, .1, BEDROCK)
+    rectangle = json.loads(model.call_json('analyze', json.dumps({'feature_index':0,'baseline_year':1381,'sy':.1,
+        'bedrock_text':BEDROCK,'cell_width_m':500,'cell_height_m':800})))
+    assert square['plan_maps']['cell_width_m'] == square['plan_maps']['cell_height_m'] == 4000
+    assert rectangle['plan_maps']['side_m'] is None
+    assert rectangle['plan_maps']['cell_width_m'] == 500
+    assert rectangle['plan_maps']['cell_height_m'] == 800
+    assert rectangle['pixel_water']['cells'] == rectangle['plan_maps']['cells']
+    assert len(rectangle['plan_maps']['cells']) > len(square['plan_maps']['cells'])
+    assert rectangle['metrics']['drainable_after_mcm'] == pytest.approx(square['metrics']['drainable_after_mcm'])
+    for key in ['before_mcm','remaining_mcm','lost_mcm','area_m2']:
+        assert sum(c[key] for c in rectangle['plan_maps']['cells']) == pytest.approx(sum(c[key] for c in square['plan_maps']['cells']))
+    full = [c for c in rectangle['plan_maps']['cells'] if c['area_m2'] == pytest.approx(500*800)]
+    assert full
+    from shapely.geometry import shape
+    bounds = shape({'type':'MultiPolygon','coordinates':full[0]['polygons']}).bounds
+    assert bounds[2]-bounds[0] == pytest.approx(rectangle['plan_maps']['spacing_lon'])
+    assert bounds[3]-bounds[1] == pytest.approx(rectangle['plan_maps']['spacing_lat'])
+
+
+@pytest.mark.parametrize('width,height',[(0,4000),(-1,4000),(None,4000),(True,4000),(1e7,4000),(4000,float('nan'))])
+def test_invalid_pixel_dimensions_are_rejected(width,height):
+    with pytest.raises(ValueError):
+        _model().analyze(0,1381,.1,BEDROCK,cell_width_m=width,cell_height_m=height)
+
+
+def test_excessive_pixel_count_is_rejected_before_generating_geometry():
+    with pytest.raises(ValueError,match='۲۵٬۰۰۰'):
+        _model().analyze(0,1381,.1,BEDROCK,cell_width_m=1,cell_height_m=1)
 
 
 def test_pixel_columns_do_not_draw_loss_for_rises_or_invent_missing_storage():

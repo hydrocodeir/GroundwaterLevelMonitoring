@@ -433,15 +433,25 @@ def _sy_points(text):
     return result
 
 
-def _plan_maps(display, spatial_sy, coefficient, has_floor):
-    """Physical (unraised) floor, Sy and baseline-relative storage on clipped squares."""
+def _pixel_grid_size(width_m=4000, height_m=4000):
+    width, height = _number(width_m), _number(height_m)
+    if any(isinstance(v, bool) for v in (width_m, height_m)) or any(v is None or not 0 < v <= 1e6 for v in (width, height)):
+        raise ValueError('طول و عرض پیکسل باید عدد مثبت و حداکثر ۱٬۰۰۰٬۰۰۰ متر باشند.')
+    return width, height
+
+
+def _plan_maps(display, spatial_sy, coefficient, has_floor, cell_width_m=4000, cell_height_m=4000):
+    """Physical floor/storage on clipped cells; nominal metres in the local metric."""
     from shapely.geometry import Polygon, box
     from shapely.ops import unary_union
     shape = unary_union([Polygon(p[0], p[1:]) for p in display['polygons']])
     west, south, east, north = shape.bounds
     sx, sy = 111320 * math.cos(math.radians((south+north)/2)), 111320
-    side = max((east-west)*sx, (north-south)*sy) / 32
-    dx, dy = side/sx, side/sy
+    width, height_m = _pixel_grid_size(cell_width_m, cell_height_m)
+    dx, dy = width/sx, height_m/sy
+    grid_cols, grid_rows = math.ceil((east-west)/dx), math.ceil((north-south)/dy)
+    if grid_cols*grid_rows > 25000:
+        raise ValueError('این ابعاد بیش از ۲۵٬۰۰۰ خانهٔ شبکه ایجاد می‌کند؛ برای محاسبه در مرورگر، طول یا عرض پیکسل را بزرگ‌تر انتخاب کنید.')
     points, cols, rows = display['points'], display['cols'], display['rows']
     x0, y0 = points[0][:2]
     x1, y1 = points[-1][:2]
@@ -455,8 +465,8 @@ def _plan_maps(display, spatial_sy, coefficient, has_floor):
                 + points[(j+1)*cols+i][column]*(1-u)*v + points[(j+1)*cols+i+1][column]*u*v)
 
     cells = []
-    for j in range(math.ceil((north-south)/dy)):
-        for i in range(math.ceil((east-west)/dx)):
+    for j in range(grid_rows):
+        for i in range(grid_cols):
             cell = shape.intersection(box(west+i*dx, south+j*dy, west+(i+1)*dx, south+(j+1)*dy))
             if cell.is_empty or cell.area < 1e-14:
                 continue
@@ -496,7 +506,11 @@ def _plan_maps(display, spatial_sy, coefficient, has_floor):
         cell_values = [c[key] for c in cells]
         fields[key] = {'min':min(cell_values), 'max':max(cell_values),
                        'contours':_surface_contours(points, cols, rows, values, shape)}
-    return {'cells':cells, 'side_m':side, 'fields':fields,
+    return {'cells':cells, 'side_m':width if width == height_m else None, 'fields':fields,
+            'cell_width_m':width, 'cell_height_m':height_m,
+            'spacing_lon':dx, 'spacing_lat':dy, 'grid_cols':grid_cols, 'grid_rows':grid_rows,
+            'metric_basis':'local equirectangular; nominal metres at polygon mean latitude',
+            'reference_latitude':(south+north)/2,
             'polygons':display['polygons'], 'extent':[west,south,east,north],
             'percentage_reference':'baseline_storage', 'zero_baseline':'undefined'}
 
@@ -549,8 +563,9 @@ def _pixel_water_mesh(display, spatial_sy, coefficient, has_floor, plan_maps=Non
     from shapely.ops import triangulate
     plan_maps = plan_maps or _plan_maps(display, spatial_sy, coefficient, has_floor)
     shell = {'blue': [], 'red': [], 'green': [], 'floor': [], 'outlines': []}
+    face_cells = {'blue': [], 'red': []}
     vertices, cells = [], plan_maps['cells']
-    for cell in cells:
+    for cell_index, cell in enumerate(cells):
         lon,lat,now,lost = [cell[k] for k in ('lon','lat','remaining_m','lost_m')]
         vertices.append([lon,lat,0,0,0,0,now+lost])
         parts = [Polygon(p[0],p[1:]) for p in cell['polygons']]
@@ -561,11 +576,12 @@ def _pixel_water_mesh(display, spatial_sy, coefficient, has_floor, plan_maps=Non
                 xy = list(ring.coords)
                 for (ax,ay),(bx,by) in zip(xy,xy[1:]):
                     shell['outlines'].extend([[ax,ay,0],[bx,by,0]])
-            # Clip boundary squares exactly; interior cells remain square.
+            # Clip boundary cells exactly; interior cells retain the chosen dimensions.
             tops = [t for t in triangulate(part) if part.covers(t)]
             for kind, low, high in [('blue',0,now), ('red',now,now+lost)]:
                 if high-low < 1e-10:
                     continue
+                first_face = len(shell[kind])
                 for tri in tops:
                     xy = list(tri.exterior.coords)[:3]
                     shell[kind].append([[x,y,high]+([now] if kind=='red' else []) for x,y in xy])
@@ -579,10 +595,13 @@ def _pixel_water_mesh(display, spatial_sy, coefficient, has_floor, plan_maps=Non
                                 point.append(now)
                         shell[kind].extend([[a,b,c],[a,c,d]])
                         shell['outlines'].extend([[ax,ay,high],[bx,by,high]])
+                face_cells[kind].extend([cell_index] * (len(shell[kind]) - first_face))
     # Extent includes cell corners rather than only their representative points.
     west,south,east,north = plan_maps['extent']
     vertices.extend([[west,south,0,0,0,0,0],[east,north,0,0,0,0,0]])
-    return {'shell':shell, 'vertices':vertices, 'cells':cells, 'side_m':plan_maps['side_m']}
+    return {'shell':shell, 'vertices':vertices, 'cells':cells, 'side_m':plan_maps['side_m'],
+            'cell_width_m':plan_maps.get('cell_width_m',plan_maps['side_m']),
+            'cell_height_m':plan_maps.get('cell_height_m',plan_maps['side_m']), 'face_cells':face_cells}
 
 
 def _volume_mesh(display, spatial_sy, coefficient, has_floor):
@@ -771,7 +790,10 @@ def _volume_shells(vertices, triangles, boundary, equivalent):
     return shells
 
 
-def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m=65.0, sy_text=""):
+def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m=65.0, sy_text="", user_layers_only=True, cell_width_m=4000, cell_height_m=4000, spatial_method='idw', spline_smoothing=0):
+    cell_width_m, cell_height_m = _pixel_grid_size(cell_width_m, cell_height_m)
+    smoothing=_number(spline_smoothing)
+    if spatial_method not in ('idw','spline','thiessen') or smoothing is None or smoothing<0:raise ValueError('روش مکانی یا هموارسازی معتبر نیست.')
     summary = prepare(feature_index)
     current_year = summary['current_year']
     year = int(baseline_year)
@@ -798,20 +820,20 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
     center_lat = (south + north) / 2
     uploaded_bedrock = _bedrock_points(bedrock_text, polygons, extent)
     builtin_mashhad = []
-    if _normal(summary["name"]) == _normal("مشهد") and not uploaded_bedrock:
+    if not user_layers_only and _normal(summary["name"]) == _normal("مشهد") and not uploaded_bedrock:
         builtin_mashhad = _bedrock_points(_mashhad_bedrock_text, polygons, extent)
     elevation_bedrock = uploaded_bedrock or builtin_mashhad
     is_neyshabur = (_normal(summary["name"]) == _normal("نیشابور") and
                     _normal(summary["mahdoude"]) == _normal("نیشابور"))
     is_karat = (_normal(summary["name"]) == _normal("کرات") and
                 _normal(summary["mahdoude"]) == _normal("کرات"))
-    figure_depth = _figure_depth if is_neyshabur and not uploaded_bedrock else []
+    figure_depth = _figure_depth if not user_layers_only and is_neyshabur and not uploaded_bedrock else []
     figure_rule = _figure_boundary_rule if figure_depth else None
     figure_boundary = _boundary_index(polygons, center_lat) if figure_rule else None
     scenario_thickness = None
     current_heads = []
     current_grounds = []
-    if is_karat and not uploaded_bedrock:
+    if not user_layers_only and is_karat and not uploaded_bedrock:
         scenario_thickness = _number(karat_thickness_m)
         if scenario_thickness is None or not 20 <= scenario_thickness <= 300:
             raise ValueError("ضخامت فرضی کرات باید بین ۲۰ و ۳۰۰ متر باشد.")
@@ -906,7 +928,7 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
     if bedrock_source == "schematic":
         for point in points:
             if point[5]:
-                point[4] = schematic_base
+                point[4] = min(point[2],point[3]) if user_layers_only else schematic_base
     area_m2 = summary["area_km2"] * 1e6
     mean_before = sum(row[0] for row in sampled) / len(sampled)
     mean_after = sum(row[1] for row in sampled) / len(sampled)
@@ -1030,7 +1052,16 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
     display_grid = {"cols": GRID_SIZE + 2, "rows": GRID_SIZE + 2,
                     "points": display_points, "polygons": polygons}
     volume_mesh = _volume_mesh(display_grid, spatial_sy, coefficient, bedrock_source != "schematic")
-    plan_maps = _plan_maps(display_grid, spatial_sy, coefficient, bedrock_source != "schematic")
+    if user_layers_only and bedrock_source == 'schematic':
+        # Two measured/interpolated head surfaces; no invented bedrock or volume.
+        v=volume_mesh['vertices'];tri=volume_mesh['triangles']
+        for point in v:point[4]=min(point[2],point[3])
+        volume_mesh['geology']={'blue':[[[v[i][0],v[i][1],v[i][3]] for i in t] for t in tri],
+            'red':[[[v[i][0],v[i][1],v[i][2],v[i][2]] for i in t] for t in tri],
+            'green':[],'floor':[],'outlines':[]}
+        volume_mesh['water']=None
+        volume_mesh['heads_only']=True
+    plan_maps = _plan_maps(display_grid, spatial_sy, coefficient, bedrock_source != "schematic", cell_width_m, cell_height_m)
     pixel_water = _pixel_water_mesh(display_grid, spatial_sy, coefficient, bedrock_source != "schematic", plan_maps)
     result = {
         "aquifer": {"name": summary["name"], "mahdoude": summary["mahdoude"],
@@ -1078,6 +1109,7 @@ def analyze(feature_index, baseline_year, sy, bedrock_text="", karat_thickness_m
                     "sy": coefficient},
         "pixel_water": pixel_water,
         "plan_maps": plan_maps,
+        "spatial": {"method":spatial_method,"spline_smoothing":smoothing,"coverage":"aquifer"},
         "water_grid": {"cols": GRID_SIZE, "rows": GRID_SIZE, "points": water_points,
                        "outlines": outlines, "bedrock_real": True,
                        "bedrock_source": "equivalent_water"},
@@ -1235,7 +1267,9 @@ def call_json(command, argument_json="{}"):
     elif command == "analyze":
         result = analyze(arguments["feature_index"], arguments["baseline_year"],
                          arguments.get("sy"), arguments.get("bedrock_text", ""),
-                         arguments.get("karat_thickness_m", 65.0), arguments.get("sy_text", ""))
+                         arguments.get("karat_thickness_m", 65.0), arguments.get("sy_text", ""),
+                         cell_width_m=arguments.get('cell_width_m',4000), cell_height_m=arguments.get('cell_height_m',4000),
+                         spatial_method=arguments.get('spatial_method','idw'), spline_smoothing=arguments.get('spline_smoothing',0))
         _last_analysis = result
     elif command == 'cross_section':
         result = cross_section(arguments['start'],arguments['end'])

@@ -35,35 +35,30 @@ load_environment()
 app = FastAPI(title="داشبورد پایش آب زیرزمینی")
 app.mount("/assets", StaticFiles(directory=ROOT / "frontend" / "assets"), name="assets")
 app.mount("/subsidence", StaticFiles(directory=ROOT / "Data" / "Subsidence"), name="subsidence")
-templates = Jinja2Templates(directory=ROOT / "frontend" / "templates")
-templates.env.globals["asset_version"] = max(
-    (ROOT / "frontend" / "assets" / "js" / "dashboard-help.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "data" / "khorasan-razavi-urban.geojson").stat().st_mtime_ns,
-    (ROOT / "app" / "data_service.py").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "css" / "workbench.css").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "map-cities.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-views.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "css" / "app.css").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "app.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "comparison.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-render.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-tools.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-maps.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-quality.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-workspace.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-layout.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "css" / "aquifer3d-workspace.css").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "css" / "aquifer3d-management.css").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-management.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer-management-compute.py").stat().st_mtime_ns,
-    (ROOT / "scripts" / "waterq_compute.py").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d_compute.py").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "css" / "aquifer3d.css").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "dashboard-worker.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "aquifer3d-worker.js").stat().st_mtime_ns,
-    (ROOT / "frontend" / "assets" / "js" / "pyodide-runtime.js").stat().st_mtime_ns,
-)
+def current_asset_version() -> str:
+    """Version markup and its modules together, including edits without restart."""
+    import hashlib
+    paths = [
+        *(ROOT / "frontend" / "assets" / "js").glob("*.js"),
+        *(ROOT / "frontend" / "assets" / "js").glob("*.py"),
+        *(ROOT / "frontend" / "assets" / "css").glob("*.css"),
+        *(ROOT / "frontend" / "templates").rglob("*.html"),
+        ROOT / "frontend/assets/data/khorasan-razavi-urban.geojson",
+        ROOT / "app/data_service.py", ROOT / "scripts/waterq_compute.py",
+    ]
+    fingerprint = []
+    for path in sorted(paths):
+        stat = path.stat()
+        fingerprint.append(f"{path.relative_to(ROOT).as_posix()}:{stat.st_mtime_ns}:{stat.st_size}")
+    return hashlib.sha256("\n".join(fingerprint).encode()).hexdigest()[:20]
+
+
+def asset_context(request: Request) -> dict[str, str]:
+    return {"asset_version": current_asset_version()}
+
+
+templates = Jinja2Templates(directory=ROOT / "frontend" / "templates",
+                           context_processors=[asset_context])
 AI_REQUEST_MAX_BYTES = 64_000
 
 
@@ -89,7 +84,14 @@ async def limit_ai_request_size(request: Request, call_next):
                     provider=None,
                     status_code=413,
                 )
-    return await call_next(request)
+    response = await call_next(request)
+    # Revalidate documents and mutable application files; large runtime wheels
+    # retain normal caching. The service worker still supports offline loading.
+    if (response.headers.get('content-type','').startswith('text/html') or
+        request.url.path.startswith(('/assets/js/','/assets/css/')) or
+        request.url.path == '/aquifer3d-sw.js'):
+        response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 
 @app.get("/", response_class=HTMLResponse)

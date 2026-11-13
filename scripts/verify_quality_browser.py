@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from browser_aquifer_inputs import choose_test_layers, choose_test_subsidence, open_section
 
 
 def main():
@@ -15,9 +16,10 @@ def main():
         page.on('pageerror',lambda e:errors.append(str(e)))
         page.on('request',lambda request:posts.append(request.url) if request.method!='GET' else None)
         page.goto('http://127.0.0.1:8767/aquifer-3d?name=%D9%85%D8%B4%D9%87%D8%AF',wait_until='domcontentloaded')
+        choose_test_layers(page,quality=True)
         page.wait_for_function("document.querySelector('#status3d').textContent.includes('آماده است') || document.querySelector('#status3d').dataset.state==='error'",timeout=180000)
         assert page.locator('#status3d').get_attribute('data-state')!='error',repr(page.locator('#status3d').inner_text())
-        page.locator('#a3Nav-quality').click()
+        open_section(page,'quality')
         root=page.locator('#qualityTools')
         def run():
             root.locator('[data-q-run]').click()
@@ -31,11 +33,11 @@ def main():
         assert volumes['drinking']<=report['total_remaining_mcm']-volumes['unknown']+1e-8
         assert volumes['irrigation']<=report['total_remaining_mcm']-volumes['irrigation_unknown']+1e-8
         assert root.locator('[data-cell]').count()>100
-        page.locator('#a3Nav-management').click()
+        open_section(page,'management')
         page.wait_for_function("document.querySelector('#managementTools metadata') && JSON.parse(document.querySelector('#managementTools metadata').textContent).management.quality_supported_area_pct>0",timeout=60000)
         management=json.loads(page.locator('#managementTools metadata').text_content())['management']
         assert management['quality']['quality_water_year']==report['quality_water_year']
-        page.locator('#a3Nav-quality').click()
+        open_section(page,'quality')
         root.screenshot(path=str(out/'quality-desktop.png'))
         root.locator('select').select_option('quality_ec')
         with page.expect_download() as download:root.locator('[data-export=png]').click()

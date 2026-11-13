@@ -168,7 +168,7 @@ body.a3-presenting .a3-professional>.a3-tool-heading,body.a3-presenting .a3-prof
 .a3-map button{cursor:pointer}.a3-map button:hover{background:#edf5f8}.a3-map button:disabled{opacity:.5;cursor:wait}
 .a3-map button:focus-visible,.a3-map select:focus-visible,.a3-plan-svg:focus-visible{outline:2px solid #14637b;outline-offset:3px}
 .a3-map input[type=checkbox]{width:17px;height:17px;accent-color:#14637b}.a3-map-controls [hidden]{display:none}
-.a3-map-navigation{margin-inline-start:auto}.a3-plan-svg{display:block;width:100%;height:auto;max-height:76vh;border:1px solid #dce8ee;border-radius:6px;background:#fff;direction:ltr;font-family:Vazirmatn,Tahoma,sans-serif;touch-action:none;cursor:grab;user-select:none}
+.a3-map-navigation{margin-inline-start:auto}.a3-plan-svg{display:block;width:100%;height:auto;max-height:none;border:1px solid #dce8ee;border-radius:6px;background:#fff;direction:ltr;font-family:Vazirmatn,Tahoma,sans-serif;touch-action:none;cursor:grab;user-select:none}
 .a3-plan-svg:active{cursor:grabbing}.a3-plan-svg [data-cell]{cursor:crosshair}.a3-map-detail{min-height:58px;padding:10px 12px;background:#f1f7fa;border-radius:5px;font-size:12px;line-height:1.9;margin-top:10px}
 .a3-map-note{font-size:11px;line-height:1.9;margin:12px 0;color:#536b7b}.a3-map-exports{padding-top:10px;border-top:1px solid #e0eaf0}.a3-map-exports span{font-size:11px}
 .aquifer3d-water-tabs{flex-wrap:wrap}

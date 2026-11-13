@@ -1,0 +1,18 @@
+{"source_availability": {"precip": ["1981-01-01", "2026-09-30"], "temp": ["1950-01-02", "2026-11-05"]}}
+{"planned_water_years": [1360, 1404], "records": 45, "cached": 0, "boundary_sha256": "83f07ee7e879ee625ebbc72e62a843a57e3f3d025477df3a75c29aae338567a3"}
+GEE complete: WY 1360..1362 (3/45)
+GEE complete: WY 1363..1365 (6/45)
+GEE complete: WY 1366..1368 (9/45)
+GEE complete: WY 1369..1371 (12/45)
+GEE complete: WY 1372..1374 (15/45)
+GEE complete: WY 1375..1377 (18/45)
+GEE complete: WY 1378..1380 (21/45)
+GEE complete: WY 1381..1383 (24/45)
+GEE complete: WY 1384..1386 (27/45)
+GEE complete: WY 1387..1389 (30/45)
+GEE complete: WY 1390..1392 (33/45)
+GEE complete: WY 1393..1395 (36/45)
+GEE complete: WY 1396..1398 (39/45)
+GEE complete: WY 1399..1401 (42/45)
+GEE complete: WY 1402..1404 (45/45)
+{"output": "D:\\Pooya\\w\\GitHub\\HydroCodeIR\\GroundwaterLevelMonitoring\\Data\\MASHHAD_CLIMATE", "complete_water_years": 45, "first": 1360, "last": 1404, "excluded": [], "summary": {"precip_mm": {"min": 132.039836, "mean": 224.94036128888888, "max": 417.597843}, "temp_c": {"min": 10.82852, "mean": 12.939753666666666, "max": 14.741177}}}

@@ -23,7 +23,8 @@ def is_dashboard(url: str, timeout: float = 2) -> bool:
         request = Request(url + '/aquifer-3d', headers={'Cache-Control': 'no-cache'})
         with opener.open(request, timeout=timeout) as response:
             html = response.read(2_000_000).decode('utf-8', errors='replace')
-            return response.status == 200 and 'id="aquiferSelect3d"' in html and 'js/aquifer3d.js' in html
+            return (response.status == 200 and 'id="aquiferSelect3d"' in html
+                    and any(name in html for name in ('js/aquifer3d.js', 'js/aquifer3d-bootstrap.js')))
     except (URLError, OSError, TimeoutError):
         return False
 

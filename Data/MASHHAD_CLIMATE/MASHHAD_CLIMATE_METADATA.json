@@ -1,0 +1,113 @@
+{
+  "aquifer": "مشهد",
+  "retrieved_utc": "2026-11-13T18:45:59.640107+00:00",
+  "calendar": "Persian water year, 1 Mehr to end of Shahrivar; named for starting Persian year",
+  "start_water_year": 1360,
+  "end_water_year": 1404,
+  "complete_water_years": 45,
+  "gregorian_start": "1981-09-23",
+  "gregorian_end_exclusive": "2026-09-23",
+  "sources": {
+    "precip": {
+      "collection": "UCSB-CHG/CHIRPS/DAILY",
+      "band": "precipitation",
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/UCSB-CHG_CHIRPS_DAILY",
+      "doi": "10.1038/sdata.2015.66",
+      "unit": "mm/day",
+      "nominal_resolution_degrees": 0.05
+    },
+    "temp": {
+      "collection": "ECMWF/ERA5_LAND/DAILY_AGGR",
+      "band": "temperature_2m",
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_DAILY_AGGR",
+      "unit": "K; daily mean",
+      "nominal_resolution_degrees": 0.1
+    }
+  },
+  "source_catalog": {
+    "precip": {
+      "first": "1981-01-01",
+      "last": "2026-09-30",
+      "projection": {
+        "type": "Projection",
+        "crs": "EPSG:4326",
+        "transform": [
+          0.05,
+          0,
+          -180,
+          0,
+          -0.05,
+          50
+        ]
+      },
+      "collection": "UCSB-CHG/CHIRPS/DAILY",
+      "band": "precipitation"
+    },
+    "temp": {
+      "first": "1950-01-02",
+      "last": "2026-11-05",
+      "projection": {
+        "type": "Projection",
+        "crs": "EPSG:4326",
+        "transform": [
+          0.1,
+          0,
+          -180.05,
+          0,
+          -0.1,
+          90.05
+        ]
+      },
+      "collection": "ECMWF/ERA5_LAND/DAILY_AGGR",
+      "band": "temperature_2m"
+    }
+  },
+  "boundary_sha256": "83f07ee7e879ee625ebbc72e62a843a57e3f3d025477df3a75c29aae338567a3",
+  "boundary_file": "MASHHAD_CLIMATE_BOUNDARY.geojson",
+  "boundary_buffer_m": 0,
+  "spatial_aggregation": "For each source separately, native projection and affine transform; sum(value * pixelArea) / sum(valid pixelArea), clipped to the aquifer. Earth Engine weighted reduction includes polygon-edge fractions; no bbox average, smoothing or upsampling.",
+  "temporal_aggregation": {
+    "precip_mm": "Sum of every daily precipitation image in exact Mehr-to-Mehr interval; spatial area mean of accumulated depth, mm.",
+    "temp_c": "Mean of every daily mean temperature image in exact Mehr-to-Mehr interval; spatial area mean, then Kelvin minus 273.15. Leap days included; no unweighted mean of calendar months."
+  },
+  "time_basis": "Source daily UTC calendar labels; Persian WY boundaries mapped to Gregorian dates. No hourly shift to local-midnight Iran.",
+  "quality_control": {
+    "required_daily_images": "exact expected day count, unique date count and min/max per-pixel observation count",
+    "minimum_spatial_coverage_fraction": 0.999,
+    "missing_data": "No imputation; incomplete years excluded and listed in audit.",
+    "excluded_water_years": []
+  },
+  "summary": {
+    "precip_mm": {
+      "min": 132.039836,
+      "mean": 224.94036128888888,
+      "max": 417.597843
+    },
+    "temp_c": {
+      "min": 10.82852,
+      "mean": 12.939753666666666,
+      "max": 14.741177
+    }
+  },
+  "dashboard_validation": {
+    "rows": 45,
+    "complete_water_years": 45,
+    "calendar": "Persian water year: Mehr–Shahrivar; named starting year",
+    "monthly_temperature_aggregation": "mean of 12 monthly means",
+    "sha256": "b97c4e17e31d4c195cfd8dadd59d9edae40b60ca7095687cacbc694d7b22df74"
+  },
+  "csv_sha256": "b97c4e17e31d4c195cfd8dadd59d9edae40b60ca7095687cacbc694d7b22df74",
+  "execution": {
+    "public_source_aggregation": "Explicitly requested Google Earth Engine processing.",
+    "calendar_planning_validation_conversion_and_csv": "Client-side Python in a Pyodide browser worker.",
+    "host": "Credentials, GEE transport, static files and output file I/O only.",
+    "private_piezometer_or_quality_records_sent_to_GEE": false
+  },
+  "limitations": [
+    "Gridded historical estimates, not local station observations or future climate projections.",
+    "No bias correction or validation against local rain gauges/temperature stations was performed.",
+    "CHIRPS blends satellite and station data; ERA5-Land is reanalysis, not a direct satellite thermometer.",
+    "Aquifer-average air temperature is not groundwater temperature or a recharge estimate.",
+    "A valid input CSV does not guarantee acceptance of the dashboard empirical climate-response model."
+  ]
+}

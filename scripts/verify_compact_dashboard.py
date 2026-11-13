@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from browser_aquifer_inputs import choose_test_layers, choose_test_subsidence, open_section
 
 
 def main():
@@ -13,6 +14,8 @@ def main():
         page.on('pageerror',lambda e:errors.append(str(e)))
         page.on('request',lambda r:backend.append(r.url) if '/api/comparison' in r.url or '/api/aquifers/' in r.url else None)
         page.goto('http://127.0.0.1:8767/aquifer-3d?name=مشهد',wait_until='domcontentloaded')
+        choose_test_layers(page,quality=True)
+        choose_test_subsidence(page)
         page.wait_for_function("document.querySelector('#status3d').dataset.state==='ready' || document.querySelector('#status3d').dataset.state==='error'",timeout=180000)
         assert page.locator('#status3d').get_attribute('data-state')=='ready',page.locator('#status3d').text_content()
         cities=page.evaluate('HydroCities.collection')
@@ -22,7 +25,7 @@ def main():
         assert not page.locator('#comparisonIntro').is_visible()
         assert not page.locator('#saturatedCaption').is_visible()
         info=page.locator('#sceneGeology h3 .hydro-info-trigger')
-        info.hover();page.wait_for_selector('#hydroTooltip:not([hidden])')
+        info.hover();assert not page.locator('#hydroTooltip').is_visible();info.click();page.wait_for_selector('#hydroTooltip:not([hidden])')
         assert 'اغراق قائم' in page.locator('#hydroTooltip').text_content()
         page.keyboard.press('Escape');assert not page.locator('#hydroTooltip').is_visible()
         info.focus();assert page.locator('#hydroTooltip').is_visible()
@@ -41,7 +44,7 @@ def main():
         assert page.locator('#waterPercentMap [data-map-cities]').count()==0
         assert page.locator('#waterPercentMap [data-city-id]').count()==0
         assert json.loads(page.locator('#waterPercentMap metadata').text_content())['cities']['enabled'] is False
-        page.locator('#a3Nav-parameters').click()
+        open_section(page,'parameters')
         page.wait_for_function("document.querySelector('#parameterMaps metadata') && JSON.parse(document.querySelector('#parameterMaps metadata').textContent).subsidence_layer?.input_records>0",timeout=60000)
         city=page.locator('#parameterMaps [data-city-id="osm-node-668711965"]')
         assert city.count()==1
@@ -49,6 +52,8 @@ def main():
         page.keyboard.press('Escape')
         cell=page.locator('#parameterMaps [data-cell]').nth(100)
         cell.hover(force=True)
+        assert not page.locator('#hydroTooltip').is_visible()
+        cell.click(force=True)
         assert page.locator('#hydroTooltip').is_visible()
         assert 'طول' in page.locator('#hydroTooltip').text_content()
         page.keyboard.press('Escape')
@@ -57,7 +62,7 @@ def main():
         path=out/'parameter-map.svg';dl.value.save_as(path)
         assert 'GHSL' in path.read_text(encoding='utf-8') and '<metadata>' in path.read_text(encoding='utf-8')
         page.set_viewport_size({'width':390,'height':844})
-        page.locator('#a3SectionSelect').select_option('scenes')
+        open_section(page,'scenes')
         page.locator('#a3SceneSelect').select_option('geology')
         info=page.locator('#sceneGeology h3 .hydro-info-trigger');info.click()
         assert page.locator('#hydroTooltip').is_visible()

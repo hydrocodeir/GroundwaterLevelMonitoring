@@ -32,3 +32,13 @@ body.workbench-theme.comparison-page .comparison-page-heading{max-width:1920px;p
 .aquifer3d-page .aquifer3d-field-label:has(.hydro-info-trigger){display:flex;align-items:center;gap:2px}.hydro-label-title{display:block}.a3-analysis-empty:has(.hydro-help-source){padding:10px 0;border:0;background:none;margin:0}.a3-analysis-empty:has(.hydro-help-source) strong{font-size:12px;font-weight:400;color:#647b88}
 
 .workbench-theme .workspace-welcome{display:none}
+
+/* Structured help cards, shared by maps and input explanations. */
+.hydro-tooltip{width:max-content;min-width:min(320px,calc(100vw - 20px));max-width:min(480px,calc(100vw - 20px));padding:0;white-space:normal;line-height:1.85;border-radius:10px;box-shadow:0 10px 32px #203a4924}
+.hydro-tooltip-title{padding:11px 15px;background:#edf5f6;border-bottom:1px solid #dbe6eb;font-size:13px;font-weight:700;color:#155b6b}
+.hydro-tooltip-section{padding:11px 15px}.hydro-tooltip-section+.hydro-tooltip-section{border-top:1px solid #e5edf1}
+.hydro-tooltip-subtitle{font-size:11px;font-weight:700;color:#587385;margin-bottom:8px}
+.hydro-tooltip-values{display:grid;grid-template-columns:minmax(90px,1fr) minmax(95px,1.25fr);gap:8px 15px;margin:0}.hydro-tooltip-values dt{color:#647d8b}.hydro-tooltip-values dd{margin:0;color:#203e50;font-weight:500}
+.hydro-tooltip-section p{margin:0 0 8px}.hydro-tooltip-section p:last-child{margin:0}.hydro-tooltip-section ul{margin:0;padding-inline-start:18px}.hydro-tooltip-section li{margin:5px 0}.hydro-tooltip-section li::marker{color:#21808b}
+
+.hydro-tooltip-title{position:sticky;top:0;z-index:1}

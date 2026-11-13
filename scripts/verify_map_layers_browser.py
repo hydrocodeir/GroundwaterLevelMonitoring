@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from browser_aquifer_inputs import open_section, edit_selection
 
 
 def main():
@@ -24,13 +25,13 @@ def main():
         page.emulate_media(reduced_motion='reduce')
         for key,yaw in expected.items():
             page.locator('#a3CameraView').select_option(key)
-            page.locator('#a3Nav-tools').click();page.locator('#a3Tab-views').click()
+            open_section(page,'tools');page.locator('#a3Tab-views').click()
             page.locator('#a3ViewName').fill('QA '+key);page.locator('#a3SaveView').click()
             camera=page.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('aquifer3d:views:')))).at(-1).view.camera")
             assert abs(((camera['yaw']-yaw+3.141592653589793)%(2*3.141592653589793))-3.141592653589793)<1e-7,camera
-            page.locator('#a3Nav-scenes').click()
+            open_section(page,'scenes')
         page.screenshot(path=str(output/'3d-cities-desktop.png'),full_page=True)
-        page.locator('#a3Nav-parameters').click()
+        open_section(page,'parameters')
         page.wait_for_function("document.querySelector('#parameterMaps metadata') && JSON.parse(document.querySelector('#parameterMaps metadata').textContent).subsidence_layer?.input_records>0",timeout=90000)
         parameter=page.locator('#parameterMaps')
         parameter.locator('select').select_option('management_subsidence_cumulative')
@@ -42,15 +43,15 @@ def main():
         parameter.screenshot(path=str(output/'input-subsidence.png'))
         parameter.locator('[data-map-cities]').uncheck()
         assert parameter.locator('[data-city-overlay]').evaluate('(g)=>getComputedStyle(g).display')=='none'
-        page.locator('#a3Nav-scenes').click();assert not page.locator('#a3CitiesToggle').is_checked()
+        open_section(page,'scenes');assert not page.locator('#a3CitiesToggle').is_checked()
         page.locator('#a3CitiesToggle').check()
-        page.locator('#a3Nav-management').click()
+        open_section(page,'management')
         page.locator('[data-analysis-settings=management]').evaluate('(n)=>n.open=true')
         page.locator('[data-m-source-details]').evaluate('(n)=>n.open=true')
         duration=page.locator('[data-m-sub=duration_years]')
         duration.fill('20');duration.press('Tab')
         page.wait_for_function("document.querySelector('#parameterMaps metadata') && JSON.parse(document.querySelector('#parameterMaps metadata').textContent).subsidence_layer?.duration_years===20",timeout=60000)
-        page.locator('#a3Nav-parameters').click()
+        open_section(page,'parameters')
         assert parameter.locator('svg path[data-cell] title').all_text_contents()==before
         parameter.locator('select').select_option('management_subsidence')
         with page.expect_download() as dl:parameter.locator('[data-export=geojson]').click()
@@ -62,9 +63,10 @@ def main():
             if c['management_subsidence_cumulative'] is not None:
                 assert abs(c['management_subsidence']-c['management_subsidence_cumulative']/20)<1e-8
         # Another aquifer must not retain the Mashhad layer or label.
+        edit_selection(page)
         page.locator('#aquiferSelect3d').select_option(label=next(s for s in page.locator('#aquiferSelect3d option').all_text_contents() if s.endswith('/ نیشابور')))
         page.wait_for_function("document.querySelector('#status3d').dataset.state==='ready'",timeout=120000)
-        page.locator('#a3Nav-parameters').click()
+        open_section(page,'parameters')
         page.wait_for_function("document.querySelector('#parameterMaps metadata') && JSON.parse(document.querySelector('#parameterMaps metadata').textContent).subsidence_layer",timeout=60000)
         parameter.locator('select').select_option('management_subsidence_cumulative')
         assert all('نامشخص' in text for text in parameter.locator('svg path[data-cell] title').all_text_contents())

@@ -1,0 +1,83 @@
+/* Four manager tasks, with only the current task's views visible. */
+.aquifer3d-page #a3Workspace{display:block}
+.aquifer3d-page .aquifer3d-shell{max-width:1640px;margin:auto;padding-top:16px}
+.aquifer3d-page .a3-workspace-heading{margin-bottom:12px}
+.aquifer3d-page .a3-heading-actions{display:none}
+.aquifer3d-page .a3-quick-controls{margin-bottom:12px;padding:12px 16px}
+.aquifer3d-page .a3-quick-actions{padding-top:0}
+.aquifer3d-page .a3-quick-fields{max-width:960px}
+.aquifer3d-page #a3QuickControls[hidden]{display:none!important}
+.aquifer3d-page .a3-quick-fields .aquifer3d-field{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px}
+.aquifer3d-page .a3-quick-fields .aquifer3d-field-label{white-space:nowrap}
+.a3-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid #cedce3;border-radius:9px;background:white;margin-bottom:16px;overflow:hidden}
+.a3-flow button{display:flex;align-items:center;gap:12px;min-height:76px;border:0;border-inline-end:1px solid #e0e8ed;border-bottom:3px solid transparent;background:#fff;padding:13px 18px;text-align:start;color:#4e6a7b;font:inherit;cursor:pointer}
+.a3-flow button:last-child{border-inline-end:0}.a3-flow button:disabled{cursor:default;color:#8496a0;background:#fafbfc}
+.a3-flow button:hover:not(:disabled){background:#f3f8f9}.a3-flow button[aria-current=step]{background:#edf6f7;color:#155b6b;border-bottom-color:#176b7b}
+.a3-flow-number{display:grid;place-items:center;flex:none;width:30px;height:30px;border:1px solid #cfdae1;border-radius:50%;font-size:13px}
+.a3-flow button[aria-current=step] .a3-flow-number{background:#176b7b;color:white;border-color:#176b7b}
+.a3-flow button[data-complete=true]:not([aria-current]) .a3-flow-number{border-color:#9cbbb4;color:#32766a;background:#eff7f4}
+.a3-flow strong,.a3-flow small{display:block}.a3-flow strong{font-size:13px;font-weight:600}.a3-flow small{font-size:11px;font-weight:400;margin-top:4px;line-height:1.8}
+.aquifer3d-page .a3-section-rail{display:flex;align-items:center;justify-content:space-between;gap:18px;position:static;width:auto;margin-bottom:16px;border-radius:7px;overflow:visible}
+.aquifer3d-page .a3-context-bar{padding:10px 16px;border:0;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.aquifer3d-page .a3-context-bar strong{font-size:14px}.aquifer3d-page .a3-context-bar .page-period{font-size:11px;padding:2px 0 0}
+.aquifer3d-page #a3ResultState{font-size:10px;white-space:nowrap;margin:0}
+#a3EditSelection{min-height:40px;border:0;background:transparent;padding:7px 9px;color:#2d6b7c;font:11px Vazirmatn,Tahoma,sans-serif;cursor:pointer}#a3EditSelection[hidden]{display:none}
+.aquifer3d-page .a3-workspace-tabs{flex-direction:row;align-items:stretch;padding:6px;gap:4px;overflow:auto}
+.aquifer3d-page .a3-workspace-tabs button{flex:none;width:auto;min-height:44px;padding:9px 13px;border-inline-start:0;border-bottom:2px solid transparent;gap:8px;border-radius:5px}
+.aquifer3d-page .a3-workspace-tabs button[hidden]{display:none!important}
+.aquifer3d-page .a3-workspace-tabs button[aria-selected=true]{border-bottom-color:#176b7b}
+.aquifer3d-page .a3-workspace-tabs button small{display:none}.aquifer3d-page .a3-workspace-tabs button strong{font-size:12px}.aquifer3d-page .a3-workspace-tabs button svg{width:18px;height:18px}
+.aquifer3d-page .a3-panel-heading{display:none}
+.a3-flow-readiness{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 14px}
+.a3-flow-readiness[hidden],.a3-flow-next[hidden],.a3-export-hub[hidden]{display:none!important}
+.a3-flow-readiness button{font:inherit;display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 13px;text-align:start;color:#315467;border:1px solid #d7e1e7;border-radius:6px;background:#fff;cursor:pointer}
+.a3-flow-readiness button:hover{border-color:#7cabb6}.a3-flow-readiness strong{font-size:12px;font-weight:500}.a3-flow-readiness span{font-size:11px;color:#6f7c83;margin-inline-start:auto}
+.a3-flow-readiness button::before{content:'';width:7px;height:7px;border-radius:50%;background:#d5a25c;flex:none}.a3-flow-readiness button[data-ready=true]::before{background:#398376}
+.a3-flow-readiness button[data-ready=true] span{color:#2a7668}
+.aquifer3d-page #a3Settings{width:min(580px,100vw)}
+.aquifer3d-page .a3-settings-body{padding:18px 24px}.aquifer3d-page .a3-settings-heading{padding:12px 24px}
+.a3-input-base{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;margin-bottom:14px;border:1px solid #cfe2dd;border-radius:6px;background:#f2f8f6;font-size:12px;color:#2d655b}.a3-input-base span{font-size:11px}
+.aquifer3d-page .a3-input-details{border:1px solid #dce5eb;border-radius:7px;padding:0;margin-bottom:12px;background:#fff}
+.aquifer3d-page .a3-input-details summary{display:flex;align-items:center;gap:10px;justify-content:space-between;list-style:none;padding:13px 15px;font-size:13px;min-height:50px}
+.a3-input-details summary::after{content:'+';font-size:18px;line-height:1;flex:none;color:#5a798a}.a3-input-details[open] summary::after{content:'−'}
+.a3-input-details summary small{margin-inline-start:auto;font-size:10px;font-weight:400;color:#6f7e87}
+.a3-input-details[data-selected=true] summary small{color:#32786c}.aquifer3d-page .a3-input-details>div{padding:15px;border-top:1px solid #e3eaee}
+.aquifer3d-page .a3-settings-body .aquifer3d-form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.aquifer3d-page .a3-settings-body .aquifer3d-field:has(input[type=file]){grid-column:1/-1}
+.aquifer3d-page #a3Settings .aquifer3d-action-row{padding:12px 24px 18px;background:#fff}
+.aquifer3d-page .a3-input-scope{font-size:11px;margin:0 0 10px;line-height:1.9;color:#486777}
+.aquifer3d-page .aquifer3d-input-suffix input[type=number]{text-align:right;padding-left:70px;direction:ltr}
+.a3-clear-layer{grid-column:1/-1;justify-self:start;border:0;background:none;font:11px Vazirmatn,Tahoma,sans-serif;color:#97635d;padding:8px 0;cursor:pointer;min-height:36px}
+.a3-flow-next{display:flex;align-items:center;gap:10px;padding:16px 18px;border:1px solid #d2dfe6;border-radius:8px;background:#f9fcfd;margin-top:18px}
+.a3-flow-next>div{display:grid;gap:5px;margin-inline-end:auto}.a3-flow-next span{font-size:10px;color:#718491}.a3-flow-next strong{font-size:12px;font-weight:500;color:#365b6e}
+.a3-flow-next button{font:12px Vazirmatn,Tahoma,sans-serif;min-height:44px;padding:10px 17px;border:1px solid #c6d7df;border-radius:6px;color:#376173;background:#fff;cursor:pointer}
+.a3-flow-next #a3FlowContinue{background:#176b7b;color:#fff;border-color:#176b7b}
+.a3-export-hub{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.a3-export-hub article{display:flex;flex-direction:column;align-items:start;gap:10px;padding:18px;background:white;border:1px solid #d7e1e7;border-radius:7px;min-width:0}
+.a3-export-hub strong{font-size:13px;font-weight:600}.a3-export-hub span{font-size:11px;color:#647e8c;line-height:1.8;overflow-wrap:anywhere}.a3-export-hub article>div{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.a3-export-hub button{font:11px Vazirmatn,Tahoma,sans-serif;min-height:40px;padding:9px 12px;border:1px solid #c9dbe3;border-radius:5px;color:#1b6375;background:#f8fcfd;cursor:pointer}
+.a3-export-hub button:disabled{opacity:.45;cursor:default}
+.aquifer3d-page .a3-professional{display:block}
+.aquifer3d-page .a3-professional>.a3-tool-tabs{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;border-inline-end:0;border-bottom:1px solid #d7e0e6;padding:0;margin-bottom:18px;gap:4px}
+.aquifer3d-page .a3-professional>.a3-tool-tabs button{flex:none;min-height:44px;padding:10px 14px;white-space:nowrap;border-radius:4px 4px 0 0}
+.aquifer3d-page .a3-professional>.a3-tool-tabs button[aria-selected=true]{border-bottom:2px solid #176b7b}
+.aquifer3d-page .a3-management[data-management-view=future] .a3-management-stage{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+.a3-quantity-prerequisite{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin-bottom:16px;border:1px solid #dccba9;border-radius:6px;background:#fffcf5;font-size:12px;line-height:1.9}
+@media(max-width:1000px){
+  .aquifer3d-page .a3-section-rail{gap:0;flex-wrap:wrap}.aquifer3d-page .a3-context-bar{flex:1}.aquifer3d-page .a3-workspace-tabs{flex-wrap:nowrap}
+  .a3-flow button{padding:12px;gap:8px}.a3-flow small{font-size:10px}
+  .a3-flow-readiness button{gap:8px;flex-wrap:wrap}.a3-flow-readiness span{margin-inline-start:0}
+  .aquifer3d-page .a3-management[data-management-view=future] .a3-management-stage{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .aquifer3d-page .aquifer3d-shell{padding:12px 10px 24px}.aquifer3d-page .a3-workspace-heading h1{font-size:18px}
+  .aquifer3d-page .a3-quick-controls{padding:10px;margin-bottom:10px}.aquifer3d-page .a3-quick-fields{gap:8px}.aquifer3d-page .a3-quick-actions{gap:8px}
+  .a3-flow{margin-bottom:10px}.a3-flow button{flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:10px 4px;min-height:78px;text-align:center}.a3-flow-number{width:23px;height:23px;font-size:11px}.a3-flow strong{font-size:11px}.a3-flow small{display:none}
+  .aquifer3d-page .a3-context-bar{padding:10px 12px;gap:8px;justify-content:space-between;flex-basis:100%}.aquifer3d-page .a3-context-bar strong{font-size:12px}.aquifer3d-page .a3-context-bar .page-period{font-size:10px}.aquifer3d-page #a3ResultState{display:none}#a3EditSelection{font-size:10px;padding:6px 0}
+  .aquifer3d-page .a3-workspace-tabs{width:100%;padding:4px 6px;border-top:1px solid #e4ebef;gap:2px}.aquifer3d-page .a3-workspace-tabs button{flex:1;justify-content:center;white-space:nowrap;padding:9px 7px;gap:5px}.aquifer3d-page .a3-workspace-tabs button strong{font-size:11px}.aquifer3d-page .a3-workspace-tabs button svg{display:none}
+  .a3-flow-readiness{gap:6px}.a3-flow-readiness button{padding:9px 8px;min-height:70px;gap:6px;align-content:start}.a3-flow-readiness strong{font-size:11px}.a3-flow-readiness span{font-size:10px;flex-basis:100%;line-height:1.8}
+  .aquifer3d-page .a3-settings-body{padding:14px}.aquifer3d-page .a3-settings-heading{padding:10px 14px}.aquifer3d-page #a3Settings .aquifer3d-action-row{padding:12px 14px}.aquifer3d-page .a3-settings-body .aquifer3d-form-grid{grid-template-columns:1fr}
+  .a3-flow-next{flex-wrap:wrap;padding:12px}.a3-flow-next>div{flex-basis:100%;margin-bottom:3px}.a3-flow-next strong{line-height:1.9}.a3-flow-next button{flex:1}
+  .a3-export-hub{grid-template-columns:1fr;gap:8px}.a3-export-hub article{padding:14px}.a3-export-hub button{min-height:44px}
+  .a3-quantity-prerequisite{flex-direction:column;align-items:stretch}
+}

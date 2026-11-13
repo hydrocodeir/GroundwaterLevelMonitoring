@@ -158,7 +158,7 @@ export function mountProfessionalTools({data,scene,request,featureIndex}){
   };
   disposers.push(()=>filmController?.abort());
   // 6. Real observations and local cell accounting, with optional pinned cards.
-  panel('details','جزئیات و مقایسه',`<p>روی پیزومتر یا ستون سه‌بعدی کلیک کنید، یا از فهرست زیر انتخاب کنید. تا چهار کارت را برای مقایسه ثابت نگه دارید.</p><div class="a3-actions"><label>پیزومتر <select id="a3WellSelect"></select></label><button type="button" id="a3OpenWell">جزئیات پیزومتر</button><label>سلول <select id="a3CellSelect"></select></label><button type="button" id="a3OpenCell">جزئیات سلول</button></div><div id="a3PinnedCards" class="a3-pinned-grid"></div>`);
+  panel('details','جزئیات و مقایسه',`<p>کلیک روی ستون سه‌بعدی، tooltip آن پیکسل را باز می‌کند. برای کارت کامل و مقایسه، پیزومتر یا سلول را از فهرست انتخاب کنید. تا چهار کارت را می‌توانید ثابت نگه دارید.</p><div class="a3-actions"><label>پیزومتر <select id="a3WellSelect"></select></label><button type="button" id="a3OpenWell">جزئیات پیزومتر</button><label>سلول <select id="a3CellSelect"></select></label><button type="button" id="a3OpenCell">جزئیات سلول</button></div><div id="a3PinnedCards" class="a3-pinned-grid"></div>`);
   data.wells.points.forEach((w,i)=>$('a3WellSelect').add(new Option(w.name,String(i))));
   (data.pixel_water?.cells||[]).forEach((c,i)=>$('a3CellSelect').add(new Option(`${fmt(i+1,0)} · ${fmt(c.lon,4)}, ${fmt(c.lat,4)}`,String(i))));
   $('a3OpenCell').disabled=!data.pixel_water;
@@ -225,6 +225,7 @@ export function mountProfessionalTools({data,scene,request,featureIndex}){
     }catch(error){if(!disposed)status(error.message);}finally{exporting=false;if(!disposed)buttons.forEach(b=>{b.disabled=false;});}
   }
   $('a3ExportPNG').onclick=()=>exportTask('png');$('a3ExportReport').onclick=()=>exportTask('report');$('a3ExportSection').onclick=()=>exportTask('section');
+  root.querySelector('.a3-tool-tabs').prepend($('a3Tab-export'));
   activate('section');
   return ()=>{cameraSelect.onchange=null;cameraSelect.disabled=true;disposed=true;disposers.reverse().forEach(fn=>fn());root.hidden=true;root.replaceChildren();};
 }

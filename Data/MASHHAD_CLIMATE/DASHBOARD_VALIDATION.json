@@ -1,0 +1,75 @@
+{
+  "passed": true,
+  "scenario_context": "Input/worker QA only, not a climate projection: actual project Mashhad piezometers, explicitly selected existing bedrock CSV and constant Sy=0.06, four-year trend and four-year horizon; no automatic default.",
+  "reference_water_year": 1404,
+  "climate": {
+    "accepted": true,
+    "lag_years": 0,
+    "beta_precip_m_per_mm": 0.0025845607840148128,
+    "beta_temp_m_per_c": -0.5693135709680935,
+    "baseline_precip_mm": 257.6219237083333,
+    "baseline_temp_c": 13.452586125000002,
+    "precip_range_mm": [
+      142.167053,
+      417.597843
+    ],
+    "temp_range_c": [
+      11.657209,
+      14.741177
+    ],
+    "start_water_year": 1381,
+    "end_water_year": 1404,
+    "years": 24,
+    "holdout_count": 16,
+    "mae_m_year": 0.4111422284542532,
+    "baseline_mae_m_year": 0.5833795617450486,
+    "improvement_pct": 29.524060249143147,
+    "rows": 45,
+    "complete_water_years": 45,
+    "calendar": "Persian water year: Mehr–Shahrivar; named starting year",
+    "monthly_temperature_aggregation": "mean of 12 monthly means",
+    "sha256": "b97c4e17e31d4c195cfd8dadd59d9edae40b60ca7095687cacbc694d7b22df74",
+    "reason": "اثر تجربی منطقه‌ای پذیرفته شد.",
+    "method": "Regional mean September-to-September dH, >=3 common observed wells/year; OLS with secular time trend, P and T; expanding 8-year training; >=12 pairs and 4 holdouts; >=10% MAE improvement; lag 0/1 selection uses same holdouts, not independent validation; sign guard P>=0 T<=0. Association, not causal recharge or pumping attribution.",
+    "rate_trend": {
+      "mode": "4",
+      "start_water_year": 1401,
+      "end_water_year": 1404,
+      "requested_years": 4,
+      "observed_years": 4,
+      "available": true,
+      "precip_slope_mm_year": 31.82054516666666,
+      "temp_slope_c_year": -0.057010000000000005,
+      "reference_precip_mm": 284.408079,
+      "reference_temp_c": 14.741177,
+      "estimator": "Theil–Sen of complete aquifer-mean Persian water years; slopes applied as changes from scenario start, not added to the historical mean",
+      "effect_applied": true
+    },
+    "scenario_precip_mm": 411.69025966666663,
+    "scenario_temp_c": 14.513137,
+    "outside_historical_range": false
+  },
+  "rate_audit": {
+    "mode": "4",
+    "start_water_year": 1401,
+    "end_water_year": 1404,
+    "requested_years": 4,
+    "observed_years": 4,
+    "available": true,
+    "precip_slope_mm_year": 31.82054516666666,
+    "temp_slope_c_year": -0.057010000000000005,
+    "reference_precip_mm": 284.408079,
+    "reference_temp_c": 14.741177,
+    "estimator": "Theil–Sen of complete aquifer-mean Persian water years; slopes applied as changes from scenario start, not added to the historical mean",
+    "effect_applied": true
+  },
+  "input_files": {
+    "bedrock": "MASHHAD_BEDROCK_MSL.csv",
+    "sy": null,
+    "quality": null,
+    "climate": "MASHHAD_CLIMATE_WY.csv",
+    "subsidence": null
+  },
+  "page_errors": [],
+  "user_data_uploads": []
+}

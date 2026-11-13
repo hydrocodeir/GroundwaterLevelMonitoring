@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from browser_aquifer_inputs import open_section
 
 
 def main():
@@ -18,7 +19,7 @@ def main():
         page.on('request',lambda r:posts.append(r.url) if r.method!='GET' else None)
         page.goto(args.url+'/aquifer-3d?name=%D9%85%D8%B4%D9%87%D8%AF',wait_until='domcontentloaded')
         page.wait_for_function("document.querySelector('#a3Workspace').dataset.ready==='true'",timeout=180000)
-        page.locator('#a3Nav-management').click()
+        open_section(page,'management')
         def ready():
             page.wait_for_function("document.querySelector('[data-m-results]') && !document.querySelector('[data-m-results]').hidden && !document.querySelector('[data-m-run]').disabled",timeout=180000)
         def report():return json.loads(page.locator('#managementTools metadata').text_content())['management']

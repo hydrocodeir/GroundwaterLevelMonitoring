@@ -1,14 +1,17 @@
 /** Navigation, drafts and layout. Scientific state stays in the Pyodide worker. */
+const version=new URL(import.meta.url).searchParams.get('v')||'1';
+const {mountManagementFlow,workflowStage}=await import(`./aquifer3d-flow.js?v=${encodeURIComponent(version)}`);
 export function mountWorkspace() {
   const $=id=>document.getElementById(id),root=$('a3Workspace');
   const mobile=matchMedia('(max-width: 850px)');
   const tabs=[...document.querySelectorAll('[data-workspace-tab]')];
   const sceneTabs=[...document.querySelectorAll('[data-scene-view]')];
   const sectionSelect=$('a3SectionSelect');
-  const sections={scenes:['نمای آبخوان','سطح آب، سنگ‌بستر و تغییر ذخیره'],quality:['کیفیت آب','شوری و سهم حجم زیر آستانهٔ انتخابی'],management:['آینده و اقدام','اولویت مداخله، مسیر آینده و فرونشست'],parameters:['لایه‌های ورودی','نقشهٔ Sy، سنگ‌بستر و لایهٔ فرونشست'],tools:['تحلیل و خروجی','برش مقطعی، مقایسه، تصویر و فیلم'],sources:['منابع و فرض‌ها','منشأ داده‌ها و محدودیت تفسیر نتایج']};
+  const sections={lifetime:['عمر سناریویی','زمان رسیدن به محدودیت‌های انتخابی'],scenes:['نمای آبخوان','سطح آب، سنگ‌بستر و تغییر ذخیره'],quality:['کیفیت آب','شوری و سهم حجم زیر آستانهٔ انتخابی'],management:['آینده و اقدام','اولویت مداخله، مسیر آینده و فرونشست'],parameters:['لایه‌های ورودی','نقشهٔ Sy، سنگ‌بستر و لایهٔ فرونشست'],tools:['تحلیل و خروجی','برش مقطعی، مقایسه، تصویر و فیلم'],sources:['منابع و فرض‌ها','منشأ داده‌ها و محدودیت تفسیر نتایج']};
   let currentTab='scenes',sceneView='geology',waterView='pixels',ready=false,settingsOpen=false,dialogFocus=null;
+  let flow=null;
   const help=document.querySelector('.a3-canvas-help'),originalHelp=help.textContent;
-  const background=[document.querySelector('.site-header'),document.querySelector('.a3-workspace-heading'),document.querySelector('.a3-quick-controls'),document.querySelector('.a3-section-rail'),$('a3WorkspaceMain')];
+  const background=[document.querySelector('.site-header'),document.querySelector('.a3-workspace-heading'),document.querySelector('.a3-quick-controls'),$('a3Flow'),document.querySelector('.a3-section-rail'),$('a3WorkspaceMain')];
   function resize(){requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));}
   function settings(open,focus=false){
     if(open&&!settingsOpen)dialogFocus=document.activeElement;
@@ -19,6 +22,7 @@ export function mountWorkspace() {
     $('a3SettingsBackdrop').hidden=!open;
     document.body.classList.toggle('a3-settings-modal',open);
     background.forEach(node=>{if(node)node.inert=open;});
+    flow?.sync(currentTab,open);
     if(focus){if(open)$('closeA3Settings').focus();else (dialogFocus?.isConnected&&dialogFocus.getClientRects().length?dialogFocus:$('toggleA3Settings')).focus();}
     resize();
   }
@@ -47,14 +51,15 @@ export function mountWorkspace() {
     else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
   });
   for(const tab of tabs)sectionSelect.add(new Option(sections[tab.dataset.workspaceTab][0],tab.dataset.workspaceTab));
-  function syncNavigation(){for(const option of sectionSelect.options)option.disabled=tabs.find(t=>t.dataset.workspaceTab===option.value).disabled;sectionSelect.value=currentTab;document.querySelectorAll('[data-open-tool]').forEach(button=>{button.disabled=!ready;});}
+  function syncNavigation(){for(const option of sectionSelect.options)option.disabled=tabs.find(t=>t.dataset.workspaceTab===option.value).disabled;sectionSelect.value=currentTab;document.querySelectorAll('[data-open-tool]').forEach(button=>{button.disabled=!ready;});flow?.sync(currentTab,settingsOpen);}
   function navigate(key,focus=false){
     const selected=tabs.find(t=>t.dataset.workspaceTab===key);if(!selected||selected.disabled)return;
     currentTab=key;root.dataset.section=key;
-    tabs.forEach(tab=>{const active=tab===selected;tab.setAttribute('aria-selected',active);tab.tabIndex=active?0:-1;});
+    tabs.forEach(tab=>{const active=tab===selected;tab.hidden=workflowStage[tab.dataset.workspaceTab]!==workflowStage[key];tab.setAttribute('aria-selected',active);tab.tabIndex=active?0:-1;});
     document.querySelectorAll('[data-workspace-panel]').forEach(panel=>{panel.hidden=panel.dataset.workspacePanel!==key;});
     $('a3SectionTitle').textContent=sections[key][0];$('a3SectionDescription').textContent=sections[key][1];syncNavigation();
-    if(focus){if(mobile.matches)sectionSelect.focus();else selected.focus();}
+    if(focus){selected.focus({preventScroll:true});if(ready)$('a3Flow').scrollIntoView({block:'start',behavior:'auto'});}
+    if(key==='quality'&&document.querySelector('[data-q-results]')?.hidden){const form=document.querySelector('[data-analysis-settings=quality]');if(form)form.open=true;}
     document.dispatchEvent(new CustomEvent('a3:section-changed',{detail:key}));resize();
   }
   sectionSelect.onchange=()=>navigate(sectionSelect.value);
@@ -69,7 +74,7 @@ export function mountWorkspace() {
   }
   function keyboard(event,buttons,select){
     if(!['ArrowLeft','ArrowRight','ArrowDown','ArrowUp','Home','End'].includes(event.key))return;
-    event.preventDefault();const enabled=buttons.filter(b=>!b.disabled),index=enabled.indexOf(event.currentTarget);
+    event.preventDefault();const enabled=buttons.filter(b=>!b.disabled&&!b.hidden),index=enabled.indexOf(event.currentTarget);
     const target=event.key==='Home'?enabled[0]:event.key==='End'?enabled.at(-1):enabled[(index+(['ArrowLeft','ArrowDown'].includes(event.key)?1:enabled.length-1))%enabled.length];select(target,true);
   }
   tabs.forEach(button=>{button.onclick=()=>navigate(button.dataset.workspaceTab);button.onkeydown=e=>keyboard(e,tabs,(b,focus)=>navigate(b.dataset.workspaceTab,focus));});
@@ -86,20 +91,23 @@ export function mountWorkspace() {
     $('a3ResultState').dataset.state=value;$('a3ResultState').textContent=({loading:'در حال محاسبه',ready:ready?'نتایج به‌روز':'نیاز به محاسبه',dirty:ready?'تغییرات اعمال نشده':'نیاز به محاسبه',error:'نیاز به بررسی'})[value];
     $('build3d').textContent=value==='loading'?'در حال محاسبه…':value==='dirty'?'اعمال تغییرات':ready?'محاسبه مجدد':'محاسبه و نمایش';
     $('a3WorkspaceMain').setAttribute('aria-busy',value==='loading');
-    for(const key of ['quality','management','tools'])$(`a3Panel-${key}`).inert=value==='loading';
+    for(const key of ['quality','management','lifetime','tools'])$(`a3Panel-${key}`).inert=value==='loading';
     $('a3SettingsFeedback').hidden=value!=='error';$('a3SettingsFeedback').textContent=value==='error'?message:'';
     if(!ready){$('a3EmptyTitle').textContent=value==='error'?'مدل آماده نشد':value==='dirty'||value==='ready'?'ورودی‌ها را انتخاب و محاسبه کنید':'در حال آماده‌سازی نمای آبخوان';$('a3EmptyText').textContent=value==='error'?message:value==='dirty'||value==='ready'?'آبخوان و زمان مبنا را از نوار بالا انتخاب کنید.':'داده‌های محدوده و پیزومترها بارگذاری می‌شوند. اجرای نخست ممکن است کمی زمان ببرد.';$('a3EmptyAction').hidden=value==='loading';}
+    flow?.sync(currentTab,settingsOpen);
   }
-  function clear(){ready=false;root.dataset.ready='false';root.dataset.draft='false';$('a3DraftNotice').hidden=true;tabs.filter(b=>['quality','parameters','tools','management'].includes(b.dataset.workspaceTab)).forEach(b=>{b.disabled=true;});if(!['scenes','sources'].includes(currentTab))navigate('scenes');syncNavigation();}
+  function clear(){ready=false;root.dataset.ready='false';root.dataset.draft='false';$('a3DraftNotice').hidden=true;flow?.clear();tabs.filter(b=>['quality','parameters','tools','management','lifetime'].includes(b.dataset.workspaceTab)).forEach(b=>{b.disabled=true;});if(!['scenes','sources'].includes(currentTab))navigate('scenes');syncNavigation();}
   function compactMetrics(){document.querySelectorAll('.aquifer3d-metric strong').forEach(strong=>{const text=strong.textContent,match=text.match(/^(.*?)\s*(میلیون مترمکعب|کیلومتر مربع|چاه مشترک|متر)$/);if(!match)return;const number=document.createElement('span'),unit=document.createElement('span');number.className='a3-stat-number';number.textContent=match[1];unit.className='a3-stat-unit';unit.textContent=match[2];strong.replaceChildren(number,document.createTextNode(' '),unit);});}
   function result(data){
     ready=true;root.dataset.ready='true';root.dataset.draft='false';tabs.forEach(b=>{b.disabled=false;});syncNavigation();$('a3NoParameters').hidden=!$('parameterMaps').hidden;$('a3ActiveAquifer').textContent=data.aquifer.name;
     const y=x=>new Intl.NumberFormat('fa-IR',{useGrouping:false}).format(Number(x.slice(0,4)));
     $('comparisonEnd').textContent=`شهریور ${y(data.dates.before)} تا ${y(data.dates.after)}`;
     compactMetrics();state('ready');if(settingsOpen){settings(false);$('build3d').focus({preventScroll:true});}resize();
+    flow?.result(data);navigate('scenes',true);
     $('a3MobileMetricValue').textContent=$('declineMetric').textContent;
     $('declineMetric').closest('article').dataset.trend=data.metrics.mean_head_decline_m<0?'rise':'decline';
   }
+  flow=mountManagementFlow({navigate,settings:open=>settings(open,true)});
   settings(false);scene('geology');clear();navigate('scenes');
-  return {state,clear,result,context:name=>{$('a3ActiveAquifer').textContent=name;}};
+  return {state,clear,result,settings:open=>settings(open,true),context:name=>{$('a3ActiveAquifer').textContent=name;}};
 }

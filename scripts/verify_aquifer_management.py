@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from browser_aquifer_inputs import open_section, edit_selection
 
 
 def main():
@@ -20,7 +21,7 @@ def main():
         def core_ready():
             page.wait_for_function("document.querySelector('#a3Workspace').dataset.ready==='true' || document.querySelector('#status3d').dataset.state==='error'",timeout=180000)
             assert page.locator('#a3Workspace').get_attribute('data-ready')=='true',page.locator('#status3d').inner_text()
-        core_ready();page.locator('#a3Nav-management').click()
+        core_ready();open_section(page,'management')
         def ready():
             page.wait_for_function("document.querySelector('[data-m-results]') && !document.querySelector('[data-m-results]').hidden && !document.querySelector('[data-m-run]').disabled",timeout=60000)
         def report():return json.loads(page.locator('#managementTools metadata').text_content())['management']
@@ -71,8 +72,9 @@ def main():
         page.evaluate("()=>document.dispatchEvent(new CustomEvent('a3:quality-result',{detail:null}))")
         ready();assert report()['quality_supported_area_pct']==0
         # Generic behavior, with no aquifer name in the model or parameters.
+        edit_selection(page)
         page.locator('#aquiferSelect3d').select_option(label=next(t for t in page.locator('#aquiferSelect3d option').all_text_contents() if t.endswith('/ نیشابور')))
-        core_ready();page.locator('#a3Nav-management').click();ready()
+        core_ready();open_section(page,'management');ready()
         other=report();assert other['aquifer']['name']=='نیشابور'
         assert other['settings']['horizons']==[3,5,10,25]
         assert other['subsidence_supported_area_pct']==0

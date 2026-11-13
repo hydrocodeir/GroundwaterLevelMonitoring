@@ -1,5 +1,17 @@
-const CACHE_NAME = "aquifer3d-offline-v30";
+const CACHE_NAME = "aquifer3d-offline-v40";
 const CORE_FILES = [
+  "/assets/js/aquifer-spatial.py",
+  "/assets/templates/quality-template.csv",
+  "/assets/templates/quality-template-utm.csv",
+  "/assets/templates/quality-example.csv",
+  "/assets/templates/quality-guide.html",
+  "/assets/js/aquifer-trend-options.py",
+  "/assets/js/aquifer3d-flow.js",
+  "/assets/css/aquifer3d-flow.css",
+  "/assets/js/aquifer3d-bootstrap.js",
+  "/assets/js/aquifer3d-lifetime.js",
+  "/assets/js/aquifer-lifetime-compute.py",
+  "/assets/css/aquifer3d-lifetime.css",
   "/",
   "/dashboard-compute.py",
   "/comparison",
@@ -16,10 +28,6 @@ const CORE_FILES = [
   "/assets/js/echarts-extension-leaflet.js",
   "/assets/css/leaflet.css",
   "/data/MAHDOUDE.geojson",
-  "/data/Monthly_Precipitation.csv",
-  "/data/Monthly_NDVI.csv",
-  "/data/Monthly_AET.csv",
-  "/data/Warm_Season_Irrigated_Area.csv",
   "/aquifer-3d",
   "/assets/css/app.css",
   "/assets/css/aquifer3d.css",
@@ -34,17 +42,12 @@ const CORE_FILES = [
   "/assets/js/aquifer3d-management.js",
   "/assets/js/aquifer-management-compute.py",
   "/assets/css/aquifer3d-management.css",
-  "/subsidence/sources.json",
   "/assets/js/aquifer3d.js",
   "/assets/js/aquifer3d-render.js",
   "/assets/js/aquifer3d-tools.js",
   "/assets/js/aquifer3d-maps.js",
   "/assets/js/aquifer3d-quality.js",
   "/water-quality/compute.py",
-  "/water-quality/WaterQ.csv",
-  "/water-quality/covariates.npy",
-  "/water-quality/geology.geojson",
-  "/water-quality/sources.json",
   "/runtime/quality-openblas",
   "/assets/js/aquifer3d-worker.js",
   "/assets/js/aquifer3d_compute.py",
@@ -64,11 +67,9 @@ const CORE_FILES = [
   "/data/AQUIFER.geojson",
   "/data/LOCATION.csv",
   "/data/DATA.csv",
-  "/data/NEYSHABUR_BEDROCK_DEPTH.csv",
-  "/data/MASHHAD_BEDROCK_MSL.csv",
-  "/data/NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv",
-  "/data/NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json"
 ];
+
+const LAZY_DATA_FILES=["/data/Monthly_Precipitation.csv", "/data/Monthly_NDVI.csv", "/data/Monthly_AET.csv", "/data/Warm_Season_Irrigated_Area.csv", "/subsidence/sources.json", "/water-quality/WaterQ.csv", "/water-quality/covariates.npy", "/water-quality/geology.geojson", "/water-quality/sources.json", "/data/NEYSHABUR_BEDROCK_DEPTH.csv", "/data/MASHHAD_BEDROCK_MSL.csv", "/data/NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv", "/data/NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json"];
 
 function isPythonPackage(url) {
   return (url.origin === "https://cdn.jsdelivr.net"
@@ -117,7 +118,7 @@ self.addEventListener("fetch", (event) => {
   const partial = isDashboardPartial(url);
   const subsidenceAsset=url.origin===self.location.origin&&url.pathname.startsWith('/subsidence/');
   if (!pythonPackage && !partial && !subsidenceAsset
-      && (url.origin !== self.location.origin || !CORE_FILES.includes(url.pathname))) return;
+      && (url.origin !== self.location.origin || !CORE_FILES.includes(url.pathname)&&!LAZY_DATA_FILES.includes(url.pathname))) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     const key = partial ? event.request : new Request(url.origin + url.pathname);

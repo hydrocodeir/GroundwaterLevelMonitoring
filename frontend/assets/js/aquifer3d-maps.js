@@ -29,10 +29,10 @@ export function mountMap(root,data,keys,id,customFields={}){
   const select=root.querySelector('select'),svg=root.querySelector('.a3-plan-svg'),detail=root.querySelector('.a3-map-detail');
   for(const key of keys)select.add(new Option(definitions[key].label,key));
   const [west,south,east,north]=maps.extent,sx=111320*Math.cos((south+north)/2*Math.PI/180),sy=111320;
-  const scale=Math.min(660/((east-west)*sx),470/((north-south)*sy));
-  const xy=([x,y])=>[380+(x-(west+east)/2)*sx*scale,320-(y-(south+north)/2)*sy*scale];
+  let width=760,height=660,cx=380,cy=320,scale=1,plotHeight=470,legendColumns=4,legendTop=580;
+  const xy=([x,y])=>[cx+(x-(west+east)/2)*sx*scale,cy-(y-(south+north)/2)*sy*scale];
   const path=polygons=>polygons.map(p=>p.map(r=>r.map((p,i)=>(i?'L':'M')+xy(p).map(v=>v.toFixed(3)).join(',')).join(' ')+'Z').join(' ')).join(' ');
-  const boundary=path(maps.polygons);
+  let boundary;
   let viewport,labels,contours,cityGroup;
   const cityControl=document.createElement('label');cityControl.className='hydro-city-toggle';
   const cityInput=document.createElement('input');cityInput.type='checkbox';cityInput.checked=window.HydroCities?.enabled??true;cityInput.dataset.mapCities='';cityControl.append(cityInput,document.createTextNode('شهرها'));if(citiesAllowed)root.querySelector('.a3-map-controls').append(cityControl);
@@ -41,38 +41,52 @@ export function mountMap(root,data,keys,id,customFields={}){
   const unsubscribeCities=citiesAllowed?window.HydroCities?.subscribe(paintCities):null;
   if(citiesAllowed)window.HydroCities?.ready().then(paintCities).catch(error=>{cityControl.title=error.message;cityInput.disabled=true;});
   const toLocal=e=>{const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());};
-  function transform(){viewport?.setAttribute('transform',`translate(${380+pan[0]} ${320+pan[1]}) scale(${zoom}) translate(-380 -320)`);}
-  function setZoom(next,pivot=[380,320]){next=Math.max(.5,Math.min(12,next));const ratio=next/zoom;pan=pan.map((v,i)=>(pivot[i]-[380,320][i])*(1-ratio)+v*ratio);zoom=next;transform();}
+  function transform(){viewport?.setAttribute('transform',`translate(${cx+pan[0]} ${cy+pan[1]}) scale(${zoom}) translate(${-cx} ${-cy})`);}
+  function setZoom(next,pivot=[cx,cy]){next=Math.max(.5,Math.min(12,next));const ratio=next/zoom;pan=pan.map((v,i)=>(pivot[i]-[cx,cy][i])*(1-ratio)+v*ratio);zoom=next;transform();}
   function showCell(cell,event,target){
     const f=definitions[field],digits=field==='sy'?4:1;
     detail.textContent=`${f.label}: ${f.categories?.[cell[field]]?.label||fmt(cell[field],digits)} ${f.unit} | طول ${fmt(cell.lon,5)}، عرض ${fmt(cell.lat,5)} | Sy: ${fmt(cell.sy,4)} | کف: ${fmt(cell.bedrock_msl,2)} متر MSL`+
-      (data.quality_report?` | EC: ${fmt(cell.quality_ec,0)} µS/cm؛ SAR: ${fmt(cell.quality_sar,2)}؛ سهم شوری شرب ${fmt(cell.quality_drinking_pct)}٪؛ سهم EC/SAR کشاورزی ${fmt(cell.quality_usable_pct)}٪`:'')+
+      (data.quality_report?` | روش: ${cell.quality_spatial_method||data.spatial?.method||'IDW'}؛ ${cell.quality_spatial_estimated?'برآورد مکانی بیرون پوشش منبع':'داخل پوشش نقاط'} | EC: ${fmt(cell.quality_ec,0)} µS/cm؛ SAR: ${fmt(cell.quality_sar,2)}؛ سهم شوری شرب ${fmt(cell.quality_drinking_pct)}٪؛ سهم EC/SAR کشاورزی ${fmt(cell.quality_usable_pct)}٪`:'')+
       (finite(cell.before_m)?` | ذخیرهٔ مبنا: ${fmt(cell.before_mcm,5)}، پایان: ${fmt(cell.remaining_mcm,5)} میلیون مترمکعب | باقی‌مانده ${fmt(cell.remaining_pct)}٪، از دست‌رفته ${fmt(cell.lost_pct)}٪، افزایش ${fmt(cell.gained_pct)}٪`:'')+
+      (data.lifetime_report?` | عمر: ${finite(cell.life_years)?fmt(cell.life_years)+' سال':cell.life_status==='beyond'?'بیش از افق':'نامشخص'}${finite(cell.life_quantity_allowed_drop_m)?`؛ افت معادل آستانه ${fmt(cell.life_quantity_allowed_drop_m,2)} متر`:''}؛ روند ${fmt(cell.management_slope,3)} متر/سال؛ کمیت ${fmt(cell.life_quantity_years)}، شوری شرب ${fmt(cell.life_drinking_years)}، شوری کشاورزی ${fmt(cell.life_crop_years)}، نشست ${fmt(cell.life_subsidence_years)} سال${cell.life_known_limit_upper_bound!==null&&cell.life_known_limit_upper_bound!==undefined?`؛ حد بالای بخش معلوم ${fmt(cell.life_known_limit_upper_bound)} سال`:''}${cell.life_sensitivity_min!==undefined?`؛ حساسیت ${fmt(cell.life_sensitivity_min)} تا ${fmt(cell.life_sensitivity_max)} سال در ترکیب‌های دارای عبور${cell.life_sensitivity_unknown?'؛ ترکیب نامشخص: دامنهٔ کل تعیین نشده':''}${cell.life_sensitivity_beyond?'؛ یک ترکیب بدون عبور تا افق':''}`:''}`:'')+
       (data.management_report?` | روند تراز ${fmt(cell.management_slope,3)} متر/سال؛ افت هم‌دورهٔ تغییرشکل ${fmt(cell.management_subsidence_decline,3)} متر/سال؛ ${data.management_report.subsidence.cumulative?'میانگین سالانهٔ دوره':'نرخ تغییرشکل'} ${fmt(cell.management_subsidence,2)} mm/year${data.management_report.subsidence.cumulative?`؛ نشست تجمعی ${fmt(cell.management_subsidence_cumulative,2)} mm؛ افت تجمعی آب ${fmt(cell.management_groundwater_cumulative,2)} متر؛ پوشش پیکسل معتبر ${fmt(cell.management_subsidence_coverage_pct)}٪`:''}؛ زمان آستانه ${fmt(cell.management_critical_years,2)} سال؛ وضعیت ${cell.management_critical_status_label||''}${finite(cell.management_critical_water_year)?`؛ سال آبی ${fmt(cell.management_critical_water_year,0)}`:''}`:'');
-    if(target)window.HydroHelp?.showFor(target,detail.textContent,event,event?.type==='click');
+    if(target){
+      const life=data.lifetime_report,payload=life?{title:'عمر سناریویی · '+life.scenario.name,sections:[
+        {title:'وضعیت این پیکسل',rows:[['زمان رسیدن به محدودیت',finite(cell.life_years)?fmt(cell.life_years)+' سال':cell.life_status==='beyond'?'بیش از افق بررسی':'نامشخص'],['عامل محدودکننده',['بدون عبور در افق','کمیت','شوری','فرونشست','هم‌زمان','نامشخص'][cell.life_cause]],['سال آبی عبور',finite(cell.life_water_year)?new Intl.NumberFormat('fa-IR',{useGrouping:false}).format(cell.life_water_year):'—']]},
+        {title:'داده و آستانه',rows:[['طول / عرض',fmt(cell.lon,5)+' / '+fmt(cell.lat,5)],['روند تراز',fmt(cell.life_trend_m_year??cell.management_slope,3)+' متر/سال'],['Sy',fmt(cell.life_scenario_sy,4)],['کف',fmt(cell.life_scenario_floor_msl,2)+' متر MSL'],['افت معادل آستانه',fmt(cell.life_quantity_allowed_drop_m,2)+' متر']]},
+        {title:'پوشش مکانی روند',rows:[['منشأ روند',({network_idw:'درون‌یابی IDW',extended_idw:'برون‌یابی مکانی IDW',network_spline:'درون‌یابی Spline',extended_spline:'برون‌یابی مکانی Spline',network_thiessen:'پهنهٔ تیسن در پوشش شبکه',extended_thiessen:'تعمیم پهنهٔ تیسن به حاشیه',manual:'نرخ دستی سناریو',unavailable:'فاقد روند'})[cell.life_trend_source]||'—'],['فاصله تا نزدیک‌ترین پیزومتر معتبر',fmt(cell.life_trend_nearest_km,2)+' کیلومتر'],...(cell.life_nearest_well_name?[['پیزومتر نزدیک',cell.life_nearest_well_name]]:[]),...(life.rate_audit?.quantity?.start_water_year?[['دورهٔ روند (سال آبی)',life.rate_audit.quantity.start_water_year+' تا '+life.rate_audit.quantity.end_water_year]]:[])],...(cell.life_trend_extrapolated?{paragraphs:['روند این پیکسل تعمیم یافته است؛ اعتبار آن با ناحیهٔ داخل پوشش یکسان نیست.'],bullets:cell.life_trend_support_reasons.map(r=>window.HydroHelp.reasonLabel(r))}:{}),...(cell.life_spline_overshoot?{paragraphs:['مقدار Spline این پیکسل از بازهٔ مقادیر نقاط برازش فراتر رفته است.']}:{} )},
+        ...(finite(cell.life_ec_growth_pct_year)||finite(cell.life_subsidence_rate_mm_year)?[{title:'نرخ‌های سناریو',rows:[...(finite(cell.life_ec_growth_pct_year)?[['تغییر EC',fmt(cell.life_ec_growth_pct_year,2)+'٪ در سال']]:[]),...(finite(cell.life_subsidence_rate_mm_year)?[['نشست',fmt(cell.life_subsidence_rate_mm_year,2)+' میلی‌متر/سال']]:[])]}]:[]),
+        ...(cell.life_unknown_reasons?.length?[{title:'علت نامشخص‌بودن',bullets:cell.life_unknown_reasons.map(r=>window.HydroHelp.reasonLabel(r))}]:[])
+      ]}:{title:f.label,sections:[{rows:[[f.label,(f.categories?.[cell[field]]?.label||fmt(cell[field],digits))+' '+f.unit],['طول / عرض',fmt(cell.lon,5)+' / '+fmt(cell.lat,5)],['روش مکانی',data.spatial?.method||'IDW']]},...(data.quality_report?[{title:'کیفیت آب',rows:[['EC',fmt(cell.quality_ec,0)+' µS/cm'],['SAR',fmt(cell.quality_sar,2)],['منشأ',cell.quality_spatial_estimated?'برآورد مکانی بیرون پوشش منبع':'داخل پوشش نقاط'],['خروج Spline از دامنه',cell.quality_spline_overshoot?'بیرون دامنهٔ مقادیر منبع':'—']]}]:[]),...(field.startsWith('management_subsidence')||field==='management_overlap'?[{title:'فرونشست',rows:[['نرخ',fmt(cell.management_subsidence,2)+' mm/year'],['تجمعی',fmt(cell.management_subsidence_cumulative,2)+' mm'],['منشأ',cell.management_subsidence_estimated?'برآورد مکانی':'پوشش منبع'],['پوشش اصلی منبع',finite(cell.management_subsidence_coverage_pct)?fmt(cell.management_subsidence_coverage_pct)+'٪':'—']]}]:[])]};
+      window.HydroHelp?.showFor(target,payload,event,event?.type==='click'||event?.type==='pointerup');
+    }
   }
   function draw(){
     field=select.value;const f=definitions[field],values=cells.map(c=>c[field]).filter(finite),percent=field.endsWith('_pct');
     const min=percent?0:values.length?Math.min(...values):0,max=percent?Math.max(100,...values):values.length?Math.max(...values):1;
     const range=Math.abs(max-min)<=Number.EPSILON*64*Math.max(1,Math.abs(min),Math.abs(max))?0:max-min,precision=field==='sy'?4:1;
     svg.replaceChildren();svg.setAttribute('aria-label',`${data.aquifer.name}، ${f.label}؛ کشیدن برای جابه‌جایی و چرخ ماوس برای زوم`);
-    const legendExtra=f.categories?Math.max(0,Math.ceil(f.categories.length/4)-2)*30:0;
-    svg.setAttribute('viewBox',`0 0 760 ${660+legendExtra}`);
-    svg.append(node('rect',{width:760,height:660+legendExtra,fill:'#fff'}));
+    width=Math.max(280,Math.round(svg.getBoundingClientRect().width||root.clientWidth||760));
+    legendColumns=width<600?2:width<950?3:4;
+    plotHeight=Math.max(280,Math.min(500,Math.round(innerHeight*.52)));
+    legendTop=78+plotHeight+20;
+    height=legendTop+(f.categories?Math.ceil(f.categories.length/legendColumns)*30:54)+38;
+    cx=width/2;cy=78+plotHeight/2;
+    scale=Math.min((width-64)/((east-west)*sx),(plotHeight-24)/((north-south)*sy));boundary=path(maps.polygons);
+    svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('direction','ltr');svg.style.height=height+'px';
+    svg.append(node('rect',{width,height,fill:'#fff'}));
     const defs=node('defs'),gradient=node('linearGradient',{id:`${id}-gradient`});
     f.palette.forEach((c,i)=>gradient.append(node('stop',{offset:`${i*50}%`,'stop-color':c})));defs.append(gradient);
-    const clip=node('clipPath',{id:`${id}-plot`});clip.append(node('rect',{x:25,y:72,width:710,height:490}));defs.append(clip);svg.append(defs);
-    svg.append(node('text',{x:725,y:27,'text-anchor':'end','font-weight':700,'font-size':17},`${data.aquifer.name} | ${f.label}`));
-    svg.append(node('text',{x:725,y:52,'text-anchor':'end','font-size':12},field.startsWith('management_subsidence')&&data.parameter_subsidence_report?`دورهٔ ${data.parameter_subsidence_report.calendar_basis==='persian'?'شمسی':'سال آبی'} ${(data.parameter_subsidence_report.source_years||data.parameter_subsidence_report.periods?.[0]||[]).join(' تا ')} | ${f.unit}`:data.management_caption?`${data.management_caption} | ${f.unit}`:data.management_report?`سال آبی ${data.management_report.trend_start_water_year} تا ${data.management_report.trend_end_water_year} | افق ${fmt(data.management_horizon)} سال | ${f.unit}`:data.quality_report?`کیفیت WY ${data.quality_report.quality_water_year} | حجم شهریور ${data.dates.after.slice(0,4)} | ${f.unit}`:`شهریور ${data.dates.before.slice(0,4)} تا شهریور ${data.dates.after.slice(0,4)} | ${f.unit}`));
+    const hatch=node('pattern',{id:`${id}-extrapolated`,width:7,height:7,patternUnits:'userSpaceOnUse',patternTransform:'rotate(30)'});hatch.append(node('line',{x1:0,y1:0,x2:0,y2:7,stroke:'#213b48','stroke-opacity':.38,'stroke-width':1.4}));defs.append(hatch);
+    const clip=node('clipPath',{id:`${id}-plot`});clip.append(node('rect',{x:16,y:72,width:width-32,height:plotHeight+12}));defs.append(clip);svg.append(defs);
+    svg.append(node('text',{x:width-24,y:27,'text-anchor':'end','font-weight':700,'font-size':width<500?13:16},`${data.aquifer.name} | ${f.label}`));
+    svg.append(node('text',{x:width-24,y:52,'text-anchor':'end','font-size':width<500?9:12},field.startsWith('management_subsidence')&&data.parameter_subsidence_report?`دورهٔ ${data.parameter_subsidence_report.calendar_basis==='persian'?'شمسی':'سال آبی'} ${(data.parameter_subsidence_report.source_years||data.parameter_subsidence_report.periods?.[0]||[]).join(' تا ')} | ${f.unit}`:data.lifetime_caption?`${data.lifetime_caption} | ${f.unit}`:data.management_caption?`${data.management_caption} | ${f.unit}`:data.management_report?`سال آبی ${data.management_report.trend_start_water_year} تا ${data.management_report.trend_end_water_year} | افق ${fmt(data.management_horizon)} سال | ${f.unit}`:data.quality_report?`کیفیت WY ${data.quality_report.quality_water_year} | حجم شهریور ${data.dates.after.slice(0,4)} | ${f.unit}`:`شهریور ${data.dates.before.slice(0,4)} تا شهریور ${data.dates.after.slice(0,4)} | ${f.unit}`));
     const plot=node('g',{'clip-path':`url(#${id}-plot)`});viewport=node('g');plot.append(viewport);svg.append(plot);
     labels=node('g',{'pointer-events':'none',class:'a3-cell-labels','text-anchor':'middle','dominant-baseline':'central','font-size':7});
     for(const [index,cell] of cells.entries()){
       const value=cell[field],shape=node('path',{d:path(cell.polygons),'fill-rule':'evenodd',fill:f.categories?.[value]?.color||(finite(value)?color(f.palette,range?(value-min)/range:.5):'#d8dee2'),stroke:'#fff','stroke-width':.45,'vector-effect':'non-scaling-stroke','data-cell':index});
-      shape.append(node('title',{},`${f.label}: ${f.categories?.[value]?.label||fmt(value,precision)} ${f.unit}`));
-      shape.addEventListener('pointerenter',event=>{if(!drag)showCell(cell,event,shape);});
-      shape.addEventListener('pointerleave',()=>window.HydroHelp?.hideTransient());
-      shape.addEventListener('click',event=>{if(!drag?.moved)showCell(cell,event,shape);});
       viewport.append(shape);
+      if(cell.life_trend_extrapolated&&field!=='life_support')viewport.append(node('path',{d:path(cell.polygons),'fill-rule':'evenodd',fill:`url(#${id}-extrapolated)`,'pointer-events':'none','data-extrapolated-cell':index}));
       const [x,y]=xy([cell.lon,cell.lat]);labels.append(node('text',{x,y,fill:'#163e50',stroke:'#fff','stroke-width':1.6,'paint-order':'stroke'},f.categories?.[value]?.short||(finite(value)?fmt(value,field==='sy'?3:0):'—')));
     }
     viewport.append(node('path',{d:boundary,'fill-rule':'evenodd',fill:'none',stroke:'#344f5e','stroke-width':1.3,'vector-effect':'non-scaling-stroke','pointer-events':'none'}));
@@ -84,31 +98,28 @@ export function mountMap(root,data,keys,id,customFields={}){
     }
     cityGroup=node('g');viewport.append(contours,labels,cityGroup);paintCities();transform();
     svg.append(node('text',{x:37,y:96,'text-anchor':'middle','font-size':15,'font-weight':700},'N'),node('path',{d:'M37 125V103M32 110L37 103L42 110',stroke:'#294c5f',fill:'none','stroke-width':2}));
-    if(f.categories){f.categories.forEach((c,i)=>{
-      if(f.categories.length<=5){svg.append(node('rect',{x:55+i*134,y:580,width:20,height:14,fill:c.color}),node('text',{x:65+i*134,y:614,'text-anchor':'middle','font-size':10},c.label));}
-      else{const x=45+(i%4)*177,y=575+Math.floor(i/4)*30;svg.append(node('rect',{x,y,width:14,height:12,fill:c.color}),node('text',{x:x+22,y:y+10,'font-size':10},c.label));}
-    });}
-    else{svg.append(node('rect',{x:180,y:582,width:400,height:13,fill:`url(#${id}-gradient)`}));
-    svg.append(node('text',{x:180,y:616,'text-anchor':'middle','font-size':12},fmt(min,precision)),node('text',{x:580,y:616,'text-anchor':'middle','font-size':12},fmt(max,precision)));}
-    svg.append(node('text',{x:725,y:640+legendExtra,'text-anchor':'end','font-size':11,'data-map-meta':''},`ضلع شبکه ${fmt(maps.side_m,0)} متر | ${fmt(cells.length,0)} پیکسل | خاکستری: بدون مقدار معتبر`));
+    if(f.categories){f.categories.forEach((c,i)=>{const columnWidth=(width-48)/legendColumns,x=width-24-(i%legendColumns)*columnWidth,y=legendTop+Math.floor(i/legendColumns)*30;svg.append(node('rect',{x:x-14,y,width:14,height:12,fill:c.color}),node('text',{x:x-22,y:y+11,'text-anchor':'end','font-size':width<500?9:11},c.label));});}
+    else{svg.append(node('rect',{x:width*.2,y:legendTop,width:width*.6,height:13,fill:`url(#${id}-gradient)`}));
+    svg.append(node('text',{x:width*.2,y:legendTop+34,'text-anchor':'middle','font-size':12},fmt(min,precision)),node('text',{x:width*.8,y:legendTop+34,'text-anchor':'middle','font-size':12},fmt(max,precision)));}
+    svg.append(node('text',{x:width-24,y:height-20,'text-anchor':'end','font-size':11,'data-map-meta':''},`شبکه ${fmt(maps.cell_width_m??maps.side_m,0)} × ${fmt(maps.cell_height_m??maps.side_m,0)} متر | ${fmt(cells.length,0)} پیکسل | خاکستری: بدون مقدار معتبر`+(cells.some(c=>c.life_trend_extrapolated)&&field!=='life_support'?' | هاشور: برون‌یابی روند':'')));
     const source=field==='sy'?(data.input_files?.sy|| (data.metrics.sy_mode==='spatial'?'CSV مکانی':'مقدار یکنواخت انتخابی')):(data.input_files?.bedrock||sourceLabels[data.grid.bedrock_source]);
     const sySource=data.input_files?.sy||(data.metrics.sy_mode==='spatial'?'CSV مکانی':`Sy=${fmt(data.metrics.sy,4)}`);
-    const exportSource=field.startsWith('management_subsidence')?data.parameter_subsidence_report?.input_file||'لایهٔ معتبر وارد نشده':data.quality_report?`${data.input_files?.quality||'WaterQ.csv'} | نسبت عمقی ${fmt(data.quality_report.vertical_model.bottom_top_ec_ratio,3)} | EC ${fmt(data.quality_report.thresholds.drinking_ec_uScm,0)}/${fmt(data.quality_report.thresholds.irrigation_ec_uScm,0)}`:percent?`${data.input_files?.bedrock||sourceLabels[data.grid.bedrock_source]} | ${sySource}`:source;
-    svg.append(node('text',{x:725,y:655+legendExtra,'text-anchor':'end','font-size':9,'data-map-source':`منبع: ${data.management_report?'مشاهدات پیزومترها و ورودی‌های همین تحلیل':exportSource.length>110?exportSource.slice(0,107)+'…':exportSource}`},`منبع: ${data.management_report?'مشاهدات پیزومترها و ورودی‌های همین تحلیل':exportSource.length>110?exportSource.slice(0,107)+'…':exportSource}`));
-    const text=data.quality_report?'زون‌های شوری از مدل کیفیت چاه‌ها هستند؛ تعمیم به حجم و عمق، سناریویی است. کم‌شور به معنای تأیید شرب نیست. سهم‌ها نسبت به ستون اشباع فعلی‌اند و ربطی به درصد مصرف آب ندارند. خاکستری: خارج پوشش معتبر کیفیت.':percent?'درصد نسبت به ذخیرهٔ همان پیکسل در سال مبنا؛ بدون ذخیرهٔ مبنا: نامشخص. افزایش ذخیره می‌تواند درصد باقی‌مانده را از ۱۰۰٪ بیشتر کند. کاهش ذخیره معادل برداشت ناخالص نیست.':`منبع: ${source}. سطح درون‌یابی‌شده روی شبکه؛ خطوط تراز از کف اصلی محاسبات و Sy انتخابی ساخته می‌شوند. بالاآمدن نمایشی کناره‌ها وارد این نقشه نیست.`;
+    const exportSource=data.lifetime_report?'مشاهدات و ورودی‌های مدل؛ سناریو: '+data.lifetime_report.scenario.name:field.startsWith('management_subsidence')?data.parameter_subsidence_report?.input_file||'لایهٔ معتبر وارد نشده':data.quality_report?`${data.input_files?.quality||'WaterQ.csv'} | نسبت عمقی ${fmt(data.quality_report.vertical_model.bottom_top_ec_ratio,3)} | EC ${fmt(data.quality_report.thresholds.drinking_ec_uScm,0)}/${fmt(data.quality_report.thresholds.irrigation_ec_uScm,0)}`:percent?`${data.input_files?.bedrock||sourceLabels[data.grid.bedrock_source]} | ${sySource}`:source;
+    svg.append(node('text',{x:width-24,y:height-5,'text-anchor':'end','font-size':9,'data-map-source':`منبع: ${data.management_report?'مشاهدات پیزومترها و ورودی‌های همین تحلیل':exportSource.length>110?exportSource.slice(0,107)+'…':exportSource}`},`منبع: ${data.management_report?'مشاهدات پیزومترها و ورودی‌های همین تحلیل':exportSource.length>110?exportSource.slice(0,107)+'…':exportSource}`));
+    const text=data.lifetime_report?'زمان تا نخستین آستانهٔ فعال؛ سناریویی. خاکستری: نامشخص؛ بیش از افق: عبور تا پایان بازه رخ نمی‌دهد. با مساحت نامشخص، زمان سهم بحرانی حد بالاست. جزئیات فرض‌ها همراه خروجی JSON هستند.':data.quality_report?'زون‌های شوری از مدل کیفیت چاه‌ها هستند؛ تعمیم به حجم و عمق، سناریویی است. کم‌شور به معنای تأیید شرب نیست. سهم‌ها نسبت به ستون اشباع فعلی‌اند و ربطی به درصد مصرف آب ندارند. خاکستری: خارج پوشش معتبر کیفیت.':percent?'درصد نسبت به ذخیرهٔ همان پیکسل در سال مبنا؛ بدون ذخیرهٔ مبنا: نامشخص. افزایش ذخیره می‌تواند درصد باقی‌مانده را از ۱۰۰٪ بیشتر کند. کاهش ذخیره معادل برداشت ناخالص نیست.':`منبع: ${source}. سطح درون‌یابی‌شده روی شبکه؛ خطوط تراز از کف اصلی محاسبات و Sy انتخابی ساخته می‌شوند. بالاآمدن نمایشی کناره‌ها وارد این نقشه نیست.`;
     root.querySelector('.a3-map-note').textContent=field.startsWith('management_subsidence')&&data.parameter_subsidence_note?data.parameter_subsidence_note:data.management_note||text;
-    const metadata=node('metadata',{},JSON.stringify({aquifer:data.aquifer,dates:data.dates,field,unit:f.unit,input_files:data.input_files,sy_mode:data.metrics.sy_mode,bedrock_source:data.grid.bedrock_source,subsidence_layer:data.parameter_subsidence_report,cities:{enabled:citiesAllowed&&window.HydroCities?.enabled,source:window.HydroCities?.citation,osm_source:'https://www.openstreetmap.org/copyright'},side_m:maps.side_m,percentage_reference:maps.percentage_reference,quality_model:data.quality_report,management:data.management_report,horizon:data.management_horizon,notes:root.querySelector('.a3-map-note').textContent}));svg.append(metadata);
+    const metadata=node('metadata',{},JSON.stringify({aquifer:data.aquifer,dates:data.dates,field,unit:f.unit,spatial:data.spatial,input_files:data.input_files,sy_mode:data.metrics.sy_mode,bedrock_source:data.grid.bedrock_source,subsidence_layer:data.parameter_subsidence_report,cities:{enabled:citiesAllowed&&window.HydroCities?.enabled,source:window.HydroCities?.citation,osm_source:'https://www.openstreetmap.org/copyright'},side_m:maps.side_m,cell_width_m:maps.cell_width_m??maps.side_m,cell_height_m:maps.cell_height_m??maps.side_m,metric_basis:maps.metric_basis,percentage_reference:maps.percentage_reference,quality_model:data.quality_report,lifetime:data.lifetime_report,management:data.management_report,horizon:data.management_horizon,notes:root.querySelector('.a3-map-note').textContent}));svg.append(metadata);
     root.querySelector('[data-contour-label]').hidden=percent||Boolean(data.management_report)||Boolean(f.categories)||field.startsWith('management_subsidence');
     labels.style.display=root.querySelector('[data-map-labels]').checked?'':'none';
     contours.style.display=root.querySelector('[data-map-contours]').checked?'':'none';
     paintCities();
-    detail.textContent=values.length?'برای دیدن مقدار دقیق، روی پیکسل کلیک کنید یا نشانگر را روی آن ببرید.':data.management_report?'برای متغیر انتخابی، پوشش یا ورودی کافی موجود نیست؛ جزئیات داده را بررسی کنید.':'برای این نقشه، Sy و تراز کف معتبر لازم است.';
+    detail.textContent=values.length?'برای دیدن مقدار دقیق، روی پیکسل کلیک کنید.':data.management_report?'برای متغیر انتخابی، پوشش یا ورودی کافی موجود نیست؛ جزئیات داده را بررسی کنید.':'برای این نقشه، Sy و تراز کف معتبر لازم است.';
   }
   select.addEventListener('change',draw);
   root.querySelector('[data-map-labels]').onchange=e=>{labels.style.display=e.target.checked?'':'none';};
   root.querySelector('[data-map-contours]').onchange=e=>{contours.style.display=e.target.checked?'':'none';};
   root.querySelectorAll('[data-zoom]').forEach(b=>{b.onclick=()=>{if(b.dataset.zoom==='fit'){zoom=1;pan=[0,0];transform();}else setZoom(zoom*(b.dataset.zoom==='in'?1.3:1/1.3));};});
-  svg.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();svg.focus({preventScroll:true});const p=toLocal(e);drag={id:e.pointerId,x:p.x,y:p.y,startX:p.x,startY:p.y,moved:false};svg.setPointerCapture(e.pointerId);};
+  svg.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();window.HydroHelp?.hide();svg.focus({preventScroll:true});const p=toLocal(e);drag={id:e.pointerId,x:p.x,y:p.y,startX:p.x,startY:p.y,moved:false};svg.setPointerCapture(e.pointerId);};
   svg.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;const p=toLocal(e);drag.moved ||= Math.hypot(p.x-drag.startX,p.y-drag.startY)>4;pan[0]+=p.x-drag.x;pan[1]+=p.y-drag.y;drag.x=p.x;drag.y=p.y;transform();};
   svg.onpointerup=e=>{if(drag?.id===e.pointerId&&!drag.moved){const bounds=svg.getBoundingClientRect();const hit=document.elementFromPoint(Math.max(bounds.left,Math.min(bounds.right-1,e.clientX)),Math.max(bounds.top,Math.min(bounds.bottom-1,e.clientY)))?.closest('[data-cell]');if(hit&&svg.contains(hit))showCell(cells[Number(hit.dataset.cell)],e,hit);}drag=null;};
   svg.onpointercancel=()=>{drag=null;};
@@ -118,17 +129,18 @@ export function mountMap(root,data,keys,id,customFields={}){
     const kind=button.dataset.export,name=`${data.aquifer.name}-${field}-${data.dates.before}-${data.dates.after}${data.management_report?`-H${data.management_horizon}`:''}`,status=root.querySelector('.a3-map-exports span');button.disabled=true;
     try{
       if(kind==='csv'){
-        const columns=['lon','lat','area_m2','sy','bedrock_msl','before_msl','after_msl','before_m','remaining_m','lost_m','gained_m','before_mcm','remaining_mcm','lost_mcm','remaining_pct','lost_pct','gained_pct',...new Set(cells.flatMap(c=>Object.keys(c).filter(k=>k.startsWith('quality_')||k.startsWith('management_'))))];
-        const context=['aquifer','baseline','end','baseline_water_year','end_water_year','percentage_reference','sy_mode','bedrock_source','sy_file','bedrock_file'];
+        const columns=['lon','lat','area_m2','sy','bedrock_msl','before_msl','after_msl','before_m','remaining_m','lost_m','gained_m','before_mcm','remaining_mcm','lost_mcm','remaining_pct','lost_pct','gained_pct',...new Set(cells.flatMap(c=>Object.keys(c).filter(k=>k.startsWith('quality_')||k.startsWith('management_')||k.startsWith('life_'))))];
+        const context=['aquifer','baseline','end','baseline_water_year','end_water_year','percentage_reference','sy_mode','bedrock_source','sy_file','bedrock_file','pixel_width_m','pixel_height_m'];
+        if(data.lifetime_report)context.push('lifetime_report_json');
         if(data.management_report)context.push('management_horizon','management_settings_json');
         if(data.parameter_subsidence_report)context.push('subsidence_source_json');
-        const rows=[[...context,...columns],...cells.map(c=>[data.aquifer.name,data.dates.before,data.dates.after,data.dates.before_water_year,data.dates.after_water_year,maps.percentage_reference,data.metrics.sy_mode,data.grid.bedrock_source,data.input_files?.sy||'',data.input_files?.bedrock||'',...(data.management_report?[data.management_horizon,JSON.stringify(data.management_report)]:[]),...(data.parameter_subsidence_report?[JSON.stringify(data.parameter_subsidence_report)]:[]),...columns.map(k=>typeof c[k]==='object'&&c[k]!==null?JSON.stringify(c[k]):c[k]??'')])];
+        const rows=[[...context,...columns],...cells.map(c=>[data.aquifer.name,data.dates.before,data.dates.after,data.dates.before_water_year,data.dates.after_water_year,maps.percentage_reference,data.metrics.sy_mode,data.grid.bedrock_source,data.input_files?.sy||'',data.input_files?.bedrock||'',maps.cell_width_m??maps.side_m,maps.cell_height_m??maps.side_m,...(data.lifetime_report?[JSON.stringify(data.lifetime_report)]:[]),...(data.management_report?[data.management_horizon,JSON.stringify(data.management_report)]:[]),...(data.parameter_subsidence_report?[JSON.stringify(data.parameter_subsidence_report)]:[]),...columns.map(k=>typeof c[k]==='object'&&c[k]!==null?JSON.stringify(c[k]):c[k]??'')])];
         const csv=rows.map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n');download(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),name+'.csv');
       }else if(kind==='geojson'){
-        const geojson={type:'FeatureCollection',name,metadata:{dates:data.dates,inputs:data.input_files,percentage_reference:maps.percentage_reference,subsidence_layer:data.parameter_subsidence_report,management:data.management_report,horizon:data.management_horizon},features:cells.map(({polygons,...properties})=>({type:'Feature',properties,geometry:{type:'MultiPolygon',coordinates:polygons}}))};
+        const geojson={type:'FeatureCollection',name,metadata:{dates:data.dates,inputs:data.input_files,pixel_grid:{cell_width_m:maps.cell_width_m??maps.side_m,cell_height_m:maps.cell_height_m??maps.side_m,metric_basis:maps.metric_basis},percentage_reference:maps.percentage_reference,subsidence_layer:data.parameter_subsidence_report,lifetime:data.lifetime_report,management:data.management_report,horizon:data.management_horizon},features:cells.map(({polygons,...properties})=>({type:'Feature',properties,geometry:{type:'MultiPolygon',coordinates:polygons}}))};
         download(new Blob([JSON.stringify(geojson)],{type:'application/geo+json'}),name+'.geojson');
       }else{
-        const copy=svg.cloneNode(true),exportHeight=svg.viewBox.baseVal.height*2;copy.setAttribute('xmlns',NS);copy.setAttribute('width',1520);copy.setAttribute('height',exportHeight);copy.setAttribute('style','font-family:Tahoma, sans-serif;direction:ltr');
+        const copy=svg.cloneNode(true),exportHeight=Math.round(svg.viewBox.baseVal.height/svg.viewBox.baseVal.width*1520);copy.setAttribute('xmlns',NS);copy.setAttribute('width',1520);copy.setAttribute('height',exportHeight);copy.setAttribute('style','font-family:Tahoma, sans-serif;direction:ltr');
         // Export the complete aquifer, independent of on-screen panning/zoom.
         copy.querySelector('[clip-path] > g')?.removeAttribute('transform');
         const xml=new XMLSerializer().serializeToString(copy),blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
@@ -141,7 +153,8 @@ export function mountMap(root,data,keys,id,customFields={}){
   }
   root.querySelectorAll('[data-export]').forEach(b=>{b.onclick=()=>exportMap(b);});
   draw();
-  return ()=>{disposed=true;unsubscribeCities?.();svg.removeEventListener('wheel',wheel);root.replaceChildren();};
+  let lastWidth=svg.getBoundingClientRect().width;const observer=new ResizeObserver(()=>{if(disposed)return;const next=svg.getBoundingClientRect().width;if(next>0&&Math.abs(next-lastWidth)>.5){lastWidth=next;draw();}});observer.observe(root);
+  return ()=>{disposed=true;observer.disconnect();unsubscribeCities?.();svg.removeEventListener('wheel',wheel);root.replaceChildren();};
 }
 
 export function mountPlanMaps({data,waterRoot,parameterRoot}){

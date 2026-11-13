@@ -1,0 +1,10 @@
+{"method": "idw", "stage": "trend ready"}
+{"method": "idw", "stage": "quality ready"}
+{"method": "idw", "passed": true, "quality_method": "idw", "subsidence_coverage": 100.00000000000006}
+{"method": "spline", "stage": "trend ready"}
+{"method": "spline", "stage": "quality ready"}
+{"method": "spline", "passed": true, "quality_method": "spline", "subsidence_coverage": 100.00000000000006}
+{"method": "thiessen", "stage": "trend ready"}
+{"method": "thiessen", "stage": "quality ready"}
+{"method": "thiessen", "passed": true, "quality_method": "thiessen", "subsidence_coverage": 100.00000000000006}
+{"passed": true, "methods": ["idw", "spline", "thiessen"], "page_errors": []}

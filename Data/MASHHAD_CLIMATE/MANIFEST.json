@@ -1,0 +1,58 @@
+{
+  "format": "Mashhad public GEE climate package v1",
+  "files": [
+    {
+      "name": "BUILD_PROVENANCE.json",
+      "bytes": 1121,
+      "sha256": "b406a7826d5e56730aa8d7654fa7237fde3123b5418cf8178cb4fbef05962e9f"
+    },
+    {
+      "name": "DASHBOARD_VALIDATION.json",
+      "bytes": 3076,
+      "sha256": "3808a3e3e8d6999373f42ba354f51f8b3d352e849b9c30e70bb230135c821a68"
+    },
+    {
+      "name": "GEE_PLAN.json",
+      "bytes": 79978,
+      "sha256": "6e42e0c1a00d3291917ee048f0c720e33b163e55762d4c14e12f1fee7c9a62ba"
+    },
+    {
+      "name": "GEE_RAW.json",
+      "bytes": 56455,
+      "sha256": "e4596a19880d30caac4b8c905ac783801c95ea0dec96f885163bf4aa7f07909f"
+    },
+    {
+      "name": "MASHHAD_CLIMATE_AUDIT.csv",
+      "bytes": 7252,
+      "sha256": "d7a551e56b65513c99bd77cc4c53282a33e1305837c17bcce7812d2013ddf091"
+    },
+    {
+      "name": "MASHHAD_CLIMATE_BOUNDARY.geojson",
+      "bytes": 29592,
+      "sha256": "feff352a75f42ccc7ca8b683dcc61141b803a80f25cdea8500f80e2b888d239a"
+    },
+    {
+      "name": "MASHHAD_CLIMATE_METADATA.json",
+      "bytes": 4476,
+      "sha256": "4412e478a8622a4650e374f5d88f28060df50b7007d617a365f847c7bb2a6e28"
+    },
+    {
+      "name": "MASHHAD_CLIMATE_WY.csv",
+      "bytes": 1231,
+      "sha256": "b97c4e17e31d4c195cfd8dadd59d9edae40b60ca7095687cacbc694d7b22df74"
+    },
+    {
+      "name": "README.fa.md",
+      "bytes": 5177,
+      "sha256": "bb99f1c15ed45e7c048c29bb3ff6354fe69ad5f4b78e60553f9997502cd5920c"
+    }
+  ],
+  "primary_input_csv": "MASHHAD_CLIMATE_WY.csv",
+  "calendar": "Persian water year, Mehr-Shahrivar, named starting year",
+  "complete_years": 45,
+  "interval": [
+    1360,
+    1404
+  ],
+  "validation": "Actual dashboard/Pyodide import and climate-scenario run passed; no user data uploaded. QA scenario is not a climate projection."
+}

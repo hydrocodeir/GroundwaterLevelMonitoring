@@ -111,10 +111,13 @@ def mg_nearest_tree(xy):
     return query
 
 
-def mg_support(points, radius_km=None, neighbors=8, power=2):
+def mg_support(points, radius_km=None, neighbors=8, power=2, extrapolate=False):
     from shapely.geometry import MultiPoint, Point
     if not points:
-        return lambda lon,lat: None, None
+        empty=lambda lon,lat: None
+        empty.reasons=lambda lon,lat:['no_eligible_wells']
+        empty.distance_km=lambda lon,lat:None
+        return empty, None
     latitude=sum(p['lat'] for p in points)/len(points)
     sx=111320*math.cos(math.radians(latitude))
     xy=[(p['lon']*sx,p['lat']*111320) for p in points]
@@ -126,7 +129,7 @@ def mg_support(points, radius_km=None, neighbors=8, power=2):
     def sample(lon,lat):
         target=(lon*sx,lat*111320)
         distances=nearest_query(target,neighbors)
-        if not distances or distances[0][0]>radius or hull.geom_type!='Polygon' or not hull.covers(Point(target)):
+        if not distances or hull.geom_type!='Polygon' or (not extrapolate and (distances[0][0]>radius or not hull.covers(Point(target)))):
             return None
         if distances[0][0]<1e-6:
             return [(points[distances[0][1]],1.)]
@@ -134,6 +137,14 @@ def mg_support(points, radius_km=None, neighbors=8, power=2):
         weights=[(chosen[0][0]/d)**power for d,_ in chosen]
         total=sum(weights)
         return [(points[i],w/total) for (_,i),w in zip(chosen,weights)]
+    def reasons(lon,lat):
+        target=(lon*sx,lat*111320);near=nearest_query(target,1);out=[]
+        if hull.geom_type!='Polygon':out.append('not_2d_support')
+        elif not hull.covers(Point(target)):out.append('outside_trend_hull')
+        if not near or near[0][0]>radius:out.append('beyond_trend_radius')
+        return out
+    sample.reasons=reasons
+    sample.distance_km=lambda lon,lat:nearest_query((lon*sx,lat*111320),1)[0][0]/1000
     return sample,radius/1000
 
 
@@ -279,18 +290,66 @@ def mg_cumulative_or_raster(text,options,polygons,start_wy,end_wy):
         else:zones.append((geom,v))
     if source_period:attach_period(source_period)
     sample,radius=mg_support(points,options.get('support_km'),options.get('neighbors',8),options.get('power',2))
+    spatial_sample,spatial_audit=sp_sampler(points+[{'lon':g.intersection(boundary).representative_point().x,'lat':g.intersection(boundary).representative_point().y,'value':v} for g,v in zones],['value'],options['spatial']) if options.get('spatial') else (None,None)
+    if spatial_audit:audit['spatial']=spatial_audit
     audit.update(support_radius_km=radius,point_count=len(points),polygon_count=len(zones))
     def query(lon,lat,*args):
         found=[v for geom,v in zones if geom.covers(Point(lon,lat))]
         if found and max(found)-min(found)>1e-8:raise ValueError('پهنه‌های متعارض همپوشانی دارند.')
         weights=sample(lon,lat) if not found else None
         v=found[0] if found else sum(p['value']*w for p,w in weights) if weights else None
+        estimate=spatial_sample(lon,lat) if spatial_sample and not found else None
+        if estimate:v=estimate['values']['value'] if estimate['values'] else None
         return {'rate':v/source_period[5] if cumulative and v is not None and source_period and source_period[5] else v if not cumulative else None,
-                'cumulative':v if cumulative else None,'coverage_pct':100 if v is not None else 0}
+                'cumulative':v if cumulative else None,'coverage_pct':100 if found or weights else 0,
+                'estimated':bool(estimate and (estimate['extrapolated'] or not weights)),'spatial_method':spatial_audit['method'] if spatial_audit else None}
+    return query,audit
+
+
+def mg_annual_subsidence(text,options,polygons,start_wy,end_wy):
+    """Average observed annual rates; never partition a cumulative observation."""
+    rows=list(csv.DictReader(io.StringIO(text.lstrip('\ufeff'))));by_year={}
+    for r in rows:
+        y=mg_number(r.get('water_year'),'سال آبی نشست',1,9999)
+        if y!=int(y):raise ValueError('سال آبی نشست باید صحیح باشد.')
+        if y<=end_wy:by_year.setdefault(int(y),[]).append(r)
+    mode=str(options.get('rate_window','source'))
+    if mode in ('source','all'):first=min(by_year,default=end_wy)
+    else:
+        length=mg_number(options.get('rate_window_years') if mode=='custom' else mode,'دورهٔ نرخ نشست',3,200)
+        if length!=int(length):raise ValueError('طول دورهٔ نرخ نشست باید صحیح باشد.')
+        first=end_wy-int(length)+1
+    chosen=sorted(y for y in by_year if first<=y<=end_wy);queries=[];audits=[]
+    for y in chosen:
+        fields=[k for k in rows[0] if k!='water_year'];fields=list(dict.fromkeys(fields+['start_water_year','end_water_year']))
+        output=io.StringIO();writer=csv.DictWriter(output,fields);writer.writeheader()
+        for r in by_year[y]:writer.writerow({**{k:v for k,v in r.items() if k!='water_year'},'start_water_year':y,'end_water_year':y})
+        settings={**options,'value_kind':'rate','calendar_basis':'water_year','start_water_year':y,'end_water_year':y}
+        settings.pop('rate_window',None);settings.pop('csv_sha256',None)
+        query,audit=mg_cumulative_or_raster(output.getvalue(),settings,polygons,y,y) if {'row','column'}.issubset(fields) else mg_subsidence_uncached(output.getvalue(),settings,polygons,y,y)
+        queries.append((y,query));audits.append(audit)
+    required=1 if mode=='source' else max(3,math.ceil((end_wy-first+1)*.5))
+    def query(lon,lat,*args):
+        values=[];last=False
+        for y,q in queries:
+            value=q(lon,lat,*args);rate=value.get('rate') if isinstance(value,dict) else value
+            if rate is not None:values.append(rate);last|=y==end_wy
+        valid=len(values)>=required and (mode=='source' or last)
+        return {'rate':sum(values)/len(values) if valid else None,'cumulative':None,'coverage_pct':100*len(values)/(end_wy-first+1) if end_wy>=first else 0}
+    audit={**(audits[-1] if audits else {}),'input_records':len(rows),'inside_records':sum(a.get('inside_records',0) for a in audits),
+           'component':options.get('component'),'direction':options.get('direction'),'input_file':options.get('file_name'),
+           'periods':[[min(chosen),max(chosen)]] if chosen else [],'annual_years':sorted(by_year),'selected_years':chosen,'annual_rates':True,'cumulative':False,
+           'rate_window':mode,'rate_period_start_water_year':first,'rate_period_end_water_year':end_wy,'minimum_years_per_cell':required,
+           'sha256_utf8':hashlib.sha256(text.encode()).hexdigest(),'rate_estimator':'Mean observed annual rate, with temporal coverage and end-year guards for explicit historical windows; no cumulative splitting'}
     return query,audit
 
 
 def mg_subsidence_uncached(text, options, polygons, start_wy, end_wy):
+    if text.strip() and not text.lstrip().startswith('{'):
+        headers=next(csv.reader(io.StringIO(text.lstrip('\ufeff'))),[])
+        if 'water_year' in headers and 'rate_mm_year' in headers:
+            if options.get('value_kind')=='cumulative':raise ValueError('برای فایل water_year و rate_mm_year، نوع مقادیر را «نرخ سالانه» انتخاب کنید.')
+            return mg_annual_subsidence(text,options,polygons,start_wy,end_wy)
     if options.get('value_kind',options.get('quantity'))=='cumulative' or options.get('raster_grid'):
         return mg_cumulative_or_raster(text,options,polygons,start_wy,end_wy)
     from shapely.geometry import shape, Polygon, Point
@@ -354,6 +413,8 @@ def mg_subsidence_uncached(text, options, polygons, start_wy, end_wy):
             raise ValueError('نقاط فرونشست تکراری با نرخ متفاوت وجود دارند.')
         merged[key]=point
     sample,radius=mg_support(list(merged.values()),options.get('support_km'),options.get('neighbors',8),options.get('power',2))
+    spatial_sample,spatial_audit=sp_sampler(list(merged.values())+[{'lon':g.intersection(boundary).representative_point().x,'lat':g.intersection(boundary).representative_point().y,'rate':v} for g,v in zones],['rate'],options['spatial']) if options.get('spatial') else (None,None)
+    if spatial_audit:audit['spatial']=spatial_audit
     audit['periods']=[list(p) for p in sorted(periods)];audit['support_radius_km']=radius
     audit['point_count']=len(merged);audit['polygon_count']=len(zones)
     def query(lon,lat,*args):
@@ -364,16 +425,23 @@ def mg_subsidence_uncached(text, options, polygons, start_wy, end_wy):
                 raise ValueError('پهنه‌های فرونشست با نرخ متفاوت همپوشانی دارند.')
             return found[0]
         weights=sample(lon,lat)
+        if spatial_sample:
+            estimate=spatial_sample(lon,lat)
+            return {'rate':estimate['values']['rate'] if estimate['values'] else None,'cumulative':None,'coverage_pct':100 if weights else 0,
+                    'estimated':bool(estimate['extrapolated'] or not weights),'spatial_method':spatial_audit['method'],'spline_overshoot':estimate['overshoot']}
         return sum(p['rate']*w for p,w in weights) if weights else None
     return query,audit
 
 
-def mg_subsidence(text,options,polygons,start_wy,end_wy):
+def mg_subsidence(text,options,polygons,start_wy,end_wy,cells=None):
     from copy import deepcopy
-    key=hashlib.sha256(text.encode()).hexdigest()+json.dumps([options,polygons,start_wy,end_wy],sort_keys=True)
+    key=hashlib.sha256(text.encode()).hexdigest()+json.dumps([options,polygons,start_wy,end_wy,[(c['lon'],c['lat'],c['polygons']) for c in (cells or [])]] if options.get('spatial') else [options,polygons,start_wy,end_wy],sort_keys=True)
     if key not in _mg_subsidence_cache:
         _mg_subsidence_cache.clear()
-        _mg_subsidence_cache[key]=mg_subsidence_uncached(text,options,polygons,start_wy,end_wy)
+        query,audit=mg_subsidence_uncached(text,options,polygons,start_wy,end_wy)
+        if options.get('spatial') and cells and audit.get('raster_grid'):
+            query,audit=sp_raster_surface(query,audit,cells,options['spatial'])
+        _mg_subsidence_cache[key]=query,audit
     query,audit=_mg_subsidence_cache[key]
     return query,deepcopy(audit)
 
@@ -381,6 +449,7 @@ def mg_subsidence(text,options,polygons,start_wy,end_wy):
 def management_analysis(data, histories, options):
     """Only data-dependent results. Defaults are editable methodological settings."""
     from copy import deepcopy
+    spatial=sp_config(data['spatial']) if data.get('spatial') else None
     horizons=options.get('horizons',[3,5,10,25])
     if isinstance(horizons,str):
         horizons=horizons.replace('،',',').split(',')
@@ -433,10 +502,22 @@ def management_analysis(data, histories, options):
             trends.append(result);backtest.extend(fit['backtest_errors'])
         well_report.append(result)
     sample,actual_radius=mg_support(trends,radius,neighbors,power)
+    # Candidate extension is kept separate: management maps/forecasts still use
+    # strict support. Only an explicit lifetime scenario can select these values.
+    extended_sample,_=mg_support(trends,radius,neighbors,power,extrapolate=True)
     maps=deepcopy(data['plan_maps']);cells=maps['cells']
+    trend_sampler,trend_spatial=sp_sampler(trends,['slope','low','high'],{**spatial,'neighbors':neighbors,'power':power}) if spatial else (None,None)
     sub_options=dict(options.get('subsidence') or {})
     sub_options.update(support_km=radius,neighbors=neighbors,power=power)
-    sub_query,sub_audit=mg_subsidence(sub_options.pop('text',''),sub_options,maps['polygons'],start_wy,end_wy)
+    if spatial:sub_options['spatial']={**spatial,'neighbors':neighbors,'power':power}
+    try:
+        sub_query,sub_audit=mg_subsidence(sub_options.pop('text',''),sub_options,maps['polygons'],start_wy,end_wy,cells)
+    except ValueError as error:
+        if not options.get('allow_incomplete_subsidence'):raise
+        # An optional incomplete layer must not discard an independently valid
+        # piezometer trend. Its error stays explicit in the report and interface.
+        sub_query,sub_audit=mg_subsidence('',sub_options,maps['polygons'],start_wy,end_wy)
+        sub_audit['input_error']=str(error)
     sub_min=mg_number(options.get('subsidence_min_observations',3),'حداقل مشاهدهٔ هم‌دوره فرونشست',3,200)
     if int(sub_min)!=sub_min:
         raise ValueError('حداقل مشاهدهٔ هم‌دوره باید صحیح باشد.')
@@ -462,6 +543,7 @@ def management_analysis(data, histories, options):
                 if len(points)>=sub_min and points[-1][0]==last and len(points)/(last-first+1)>=coverage:
                     aligned.append({'lon':well['lon'],'lat':well['lat'],**mg_fit(points,method)})
     aligned_sample,aligned_radius=mg_support(aligned,radius,neighbors,power)
+    aligned_spatial,_=sp_sampler(aligned,['slope','cumulative_drop'] if cumulative else ['slope'],{**spatial,'neighbors':neighbors,'power':power}) if spatial else (None,None)
     sub_audit.update(aligned_wells=len(aligned),aligned_support_radius_km=aligned_radius,
                      groundwater_endpoints=endpoint_report,comparison_mode='observed_cumulative' if cumulative else 'annual_trend')
     q=options.get('quality') or {}
@@ -478,8 +560,21 @@ def management_analysis(data, histories, options):
         slope=sum(p['slope']*w for p,w in weights) if weights else None
         low=sum(p['low']*w for p,w in weights) if weights else None
         high=sum(p['high']*w for p,w in weights) if weights else None
+        extended=weights or extended_sample(cell['lon'],cell['lat'])
         cell.update(management_slope=slope,management_decline=-slope if slope is not None else None,
-                    management_slope_low=low,management_slope_high=high)
+                    management_slope_low=low,management_slope_high=high,
+                    management_support_reasons=sample.reasons(cell['lon'],cell['lat']),
+                    management_nearest_well_km=sample.distance_km(cell['lon'],cell['lat']),
+                    management_extended_slope=sum(p['slope']*w for p,w in extended) if extended else None,
+                    management_extended_slope_low=sum(p['low']*w for p,w in extended) if extended else None,
+                    management_extended_slope_high=sum(p['high']*w for p,w in extended) if extended else None)
+        if trend_sampler:
+            estimate=trend_sampler(cell['lon'],cell['lat']);values=estimate['values'];weights=values is not None
+            slope=values['slope'] if values else None;low=min(values.values()) if values else None;high=max(values.values()) if values else None
+            cell.update(management_slope=slope,management_decline=-slope if slope is not None else None,management_slope_low=low,management_slope_high=high,
+                        management_extended_slope=slope,management_extended_slope_low=low,management_extended_slope_high=high,
+                        management_spatial_estimated=bool(estimate['extrapolated'] or cell['management_support_reasons']),
+                        management_spatial_method=spatial['method'],management_spline_overshoot=estimate['overshoot'],management_nearest_well_name=estimate['nearest_name'])
         if weights:
             supported_area+=cell['area_m2'];weighted_slope+=slope*cell['area_m2']
             weighted_low+=low*cell['area_m2'];weighted_high+=high*cell['area_m2']
@@ -491,10 +586,16 @@ def management_analysis(data, histories, options):
         cell['management_subsidence']=sub
         cell['management_subsidence_cumulative']=cumulative_sub
         cell['management_subsidence_coverage_pct']=sub_value.get('coverage_pct') if isinstance(sub_value,dict) else 100 if sub is not None else 0
+        cell['management_subsidence_estimated']=bool(sub_value.get('estimated')) if isinstance(sub_value,dict) else False
+        cell['management_subsidence_method']=sub_value.get('spatial_method') if isinstance(sub_value,dict) else None
         aligned_weights=aligned_sample(cell['lon'],cell['lat'])
         aligned_decline=-sum(p['slope']*w for p,w in aligned_weights) if aligned_weights else None
         cell['management_subsidence_decline']=aligned_decline
         groundwater_cumulative=sum(p['cumulative_drop']*w for p,w in aligned_weights) if cumulative and aligned_weights else None
+        if aligned_spatial:
+            estimate=aligned_spatial(cell['lon'],cell['lat']);v=estimate['values']
+            aligned_decline=-v['slope'] if v else None;cell['management_subsidence_decline']=aligned_decline
+            groundwater_cumulative=v['cumulative_drop'] if cumulative and v else None
         cell['management_groundwater_cumulative']=groundwater_cumulative
         metric=cumulative_sub if cumulative else sub
         if metric is not None:sub_area+=cell['area_m2']
@@ -590,7 +691,8 @@ def management_analysis(data, histories, options):
             'volume_model':{'sy_mode':data['metrics'].get('sy_mode'),'sy':data['metrics'].get('sy'),
                             'bedrock_source':data.get('grid',{}).get('bedrock_source'),
                             'input_files':data.get('input_files',{})},
-            'settings':{'horizons':horizons,'lookback':lookback,'min_observations':minimum,'coverage':coverage,
+            'spatial':trend_spatial,
+            'settings':{'spatial':spatial,'horizons':horizons,'lookback':lookback,'min_observations':minimum,'coverage':coverage,
                         'method':method,'neighbors':neighbors,'power':power,'support_km':radius,
                         'subsidence_min_observations':int(sub_min),
                         'endpoint_tolerance_months':endpoint_tolerance,'cumulative_subsidence_limit':cumulative_limit,
@@ -618,7 +720,7 @@ def management_analysis(data, histories, options):
                      'مسیر آینده ادامهٔ روند با لنگر آخرین تراز است؛ اثر سیاست برداشت، اقلیم یا تغذیه را شبیه‌سازی نمی‌کند.',
                      'دامنهٔ حساسیت از صدک‌های ۱۰ و ۹۰ شیب‌های جفتی است؛ فاصلهٔ اطمینان ۹۵٪ یا احتمال عبور از آستانه نیست.',
                      'آزمون زمانی، پیش‌بینی مشاهدهٔ بعدی با داده‌های قبل از آن است؛ اعتبار افق ۲۵ ساله را تأیید نمی‌کند.',
-                     'پشتیبانی مکانی داخل پوش محدب و شعاع انتخابی یا دو برابر میانهٔ نزدیک‌ترین فاصلهٔ چاه‌هاست؛ مدل جریان و مرز هیدرولیکی نیست.',
+                     ('پهنه‌بندی با روش منتخب داده‌های آبخوان تا مرز پلیگون ادامه دارد؛ بیرون پوش نقاط برآورد مکانی است، نه مشاهده یا مرز هیدرولیکی.' if spatial else 'پشتیبانی مکانی داخل پوش محدب و شعاع انتخابی یا دو برابر میانهٔ نزدیک‌ترین فاصلهٔ چاه‌هاست؛ مدل جریان و مرز هیدرولیکی نیست.'),
                      'حجم آینده فقط برای پیکسل‌های دارای روند، Sy و کف معتبر جمع می‌شود؛ آیندهٔ بخش فاقد پوشش نامشخص می‌ماند.',
                      'حجم روی شبکهٔ نمایشی با ضریب مشترک به حجم محاسبات اصلی در تاریخ پایان منطبق شده است؛ بالاآمدن نمایشی کف در محاسبه نیست.',
                      'تراز خطی ممکن است زیر کف برون‌یابی شود؛ ضخامت و حجم در صفر قطع می‌شوند و ادامهٔ خط، پیش‌بینی تراز فیزیکی نیست.',
@@ -647,4 +749,7 @@ def management_from_current(feature_index, options):
     histories=[{'name':w['name'],'lon':w['lon'],'lat':w['lat'],
                 'records':[{'water_year':year if month>=7 else year-1,'year':year,'month':month,
                             'ordinal':year*12+month,'level':w['ground']-depth} for year,month,depth in series[w['key']]]} for w in current]
-    return management_analysis(_last_analysis,histories,options)
+    result=management_analysis(_last_analysis,histories,options)
+    result['histories']=histories
+    result['report']['network_selection']={'basis':'same_wells_as_base_volume_comparison','selected_wells':len(current),'all_current_wells':len(prepared['current'])}
+    return result

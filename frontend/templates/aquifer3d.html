@@ -9,11 +9,13 @@
     <link rel="stylesheet" href="{{ url_for('assets', path='css/app.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d-management.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d-lifetime.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d-workspace.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('assets', path='css/workbench.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('assets', path='css/aquifer3d-flow.css') }}?v={{ asset_version }}">
     <script defer src="{{ url_for('assets', path='js/map-cities.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('assets', path='js/dashboard-help.js') }}?v={{ asset_version }}"></script>
-    <script type="module" src="{{ url_for('assets', path='js/aquifer3d.js') }}?v={{ asset_version }}"></script>
+    <script type="module" src="{{ url_for('assets', path='js/aquifer3d-bootstrap.js') }}?v={{ asset_version }}"></script>
   </head>
   <body class="workbench-theme aquifer3d-page">
     {% set active_page = '3d' %}
@@ -25,7 +27,7 @@
         <div><h1>نمای سه‌بعدی آبخوان</h1><p id="comparisonIntro">مقایسهٔ سطح آب و تغییر ذخیره بین دو زمان</p></div>
 <div class="a3-heading-actions"><button type="button" data-open-tool="export">خروجی و گزارش</button></div>
       </header>
-<div class="a3-quick-controls"><div class="a3-quick-fields">
+<div class="a3-quick-controls" id="a3QuickControls"><div class="a3-quick-fields">
             <label class="aquifer3d-field" for="aquiferSelect3d">
               <span class="aquifer3d-field-label">آبخوان</span>
               <select id="aquiferSelect3d" required aria-describedby="aquifer3d-aquifer-help">
@@ -42,18 +44,33 @@
               <small id="aquifer3d-year-help">شهریور سال انتخابی؛ پایان سال آبیِ آغازشده در سال قبل.</small>
             </label>
 
-</div><div class="a3-quick-actions"><button id="toggleA3Settings" class="a3-settings-toggle" type="button" aria-controls="a3Settings" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg>تنظیمات مدل</button><button id="build3d" class="aquifer3d-build-button" type="button">محاسبه و نمایش</button></div></div>
+</div><div class="a3-quick-actions"><button id="toggleA3Settings" class="a3-settings-toggle" type="button" aria-controls="a3Settings" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg>داده‌ها و تنظیم مدل</button><button id="build3d" class="aquifer3d-build-button" type="button">محاسبه و نمایش</button></div></div>
+      <nav id="a3Flow" class="a3-flow" aria-label="مراحل بررسی مدیریتی آبخوان">
+        <button type="button" data-flow-stage="inputs"><span class="a3-flow-number">۱</span><span><strong>داده‌ها</strong><small data-flow-state="inputs">انتخاب آبخوان و فایل‌ها</small></span></button>
+        <button type="button" data-flow-stage="status" disabled><span class="a3-flow-number">۲</span><span><strong>وضعیت آبخوان</strong><small data-flow-state="status">سطح آب، ذخیره و کیفیت</small></span></button>
+        <button type="button" data-flow-stage="decision" disabled><span class="a3-flow-number">۳</span><span><strong>سناریو و اقدام</strong><small data-flow-state="decision">عمر و اولویت مداخله</small></span></button>
+        <button type="button" data-flow-stage="output" disabled><span class="a3-flow-number">۴</span><span><strong>خروجی</strong><small data-flow-state="output">نقشه، تصویر و گزارش</small></span></button>
+      </nav>
       <div class="a3-workspace-layout" id="a3Workspace" data-settings="closed" data-state="loading" data-scene="geology">
         <aside id="a3Settings" aria-label="ورودی‌های تحلیل">
 <section class="aquifer3d-config aquifer3d-card" aria-labelledby="aquifer3d-config-title">
           <div class="aquifer3d-section-heading a3-settings-heading">
             <div>
 
-              <h2 id="aquifer3d-config-title">تنظیم تحلیل</h2><button id="closeA3Settings" type="button" aria-label="بستن تنظیمات">×</button>
+              <h2 id="aquifer3d-config-title">داده‌های آبخوان</h2><button id="closeA3Settings" type="button" aria-label="بستن تنظیمات">×</button>
             </div>
           </div>
 
-<div class="a3-settings-body"><details class="a3-input-details" open><summary>آبدهی ویژه (Sy)</summary><div class="aquifer3d-form-grid">
+<div class="a3-settings-body"><div class="a3-input-base"><strong>مرز و پیزومترها</strong><span>از آبخوان انتخاب‌شده</span></div><p data-help-copy>با مرز و پیزومترها، تغییر سطح آب قابل نمایش است. برای حجم و معیار درصد کاهش ذخیره، سنگ‌بستر و Sy را اضافه کنید. لایه‌های شوری، نشست و اقلیم اختیاری‌اند؛ انتخاب فایل به معنی تأیید اعتبار یا اجرای تحلیل آن نیست.</p>
+<details class="a3-input-details" data-input-layer="spatial" open><summary><span>روش پهنه‌بندی</span><small id="spatialMethodSummary">IDW · کل آبخوان</small></summary><div class="aquifer3d-form-grid">
+<label class="aquifer3d-field" for="spatialMethodInput"><span class="aquifer3d-field-label">روش مکانی مشترک</span><select id="spatialMethodInput"><option value="idw">IDW · وزن‌دهی معکوس فاصله</option><option value="spline">Spline · صفحهٔ نازک</option><option value="thiessen">تیسن · نزدیک‌ترین نقطه</option></select><small>برای روند افت، شوری و فرونشست؛ محدودهٔ محاسبه و برش، مرز همین آبخوان است. بیرون پوش نقاط، مقدار برآورد مکانی است و در خروجی مشخص می‌شود. این انتخاب، مشاهدات زمانی یا لایهٔ ورودی ناموجود تولید نمی‌کند.</small></label>
+<label class="aquifer3d-field" id="spatialSmoothingField" for="spatialSmoothingInput" hidden><span class="aquifer3d-field-label">هموارسازی Spline</span><input id="spatialSmoothingInput" type="number" min="0" step="any" value="0"><small>صفر یعنی عبور از نقاط. Spline به حداقل سه نقطهٔ غیرهم‌خط نیاز دارد و ممکن است از دامنهٔ مقادیر منبع فراتر برود؛ روش بدون اطلاع به IDW تبدیل نمی‌شود.</small></label>
+</div></details>
+<details class="a3-input-details" data-input-layer="grid" open><summary><span>اندازهٔ پیکسل</span><small id="pixelGridSummary">۴۰۰۰ × ۴۰۰۰ متر</small></summary><div class="aquifer3d-form-grid">
+<label class="aquifer3d-field" for="pixelWidthInput"><span class="aquifer3d-field-label">طول پیکسل · شرق–غرب (متر)</span><input id="pixelWidthInput" type="number" min="1" max="1000000" step="any" value="4000" inputmode="decimal"></label>
+<label class="aquifer3d-field" for="pixelHeightInput"><span class="aquifer3d-field-label">عرض پیکسل · شمال–جنوب (متر)</span><input id="pixelHeightInput" type="number" min="1" max="1000000" step="any" value="4000" inputmode="decimal"></label>
+</div><p data-help-copy>ابعاد اسمی در مقیاس متری محلی آبخوان است؛ خانه‌های مرزی با پولیگون بریده می‌شوند. این اندازه برای نقشه‌های پیکسلی، ستون‌های سه‌بعدی و خروجی رستری مشترک است. تغییر اندازه نیاز به ساخت دوبارهٔ مدل و اجرای دوبارهٔ تحلیل‌های وابسته دارد؛ ریزترشدن شبکه دقت داده‌های مشاهده‌ای را افزایش نمی‌دهد.</p></details>
+<details class="a3-input-details" data-input-layer="sy" open><summary><span>آبدهی ویژه (Sy)</span><small data-layer-state="sy">برای محاسبهٔ ذخیره</small></summary><div class="aquifer3d-form-grid">
             <label class="aquifer3d-field" for="syMode">
               <span class="aquifer3d-field-label">روش تعیین آبدهی ویژه</span>
               <select id="syMode"><option value="constant">Sy ثابت برای کل آبخوان</option><option value="spatial">Sy مکانی از فایل CSV</option></select>
@@ -65,16 +82,16 @@
                 <input id="syInput" type="number" min="0" max="1" step="any" inputmode="decimal" placeholder="مقدار دارای منبع" aria-describedby="aquifer3d-sy-help">
                 <span>بی‌بعد</span>
               </span>
-              <small id="aquifer3d-sy-help">مقدار باید ویژهٔ همین آبخوان و دارای منبع باشد؛ پیشنهاد پژوهشی نیشابور فقط برای همان آبخوان کاربرد دارد.</small>
+              <small id="aquifer3d-sy-help">مقدار باید ویژهٔ همین آبخوان و دارای منبع باشد؛ </small>
             </label>
 
             <label class="aquifer3d-field" id="syFileField" for="syFile" hidden>
               <span class="aquifer3d-field-label">نقاط آبدهی ویژه</span>
-              <input id="syFile" type="file" accept=".csv,text/csv" aria-describedby="syFileHelp">
+              <input id="syFile" type="file" accept=".csv,text/csv" aria-describedby="syFileHelp"><button type="button" data-input-template="sy">الگوی CSV</button>
               <small id="syFileHelp">ستون‌های <code dir="ltr">longitude,latitude,Sy</code>؛ مختصات WGS84، Sy بین صفر و یک (مثلاً ۰٫۰۶). نقاط باید پیرامون آبخوان را هم پوشش دهند.</small>
             </label>
 
-          </div></details><details class="a3-input-details"><summary>سنگ‌بستر و فایل جایگزین</summary><div class="aquifer3d-form-grid">
+          </div></details><details class="a3-input-details" data-input-layer="bedrock" open><summary><span>سنگ‌بستر (CSV)</span><small data-layer-state="bedrock">برای محاسبهٔ ذخیره</small></summary><div class="aquifer3d-form-grid">
             <label class="aquifer3d-field" id="karatThicknessField" for="karatThicknessInput" hidden>
               <span class="aquifer3d-field-label" id="karatThicknessLabel">ضخامت اشباع فرضی کرات در تاریخ پایان</span>
               <span class="aquifer3d-input-suffix">
@@ -86,32 +103,40 @@
 
             <label class="aquifer3d-field aquifer3d-file-field" for="bedrockFile">
               <span class="aquifer3d-field-label">دادهٔ سنگ‌بستر <span class="aquifer3d-optional">اختیاری</span></span>
-              <input id="bedrockFile" type="file" accept=".csv,text/csv" aria-describedby="aquifer3d-bedrock-help">
-              <small id="aquifer3d-bedrock-help">برای نیشابور، عمق سنگ کفِ تقریبی برگرفته از شکل S4 خودکار استفاده می‌شود. CSV شما با ستون‌های <code dir="ltr">lon,lat,bedrock_msl</code> جایگزین آن می‌شود.</small>
+              <input id="bedrockFile" type="file" accept=".csv,text/csv" aria-describedby="aquifer3d-bedrock-help"><button type="button" data-input-template="bedrock">الگوی CSV</button>
+              <small id="aquifer3d-bedrock-help">فایل خودتان با ستون‌های <code dir="ltr">lon,lat,bedrock_msl</code> خوانده می‌شود.</small>
             </label>
           </div>
 
-          </details></div><div class="aquifer3d-action-row">
+          </details><details class="a3-input-details" data-input-layer="quality"><summary><span>شوری و کیفیت آب</span><small data-layer-state="quality">اختیاری</small></summary><div class="aquifer3d-form-grid">
+<label class="aquifer3d-field">شوری و کیفیت آب (CSV)<input id="qualityInputFile" type="file" accept=".csv,text/csv"><span class="a3-quality-template-actions"><button type="button" data-input-template="quality">قالب CSV کیفیت</button><a href="/assets/templates/quality-guide.html" target="_blank" rel="noopener">راهنما و نمونه</a></span><small>هر ردیف: یک نمونه با EC بر حسب µS/cm، مختصات WGS84 یا UTM و سال/ماه شمسی نمونه‌برداری. SAR اختیاری؛ دادهٔ ناموجود خالی بماند.</small></label>
+</div></details><details class="a3-input-details" data-input-layer="subsidence"><summary><span>فرونشست</span><small data-layer-state="subsidence">اختیاری</small></summary><div class="aquifer3d-form-grid">
+<label class="aquifer3d-field">فرونشست (CSV یا GeoJSON)<input id="subsidenceInputFile" type="file" accept=".csv,.json,.geojson"><button type="button" data-input-template="subsidence">الگوی CSV</button><small>longitude,latitude,cumulative_mm یا rate_mm_year. مشخصات دوره و مؤلفه پس از ورود در «آینده و اقدام» تأیید می‌شود.</small></label>
+</div></details><details class="a3-input-details" data-input-layer="climate"><summary><span>بارش و دما</span><small data-layer-state="climate">اختیاری</small></summary><div class="aquifer3d-form-grid">
+<label class="aquifer3d-field">بارش و دما (CSV)<input id="climateInputFile" type="file" accept=".csv,text/csv"><button type="button" data-input-template="climate">الگوی CSV</button><small>water_year,precip_mm,temp_c؛ یا year_persian,month_persian,precip_mm,temp_c. میانگین مکانی همان آبخوان.</small></label>
+</div></details></div><div class="aquifer3d-action-row">
             <p id="a3SettingsFeedback" role="status" aria-live="polite" hidden></p>
-            <button id="a3SettingsApply" class="aquifer3d-build-button" type="button">اعمال تنظیمات</button>
-            <p>تغییرات پس از زدن «اعمال تنظیمات» وارد محاسبه می‌شوند.</p>
+            <p id="a3InputScope" class="a3-input-scope" role="status">نمایش تغییر سطح آب</p>
+            <button id="a3SettingsApply" class="aquifer3d-build-button" type="button">ساخت مدل و دیدن وضعیت آبخوان</button>
           </div>
         </section>
         </aside>
         <button class="a3-settings-backdrop" id="a3SettingsBackdrop" type="button" aria-label="بستن تنظیمات" tabindex="-1" hidden></button>
-<aside class="a3-section-rail" aria-label="بخش‌های تحلیل">          <div class="a3-context-bar"><div><strong id="a3ActiveAquifer">در حال بارگذاری آبخوان…</strong><span class="page-period" id="comparisonEnd">انتهای مقایسه: آخرین شهریور دارای داده</span></div><span id="a3ResultState" data-state="loading">در حال آماده‌سازی</span></div>
-          <nav class="a3-workspace-tabs" role="tablist" aria-label="بخش‌های نمای سه‌بعدی" aria-orientation="vertical">
+<section class="a3-section-rail" aria-label="بخش‌های تحلیل">          <div class="a3-context-bar"><div><strong id="a3ActiveAquifer">انتخاب آبخوان</strong><span class="page-period" id="comparisonEnd">انتهای مقایسه: آخرین شهریور دارای داده</span></div><span id="a3ResultState" data-state="loading">در حال آماده‌سازی</span><button id="a3EditSelection" type="button" aria-expanded="true" aria-controls="a3QuickControls" hidden>تغییر آبخوان / دوره</button></div>
+          <nav class="a3-workspace-tabs" role="tablist" aria-label="نماهای این مرحله" aria-orientation="horizontal">
             <button id="a3Nav-scenes" role="tab" aria-selected="true" aria-controls="a3Panel-scenes" type="button" data-workspace-tab="scenes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v9l-9 5-9-5V8Zm0 10v9M3 8l9 5 9-5"/></svg><span><strong>نمای آبخوان</strong><small>سطح آب و ذخیره</small></span></button>
             <button id="a3Nav-quality" role="tab" aria-selected="false" aria-controls="a3Panel-quality" type="button" tabindex="-1" data-workspace-tab="quality" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-12ZM8 15a4 4 0 0 0 4 4"/></svg><span><strong>کیفیت آب</strong><small>شوری و حجم قابل استفاده</small></span></button>
             <button id="a3Nav-management" role="tab" aria-selected="false" aria-controls="a3Panel-management" type="button" tabindex="-1" data-workspace-tab="management" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M5 15l5-5 4 2 5-7M15 5h4v4"/></svg><span><strong>آینده و اقدام</strong><small>اولویت، آستانه و فرونشست</small></span></button>
+            <button id="a3Nav-lifetime" role="tab" aria-selected="false" aria-controls="a3Panel-lifetime" type="button" tabindex="-1" data-workspace-tab="lifetime" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/></svg><span><strong>عمر سناریویی</strong><small>محدودیت و سناریو</small></span></button>
             <button id="a3Nav-parameters" role="tab" aria-selected="false" aria-controls="a3Panel-parameters" type="button" tabindex="-1" data-workspace-tab="parameters" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 9-4 9 4-9 4Zm0 5 9 4 9-4M3 17l9 4 9-4"/></svg><span><strong>لایه‌های ورودی</strong><small>Sy، سنگ‌بستر و فرونشست</small></span></button>
             <button id="a3Nav-tools" role="tab" aria-selected="false" aria-controls="a3Panel-tools" type="button" tabindex="-1" data-workspace-tab="tools" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H4ZM9 20l3-4 3 4M8 12l3-3 3 2 3-4"/></svg><span><strong>تحلیل و خروجی</strong><small>برش، مقایسه و خروجی</small></span></button>
             <button id="a3Nav-sources" role="tab" aria-selected="false" aria-controls="a3Panel-sources" type="button" tabindex="-1" data-workspace-tab="sources"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6ZM14 3v5h5M9 12h7M9 16h7"/></svg><span><strong>منابع و فرض‌ها</strong><small>پوشش و روش محاسبه</small></span></button>
-          </nav></aside>
+          </nav></section>
         <main id="a3WorkspaceMain" tabindex="-1">
 <div id="a3DraftNotice" class="a3-draft-notice" hidden><div><strong>تنظیمات جدید هنوز اعمال نشده‌اند</strong><p>نمودارها و خروجی‌ها مربوط به آخرین محاسبه‌اند.</p></div><button id="a3ApplyDraft" type="button">اعمال تغییرات</button><button id="a3DiscardDraft" type="button">برگرداندن تنظیمات</button></div>
           <div class="a3-panel-heading"><div><h2 id="a3SectionTitle">نمای آبخوان</h2><p id="a3SectionDescription">سطح آب، سنگ‌بستر و تغییر ذخیره</p></div><label class="a3-mobile-section" for="a3SectionSelect"><span>بخش نمایش</span><select id="a3SectionSelect"></select></label></div>
           <div class="a3-status-strip"><span class="a3-status-dot" aria-hidden="true"></span><p id="status3d" class="aquifer3d-status" role="status" aria-live="polite">برای شروع، آبخوان و سال مبنا را انتخاب کنید.</p></div>
+          <div id="a3FlowReadiness" class="a3-flow-readiness" aria-label="وضعیت تحلیل‌ها" hidden></div>
 <section class="aquifer3d-summary" data-metrics-expanded="false" aria-label="خلاصهٔ نتایج محاسبه">
           <button id="a3MobileSummary" class="a3-mobile-summary" type="button" aria-expanded="false" aria-controls="a3Metrics">خلاصهٔ نتایج <span id="a3MobileMetricValue">—</span><span aria-hidden="true">⌄</span></button>
           <div id="a3Metrics" class="aquifer3d-metrics">
@@ -166,18 +191,20 @@
           </div>
           <div class="a3-workspace-panel" id="a3Panel-quality" role="tabpanel" aria-labelledby="a3Nav-quality" data-workspace-panel="quality" hidden><section id="qualityTools" class="aquifer3d-card a3-quality" hidden aria-label="برآورد حجم با محدودیت شوری"></section></div>
           <div class="a3-workspace-panel" id="a3Panel-management" role="tabpanel" aria-labelledby="a3Nav-management" data-workspace-panel="management" hidden><section id="managementTools" class="aquifer3d-card a3-management" hidden aria-label="اولویت مداخله و آیندهٔ آبخوان"></section></div>
+          <div class="a3-workspace-panel" id="a3Panel-lifetime" role="tabpanel" aria-labelledby="a3Nav-lifetime" data-workspace-panel="lifetime" hidden><section id="lifetimeTools" class="aquifer3d-card a3-lifetime" hidden aria-label="عمر سناریویی آبخوان"></section></div>
           <div class="a3-workspace-panel" id="a3Panel-parameters" role="tabpanel" aria-labelledby="a3Nav-parameters" data-workspace-panel="parameters" hidden><section class="aquifer3d-card a3-plan-section" id="parameterMaps" hidden aria-labelledby="parameterMapsTitle"><div class="aquifer3d-section-heading"><div><h2 id="parameterMapsTitle">لایه‌های ورودی آبخوان</h2><p>Sy، سنگ‌بستر، نشست تجمعی و پوشش دادهٔ فرونشست</p></div></div><div class="a3-parameter-map a3-map"></div></section><p id="a3NoParameters" hidden>برای این محاسبه، نقشهٔ پارامتر موجود نیست. داده‌های سنگ‌بستر یا Sy مکانی را در تنظیم تحلیل وارد کنید.</p></div>
-          <div class="a3-workspace-panel" id="a3Panel-tools" role="tabpanel" aria-labelledby="a3Nav-tools" data-workspace-panel="tools" hidden><section id="professionalTools" class="aquifer3d-card a3-professional" hidden aria-label="ابزارهای تحلیل و خروجی"></section></div>
+          <div class="a3-workspace-panel" id="a3Panel-tools" role="tabpanel" aria-labelledby="a3Nav-tools" data-workspace-panel="tools" hidden><section id="a3ExportHub" class="a3-export-hub" aria-label="خروجی تحلیل‌های انجام‌شده"></section><section id="professionalTools" class="aquifer3d-card a3-professional" hidden aria-label="ابزارهای تحلیل و خروجی"></section></div>
           <div class="a3-workspace-panel" id="a3Panel-sources" role="tabpanel" aria-labelledby="a3Nav-sources" data-workspace-panel="sources" hidden>
 <section class="aquifer3d-notes aquifer3d-card" aria-labelledby="aquifer3d-notes-title">
           <div class="aquifer3d-section-heading"><div><h2 id="aquifer3d-notes-title">منابع و روش محاسبه</h2></div></div>
           <p class="a3-source-summary"><span id="bedrockLegendLabel">سنگ‌بستر</span> · جزئیات ورودی‌ها و محدودیت برآورد در ادامه آمده است.</p><div class="aquifer3d-notes-grid">
             <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۱</span><div><h3>منابع و فرض‌ها</h3><p id="sourceNote">مرز GeoJSON آبخوان و سطح آب از داده‌های همین سامانه گرفته می‌شوند. آبدهی ویژه و سنگ‌بستر باید برای آبخوان انتخابی با منبع محلی بررسی شوند.</p><p class="aquifer3d-source-link"><a href="https://pubs.usgs.gov/of/2002/ofr02197/documentation.pdf" target="_blank" rel="noopener noreferrer">توضیح USGS دربارهٔ آبدهی ویژه در آبخوان آزاد ↗</a></p></div></div>
-            <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۲</span><div><h3>پوشش داده و روش</h3><p id="coverageNote">مدل پس از انتخاب آبخوان و دوره، تعداد پیزومترهای دارای داده و محدودیت پوشش مکانی را نشان می‌دهد. بدون دادهٔ سنگ‌بستر، نمایش عمق و شکل آبخوان شماتیک است و حجم مطلق آب قابل برآورد نیست.</p></div></div>
+            <div class="aquifer3d-note"><span class="aquifer3d-note-marker">۲</span><div><h3>پوشش داده و روش</h3><p id="coverageNote">مدل پس از انتخاب آبخوان و دوره، تعداد پیزومترهای دارای داده و محدودیت پوشش مکانی را نشان می‌دهد. بدون دادهٔ سنگ‌بستر، فقط سطوح آب نمایش داده می‌شوند و حجم مطلق قابل برآورد نیست.</p></div></div>
           </div>
           <p class="aquifer3d-method">سال آبی ایران از ۱ مهر تا ۳۱ شهریور است. شهریور هر سال، پایان سال آبیِ نام‌گذاری‌شده با سال قبل است. تغییر ذخیره از اختلاف تراز و آبدهی ویژه برآورد می‌شود. حجم آب قابل زهکشی حتی با دادهٔ سنگ‌بستر، برآوردی سناریویی است و مقدار واقعی آب قابل بهره‌برداری را نشان نمی‌دهد.</p>
         </section>
           </div>
+          <footer id="a3FlowNext" class="a3-flow-next" hidden><div><span id="a3FlowNextLabel"></span><strong id="a3FlowNextTitle"></strong></div><button type="button" id="a3FlowBack">مرحلهٔ قبل</button><button type="button" id="a3FlowContinue">ادامه</button></footer>
         </main>
       </div>
     </div>

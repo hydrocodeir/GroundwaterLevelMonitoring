@@ -1,0 +1,4 @@
+Default 4 km grid and 25-year display passed
+D:\Pooya\w\GitHub\HydroCodeIR\GroundwaterLevelMonitoring\scripts\verify_pixel_grid_browser.py:77: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  assert any(v>=0 for v in image.getdata())
+{"passed": true, "artifacts": ".tmp\\grid-qa", "page_errors": []}

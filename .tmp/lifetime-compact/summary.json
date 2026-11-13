@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "template_columns": [
+    "longitude",
+    "latitude",
+    "ec",
+    "sar",
+    "year_persian",
+    "month_persian"
+  ],
+  "criterion_panes": 4,
+  "desktop_editor_max_height_px": 570,
+  "viewports": [
+    1440,
+    1024,
+    768,
+    390
+  ],
+  "page_errors": [],
+  "data_uploads": []
+}

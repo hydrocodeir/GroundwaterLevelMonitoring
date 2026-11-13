@@ -1,0 +1,8 @@
+INFO:     Started server process [15696]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8767 (Press CTRL+C to quit)
+D:\Pooya\w\GitHub\HydroCodeIR\GroundwaterLevelMonitoring\app\data_service.py:167: DtypeWarning: Columns (12) have mixed types. Specify dtype option on import or set low_memory=False.
+  frame = pd.read_csv(DATA_DIR / "DATA.csv", encoding="utf-8-sig")
+D:\Pooya\w\GitHub\HydroCodeIR\GroundwaterLevelMonitoring\app\data_service.py:167: DtypeWarning: Columns (12) have mixed types. Specify dtype option on import or set low_memory=False.
+  frame = pd.read_csv(DATA_DIR / "DATA.csv", encoding="utf-8-sig")

@@ -1,3 +1,4 @@
+from functools import partial
 """Physical checks for the Python model executed by the Pyodide worker."""
 
 import importlib.util
@@ -137,6 +138,7 @@ class Aquifer3DComputeTests(unittest.TestCase):
 
     def test_neyshabur_corrected_surface_and_sensitivity_keep_shallow_margin(self):
         model = _model("نیشابور", _corrected_figure())
+        model.analyze = partial(model.analyze,user_layers_only=False)  # Explicit archival converter test.
         result = model.analyze(0, 1381, .1)
         metrics = result["metrics"]
         points = result["grid"]["points"]
@@ -209,6 +211,7 @@ class Aquifer3DComputeTests(unittest.TestCase):
                 (.01, -.001), (.021, .01), (.01, .021), (-.001, .01)
             ])
         model = _model("نیشابور", figure, [80, 100, 120, 140])
+        model.analyze = partial(model.analyze,user_layers_only=False)  # Explicit archival converter test.
         result = model.analyze(0, 1381, .1)
         area = result["aquifer"]["area_km2"]
         self.assertEqual(result["grid"]["bedrock_source"], "figure_s4")
@@ -235,6 +238,7 @@ class Aquifer3DComputeTests(unittest.TestCase):
 
     def test_karat_scenario_has_explicit_assumed_thickness_and_sensitivity(self):
         model = _model("کرات")
+        model.analyze = partial(model.analyze,user_layers_only=False)  # Explicit archival converter test.
         result = model.analyze(0, 1381, .1, karat_thickness_m=65)
         area = result["aquifer"]["area_km2"]
         metrics = result["metrics"]
@@ -255,6 +259,7 @@ class Aquifer3DComputeTests(unittest.TestCase):
 
     def test_karat_floor_uses_all_current_wells_and_stays_fixed_across_baselines(self):
         model = _model("کرات", fifth_current_only=True)
+        model.analyze = partial(model.analyze,user_layers_only=False)  # Explicit archival converter test.
         early = model.analyze(0, 1381, .1)
         later = model.analyze(0, 1389, .1)
         self.assertEqual(early["wells"]["common"], 4)
@@ -271,6 +276,7 @@ class Aquifer3DComputeTests(unittest.TestCase):
     def test_karat_bedrock_depth_is_capped_at_300m_below_fixed_ground(self):
         model = _model("کرات", grounds=[100, 120, 140, 160, 180],
                        fifth_current_only=True)
+        model.analyze = partial(model.analyze,user_layers_only=False)  # Explicit archival converter test.
         early = model.analyze(0, 1381, .1, karat_thickness_m=270)
         later = model.analyze(0, 1389, .1, karat_thickness_m=270)
         points = [point for point in later["grid"]["points"] if point[5]]

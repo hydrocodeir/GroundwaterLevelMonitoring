@@ -4,6 +4,7 @@ const { mountProfessionalTools } = await import(`./aquifer3d-tools.js?v=${encode
 const { mountPlanMaps } = await import(`./aquifer3d-maps.js?v=${encodeURIComponent(assetVersion)}`);
 const { mountQualityTools } = await import(`./aquifer3d-quality.js?v=${encodeURIComponent(assetVersion)}`);
 const { mountWorkspace } = await import(`./aquifer3d-workspace.js?v=${encodeURIComponent(assetVersion)}`);
+const { mountLifetimeTools } = await import(`./aquifer3d-lifetime.js?v=${encodeURIComponent(assetVersion)}`);
 const { mountManagementTools } = await import(`./aquifer3d-management.js?v=${encodeURIComponent(assetVersion)}`);
 const workspace = mountWorkspace();
 
@@ -16,6 +17,8 @@ const syFile = $("syFile");
 const karatThicknessInput = $("karatThicknessInput");
 const karatThicknessField = $("karatThicknessField");
 const bedrockInput = $("bedrockFile");
+const pixelWidthInput = $('pixelWidthInput'),pixelHeightInput = $('pixelHeightInput');
+const spatialMethodInput=$('spatialMethodInput'),spatialSmoothingInput=$('spatialSmoothingInput');
 const buildButton = $("build3d");
 const worker = new Worker(`/assets/js/aquifer3d-worker.js?v=${encodeURIComponent(assetVersion)}`, { type: "module" });
 const pending = new Map();
@@ -27,6 +30,7 @@ let toolsCleanup = null;
 let mapsCleanup = null;
 let qualityCleanup = null;
 let managementCleanup = null;
+let lifetimeCleanup = null;
 let videoController = null;
 let selectedSummary = null;
 let selectionSequence = 0;
@@ -36,7 +40,9 @@ let modelUpdating = false;
 
 function captureInputs() {
   return {baselineYear:baselineSelect.value,syMode:syMode.value,sy:syInput.value,
-    karatThickness:karatThicknessInput.value,bedrockFile:bedrockInput.files?.[0]||null,syFile:syFile.files?.[0]||null};
+    pixelWidth:pixelWidthInput.value,pixelHeight:pixelHeightInput.value,
+    spatialMethod:spatialMethodInput.value,splineSmoothing:spatialSmoothingInput.value,
+    qualityFile:$('qualityInputFile').files[0]||null,climateFile:$('climateInputFile').files[0]||null,subsidenceFile:$('subsidenceInputFile').files[0]||null,karatThickness:karatThicknessInput.value,bedrockFile:bedrockInput.files?.[0]||null,syFile:syFile.files?.[0]||null};
 }
 
 function discardInputs() {
@@ -44,7 +50,9 @@ function discardInputs() {
   selectionSequence++;
   baselineSelect.value=appliedInputs.baselineYear;syMode.value=appliedInputs.syMode;
   syInput.value=appliedInputs.sy;karatThicknessInput.value=appliedInputs.karatThickness;
-  for (const [input,file] of [[bedrockInput,appliedInputs.bedrockFile],[syFile,appliedInputs.syFile]]) {
+  pixelWidthInput.value=appliedInputs.pixelWidth;pixelHeightInput.value=appliedInputs.pixelHeight;updateGridSummary();
+  spatialMethodInput.value=appliedInputs.spatialMethod;spatialSmoothingInput.value=appliedInputs.splineSmoothing;updateSpatialControls();
+  for (const [input,file] of [[bedrockInput,appliedInputs.bedrockFile],[syFile,appliedInputs.syFile],[$('qualityInputFile'),appliedInputs.qualityFile],[$('climateInputFile'),appliedInputs.climateFile],[$('subsidenceInputFile'),appliedInputs.subsidenceFile]]) {
     const transfer=new DataTransfer();if(file)transfer.items.add(file);input.files=transfer.files;
   }
   updateSyMode();updateKaratControls();saveInputs();
@@ -115,6 +123,8 @@ function saveInputs() {
   try {
     localStorage.setItem(storageKey(index), JSON.stringify({
       baselineYear: baselineSelect.value,
+      pixelWidth:pixelWidthInput.value,pixelHeight:pixelHeightInput.value,
+      spatialMethod:spatialMethodInput.value,splineSmoothing:spatialSmoothingInput.value,
       sy: syInput.value,
       karatThickness: karatThicknessInput.value
     }));
@@ -128,7 +138,7 @@ function resetMetrics() {
   }
   $("volumeBeforeHelp").textContent = "برآورد سناریویی؛ نیازمند سنگ‌بستر";
   $("volumeAfterHelp").textContent = "برآورد سناریویی؛ نیازمند سنگ‌بستر";
-  $("bedrockLegendLabel").textContent = "سنگ‌بستر / بستر شماتیک";
+  $("bedrockLegendLabel").textContent = "سنگ‌بستر وارد نشده";
   $("sourceNote").textContent = "مرز GeoJSON آبخوان و سطح آب از داده‌های همین سامانه گرفته می‌شوند. آبدهی ویژه و سنگ‌بستر باید برای آبخوان انتخابی با منبع محلی بررسی شوند.";
   for (const id of ["remainingHeight", "lostHeight", "gainedHeight"]) $(id).textContent = "—";
   $("saturatedCaption").textContent = "پس از محاسبه نمایش داده می‌شود.";
@@ -138,6 +148,7 @@ function resetMetrics() {
 
 function clearScenes() {
   workspace.clear();
+  lifetimeCleanup?.();lifetimeCleanup=null;
   managementCleanup?.();managementCleanup=null;
   qualityCleanup?.();qualityCleanup=null;
   mapsCleanup?.();mapsCleanup=null;
@@ -153,6 +164,14 @@ function updateSyMode() {
   $('syConstantField').hidden = spatial;
   $('syFileField').hidden = !spatial;
   syInput.disabled = spatial;
+}
+
+function updateGridSummary(){
+  $('pixelGridSummary').textContent=`${format(Number(pixelWidthInput.value),0)} × ${format(Number(pixelHeightInput.value),0)} متر`;
+}
+function updateSpatialControls(){
+  $('spatialSmoothingField').hidden=spatialMethodInput.value!=='spline';
+  $('spatialMethodSummary').textContent=({idw:'IDW',spline:'Spline',thiessen:'تیسن'}[spatialMethodInput.value]||'IDW')+' · کل آبخوان';
 }
 
 function invalidateResult() {
@@ -178,18 +197,22 @@ function isKarat(item) {
 function isMashhad(item) { return normalizedName(item?.name) === 'مشهد'; }
 
 function updateKaratControls() {
-  karatThicknessField.hidden = !isKarat(selectedSummary) || Boolean(bedrockInput.files?.length);
+  karatThicknessField.hidden = true;
 }
 
 async function selectAquifer() {
   const sequence = ++selectionSequence;
+  if(aquiferSelect.value==='')return;
   const index = Number(aquiferSelect.value);
   if (!Number.isInteger(index)) return;
   selectedSummary = null;
   appliedInputs = null;
   bedrockInput.value = "";
   syFile.value = "";
+  syInput.value='';for(const id of ['qualityInputFile','climateInputFile','subsidenceInputFile'])$(id).value='';
   syMode.value = 'constant';
+  pixelWidthInput.value='4000';pixelHeightInput.value='4000';updateGridSummary();
+  spatialMethodInput.value='idw';spatialSmoothingInput.value='0';updateSpatialControls();
   updateSyMode();
   updateKaratControls();
   buildButton.disabled = true;
@@ -219,28 +242,13 @@ async function selectAquifer() {
     }
     if (summary.years.some((item) => String(item.year) === saved.baselineYear)) {
       baselineSelect.value = saved.baselineYear;
-    } else if (isKarat(summary) && summary.years.some((item) => String(item.year) === "1389")) {
-      baselineSelect.value = "1389";
+
     }
-    syInput.value = saved.sy || (isNeyshabur(summary) ? "0.051" : isKarat(summary) ? "0.12" : isMashhad(summary) ? "0.06" : "");
-    const savedThickness = Number(saved.karatThickness);
-    karatThicknessInput.value = saved.karatThickness && Number.isFinite(savedThickness) && savedThickness >= 20
-      ? String(Math.min(savedThickness, 300)) : "65";
-    updateKaratControls();
-    $("aquifer3d-sy-help").textContent = isKarat(summary)
-      ? "پیش‌فرض سناریویی ۰٫۱۲، میانهٔ دامنهٔ ۰٫۰۵ تا ۰٫۱۹ آبدهی ویژه در شکل ۷b مقالهٔ کرات است؛ قابل تغییر است."
-      : isNeyshabur(summary)
-        ? "۰٫۰۵۱ میانگین ضریب ذخیرهٔ گزارش‌شده برای نیشابور است؛ استفاده از آن به‌جای آبدهی ویژه فرض مدل است."
-        : isMashhad(summary)
-          ? "پیش‌فرض ۰٫۰۶ (۶٪)، میانگین گزارش‌شده برای مشهد–چناران در Water Supply، ۲۰۲۵؛ قابل تغییر است."
-          : "مقدار باید ویژهٔ همین آبخوان و دارای منبع باشد.";
-    $("aquifer3d-bedrock-help").textContent = isNeyshabur(summary)
-      ? "برای نیشابور، عمق برآوردی شکل S4 با فرض کف کم‌عمق در مرز استفاده می‌شود. CSV شما با ستون‌های lon,lat,bedrock_msl جایگزین آن می‌شود."
-      : isKarat(summary)
-        ? "برای کرات، کف فرضی سناریو خودکار ترسیم می‌شود؛ دادهٔ اندازه‌گیری‌شدهٔ سنگ‌کف نیست. CSV شما با ستون‌های lon,lat,bedrock_msl جایگزین آن می‌شود."
-        : isMashhad(summary)
-          ? "فایل MASHHAD_BEDROCK_MSL.csv خودکار استفاده می‌شود. فایل انتخابی شما جایگزین آن خواهد شد."
-          : "CSV با ستون‌های lon,lat,bedrock_msl؛ ارتفاع سنگ‌بستر به متر از سطح دریا.";
+    for(const [field,key] of [[pixelWidthInput,'pixelWidth'],[pixelHeightInput,'pixelHeight']]){const v=Number(saved[key]);field.value=Number.isFinite(v)&&v>=1&&v<=1e6?String(v):'4000';}updateGridSummary();
+    spatialMethodInput.value=['idw','spline','thiessen'].includes(saved.spatialMethod)?saved.spatialMethod:'idw';spatialSmoothingInput.value=Number.isFinite(Number(saved.splineSmoothing))&&Number(saved.splineSmoothing)>=0?String(saved.splineSmoothing):'0';updateSpatialControls();
+    syInput.value='';karatThicknessInput.value='';updateKaratControls();
+    $('aquifer3d-sy-help').textContent='مقدار دارای منبع خودتان یا فایل Sy مکانی را وارد کنید.';
+    $('aquifer3d-bedrock-help').textContent='CSV با ستون‌های lon,lat,bedrock_msl؛ متر از سطح دریا. بدون فایل، فقط سطح آب نمایش داده می‌شود.';
     $("areaMetric").textContent = `${format(summary.area_km2, 0)} کیلومتر مربع`;
     $("coverageNote").textContent =
       `${formatter.format(summary.current_count)} پیزومتر در شهریور ${endYear} داده دارند. ` +
@@ -251,147 +259,18 @@ async function selectAquifer() {
       return;
     }
     buildButton.disabled = false;
-    await buildScene();
+    setStatus('داده‌های تکمیلی را انتخاب کنید یا فقط با پیزومترها ادامه دهید.','dirty');
+    workspace.settings(true);
   } catch (error) {
     if (sequence === selectionSequence) setStatus(error.message, "error");
   }
 }
 
-function updateSourceNote(data) {
-  const note = $("sourceNote");
-  note.replaceChildren();
-  const intro = document.createTextNode(
-    "مرز از Data/AQUIFER.geojson، عمق آب از Data/DATA.csv و تراز زمین چاه‌ها از Data/LOCATION.csv گرفته شده است. " +
-    "تراز آب هر چاه = ارتفاع زمین − عمق اندازه‌گیری‌شده. " +
-    (data.metrics.sy_mode === 'constant' && data.metrics.sy !== null ? `Sy اعمال‌شده: ${format(data.metrics.sy, 3)}. ` : '')
-  );
-  note.append(intro);
-  if (data.metrics.sy_mode === 'spatial') {
-    note.append(document.createTextNode(`Sy از CSV شما با IDW² درون‌یابی شده است؛ دامنهٔ شبکه ${format(data.metrics.sy_min, 3)} تا ${format(data.metrics.sy_max, 3)}. `));
-  } else if (isMashhad(data.aquifer)) {
-    note.append(document.createTextNode(`Sy اعمال‌شده ${format(data.metrics.sy, 3)} است. پیش‌فرض ۰٫۰۶ از میانگین مشهد–چناران گرفته شده و یکنواخت فرض شده است. `));
-    const source = document.createElement('a');
-    source.href = 'https://iwaponline.com/ws/article/25/10/1391/109401/Efficiency-assessment-of-some-machine-learning';
-    source.target = '_blank'; source.rel = 'noopener noreferrer';
-    source.textContent = 'منبع Sy مشهد، Water Supply (۲۰۲۵)'; note.append(source);
-  } else if (isNeyshabur(data.aquifer)) {
-    note.append(document.createTextNode(
-      "مقدار ۰٫۰۵۱ به‌عنوان میانگین ضریب ذخیرهٔ دشت نیشابور در یک پژوهش مبتنی بر آزمایش پمپاژ گزارش شده است؛ " +
-      "به‌کاربردن آن به‌جای آبدهی ویژه (Sy) و یکنواخت فرض‌کردنش در تمام سلول‌ها دو فرض سناریویی این مدل هستند. "
-    ));
-    const source = document.createElement("a");
-    source.href = "https://www.waterjournal.ir/article_70951.html";
-    source.target = "_blank";
-    source.rel = "noopener noreferrer";
-    source.textContent = "مقالهٔ اصلی ضریب ذخیرهٔ نیشابور ↗";
-    note.append(source);
-    note.append(document.createTextNode(
-      " پژوهشی دیگر رسوبات آبرفتی آبخوان و سنگ‌بستر کم‌تراوای مارن، شیل و سنگ‌آهک را توصیف می‌کند؛ " +
-      "این توصیف دربارهٔ جنس کف است. "
-    ));
-    const geology = document.createElement("a");
-    geology.href = "https://link.springer.com/article/10.1186/s40068-025-00412-8";
-    geology.target = "_blank";
-    geology.rel = "noopener noreferrer";
-    geology.textContent = "پژوهش زمین‌شناسی نیشابور ↗";
-    note.append(geology);
-  } else if (isKarat(data.aquifer)) {
-    note.append(document.createTextNode(
-      " برای کرات، ۰٫۱۲ فقط پیش‌فرض قابل‌تغییر سناریو است؛ از میانهٔ دامنهٔ آبدهی ویژهٔ ۰٫۰۵ تا ۰٫۱۹ در شکل ۷b پژوهش مدل‌سازی کرات انتخاب شده و به معنی Sy اندازه‌گیری‌شدهٔ یکنواخت در کل دشت نیست. "
-    ));
-    const syPaper = document.createElement("a");
-    syPaper.href = "https://gnf.khu.ac.ir/article_4083_e1b90346c92331860b1391257a106bb1.pdf";
-    syPaper.target = "_blank";
-    syPaper.rel = "noopener noreferrer";
-    syPaper.textContent = "پژوهش مدل‌سازی کرات، شکل ۷b ↗";
-    note.append(syPaper);
-  } else {
-    note.append(document.createTextNode(
-      "برای برآورد تغییر ذخیره باید آبدهی ویژهٔ مستند همین آبخوان وارد شود."
-    ));
-  }
-  if (data.grid.bedrock_source === "figure_s4") {
-    note.append(document.createTextNode(
-      " عمق سنگ کف از خطوط هم‌عمق شکل S4 مقالهٔ Izady و همکاران به‌طور تقریبی رقومی‌سازی و با مرز آبخوان زمین‌مرجع شده است. " +
-      "این نقاط، داده‌های اصلی ژئوالکتریک یا حفاری نیستند. برای فرض نزدیک‌بودن کف به سطح زمین در مرز آبخوان، عمق در همهٔ مرزهای بیرونی و داخلی ۵ متر فرض شده و حداکثر طی نوار ۵ کیلومتری با تابع هموار به عمق درون‌یابی‌شده از شکل می‌رسد. در موقعیت چاه‌های این نوار، حداقل عمق کف برابر بیشترین عمق آب ثبت‌شده در کل دورهٔ دادهٔ همان چاه به‌علاوهٔ ۵ متر فرض شده و اثر آن به‌صورت محلی کاهش می‌یابد؛ بنابراین گذار نزدیک بعضی چاه‌ها تندتر است. این ۵ متر فاصلهٔ اضافی، فرض حداقل ضخامت اشباع است و عمق سنگ‌کف اندازه‌گیری‌شده نیست. در فاصلهٔ ۵ کیلومتر و بیشتر، عمق برآوردی شکل حفظ می‌شود. عمق مرزی و عرض نوار گذار نیز فرض مدل‌اند و از مقاله یا اندازه‌گیری به دست نیامده‌اند. " +
-      "تراز کف MSL = ارتفاع زمین درون‌یابی‌شده از تمام چاه‌های دارای ارتفاع در محدوده − عمق اصلاح‌شده. سطح زمین مرجع ثابت است و با تغییر سال مبنا تغییر نمی‌کند؛ این سطح، DEM اندازه‌گیری‌شده نیست. " +
-      "نقشه شبکهٔ مختصات ندارد و مرز آن در بعضی قسمت‌ها با پلیگون سامانه چند کیلومتر اختلاف دارد. درون‌یابی و تطبیق تقریبی شکل، عدم‌قطعیت قابل‌توجهی به حجم‌ها اضافه می‌کند. "
-    ));
-    const figure = document.createElement("a");
-    figure.href = "https://static-content.springer.com/esm/art%3A10.1007%2Fs10040-014-1219-9/MediaObjects/10040_2014_1219_MOESM1_ESM.pdf";
-    figure.target = "_blank";
-    figure.rel = "noopener noreferrer";
-    figure.textContent = "شکل S4 در پیوست مقاله ↗";
-    note.append(figure);
-    note.append(document.createTextNode(" "));
-    const download = document.createElement("a");
-    download.href = "/data/NEYSHABUR_BEDROCK_DEPTH.csv";
-    download.download = "NEYSHABUR_BEDROCK_DEPTH.csv";
-    download.textContent = "دریافت CSV با اصلاح مرزی ↗";
-    note.append(download);
-    note.append(document.createTextNode(" "));
-    const original = document.createElement("a");
-    original.href = "/data/NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv";
-    original.download = "NEYSHABUR_BEDROCK_DEPTH_SOURCE.csv";
-    original.textContent = "نقاط اولیهٔ رقومی‌شده ↗";
-    note.append(original);
-    note.append(document.createTextNode(" "));
-    const metadata = document.createElement("a");
-    metadata.href = "/data/NEYSHABUR_BEDROCK_DEPTH.csv.metadata.json";
-    metadata.target = "_blank";
-    metadata.rel = "noopener noreferrer";
-    metadata.textContent = "روش رقومی‌سازی و محدودیت‌ها ↗";
-    note.append(metadata);
-  } else if (data.grid.bedrock_source === "karat_scenario") {
-    note.append(document.createTextNode(
-      ` کف فرضی هر سلول، مقدار بالاتر از «تراز آب شهریور ${data.dates.after.slice(0,4)} − ${format(data.metrics.karat_thickness_m, 0)} متر» و «تراز زمین محلی − ۳۰۰ متر» است. تراز آب و زمین از همهٔ ${format(data.metrics.karat_current_wells, 0)} چاه دارای دادهٔ شهریور ${data.dates.after.slice(0,4)} درون‌یابی می‌شوند. بنابراین عمق کف از سطح زمین در هیچ سلولی بیش از ۳۰۰ متر نیست و ضخامت نسبت به سطح آب شبکهٔ مرجع ممکن است کمتر از مقدار انتخابی شود. با تغییر سال مبنا این کف جابه‌جا نمی‌شود. این اعداد فرض سناریویی‌اند و از نقشه یا اندازه‌گیری مستقیم سنگ‌کف به دست نیامده‌اند. ` +
-      "مقالهٔ مدل‌سازی کرات می‌گوید کف مدل آن‌ها با چاه‌های اکتشافی و لاگ حفاری ساخته شده، ولی نقشه یا نقاط کف را منتشر نکرده است. " +
-      "گزارش UNECE میانگین ضخامت آبخوان را ۶۵ متر ذکر می‌کند؛ استفاده از آن برای پیش‌فرض ضخامت اشباع کنونی، تصمیم مدل است و از گزارش نتیجه نمی‌شود. " +
-      "نمایش و حجم آب قابل زهکشی حاصل، صرفاً سناریوی قابل بررسی‌اند و نباید به‌عنوان بازسازی سنگ‌کف واقعی استفاده شوند. "
-    ));
-    const modelPaper = document.createElement("a");
-    modelPaper.href = "https://gnf.khu.ac.ir/article_4083_e1b90346c92331860b1391257a106bb1.pdf";
-    modelPaper.target = "_blank";
-    modelPaper.rel = "noopener noreferrer";
-    modelPaper.textContent = "مقالهٔ مدل‌سازی کرات ↗";
-    note.append(modelPaper);
-    note.append(document.createTextNode(" "));
-    const assessment = document.createElement("a");
-    assessment.href = "https://unece.org/fileadmin/DAM/env/water/publications/assessment/English/G_PartIV_Chapter3_En.pdf";
-    assessment.target = "_blank";
-    assessment.rel = "noopener noreferrer";
-    assessment.textContent = "ارزیابی UNECE ↗";
-    note.append(assessment);
-  } else if (data.grid.bedrock_source === "mashhad_msl") {
-    note.append(document.createTextNode(" کف از فایل MASHHAD_BEDROCK_MSL.csv گرفته شده است: ارتفاع زمین SRTM نسبت به EGM96 منهای عمق سنگ‌بستر. سطح کف درون‌یابی‌شده و قسمت مرزی برون‌یابی‌شده است؛ اندازه‌گیری مستقیم کف در تمام سلول‌ها نیست. "));
-  } else if (data.grid.bedrock_source === "uploaded") {
-    note.append(document.createTextNode(
-      " فایل ارتفاع سنگ‌بستر انتخابی شما فقط در مرورگر خوانده و با روش IDW درون‌یابی شده است."
-    ));
-  } else {
-    note.append(document.createTextNode(
-      " چون سطح سنگ‌بستر در داده‌های این آبخوان نیست، کف شکل صرفاً مرجع شماتیک است."
-    ));
-    if (normalizedName(data.aquifer.name) === "کرات") {
-      note.append(document.createTextNode(
-        " مقالهٔ مدل‌سازی کرات از دادهٔ چاه‌های اکتشافی و لاگ حفاری برای ساخت سنگ‌کف استفاده کرده، اما نقشه یا نقاط کف را منتشر نکرده است. " +
-        "گزارش UNECE میانگین ضخامت آبخوان را ۶۵ متر ثبت کرده؛ این عدد عمق سنگ‌کف در هر نقطه را تعیین نمی‌کند و برای محاسبهٔ حجم مطلق به کار نرفته است. "
-      ));
-      const modelPaper = document.createElement("a");
-      modelPaper.href = "https://gnf.khu.ac.ir/article_4083_e1b90346c92331860b1391257a106bb1.pdf";
-      modelPaper.target = "_blank";
-      modelPaper.rel = "noopener noreferrer";
-      modelPaper.textContent = "مقالهٔ مدل‌سازی کرات ↗";
-      note.append(modelPaper);
-      note.append(document.createTextNode(" "));
-      const assessment = document.createElement("a");
-      assessment.href = "https://unece.org/fileadmin/DAM/env/water/publications/assessment/English/G_PartIV_Chapter3_En.pdf";
-      assessment.target = "_blank";
-      assessment.rel = "noopener noreferrer";
-      assessment.textContent = "ارزیابی UNECE ↗";
-      note.append(assessment);
-    }
-  }
+function updateSourceNote(data){
+  $('sourceNote').textContent='مرز موجود آبخوان و مشاهدات پیزومترها مبنا هستند. '+
+    (data.input_files?.bedrock?'سنگ‌بستر: '+data.input_files.bedrock+'. ':'سنگ‌بستر وارد نشده؛ شکل فقط سطوح آب را نشان می‌دهد. ')+
+    (data.metrics.sy_mode==='spatial'?'Sy: '+data.input_files.sy+'. ':data.metrics.sy!==null?'Sy واردشده: '+format(data.metrics.sy,3)+'. ':'Sy وارد نشده. ')+
+    'کیفیت، اقلیم و فرونشست فقط از فایل انتخابی شما خوانده می‌شوند.';
 }
 
 function updateMetrics(data) {
@@ -424,7 +303,7 @@ function updateMetrics(data) {
     ? "کف برآوردی S4 با مرز کم‌عمقِ فرضی"
     : karatScenario
       ? "کف فرضی کرات؛ حداکثر ۳۰۰ متر زیر زمین"
-      : data.grid.bedrock_source === "mashhad_msl" ? "کف مشهد از فایل MSL" : data.grid.bedrock_source === "uploaded" ? "سنگ‌بستر دادهٔ بارگذاری‌شده" : "بستر شماتیک";
+      : data.grid.bedrock_source === "mashhad_msl" ? "کف مشهد از فایل MSL" : data.grid.bedrock_source === "uploaded" ? "سنگ‌بستر دادهٔ بارگذاری‌شده" : "سنگ‌بستر وارد نشده";
   const sensitivity = metrics.sensitivity_20m;
   const sensitivityNote = approximate && sensitivity
     ? `سناریوی حساسیت با ۲۰ متر کاهش یا افزایش ${karatScenario ? "ضخامت اشباع فرضی، با حفظ سقف ۳۰۰ متری عمق کف" : "عمق اولیهٔ شکل، با اعمال دوبارهٔ گذار هموار و ثابت‌ماندن عمق ۵ متری مرز و حداقل عمق‌های مبتنی بر چاه‌ها"}: حجم سال مبنا حدود ${formatVolume(sensitivity.before_minus_mcm, true)} تا ${formatVolume(sensitivity.before_plus_mcm, true)} و حجم شهریور ${data.dates.after.slice(0,4)} حدود ${formatVolume(sensitivity.after_minus_mcm, true)} تا ${formatVolume(sensitivity.after_plus_mcm, true)} میلیون مترمکعب می‌شود. این بازهٔ اطمینان آماری نیست. `
@@ -464,6 +343,7 @@ function updateMetrics(data) {
     `اغراق قائم برای خوانایی شکل: ${format(sceneCleanup?.verticalExaggeration, 1)} برابر.`;
   updateSourceNote(data);
   $('saturatedCaption').textContent = `کفِ نمایشی در مرز به سطح مبنا می‌رسد؛ این تغییر در نوار حدود ${format(data.volume_mesh.transition_m,0)} متری محو می‌شود و در اعداد ذخیره اعمال نشده است. آبی: باقی‌مانده از مبنا؛ قرمز: افت؛ سبز: افزایش. آبِ پایان = آبی + سبز. روی پیزومتر کلیک کنید تا تراز واقعی و افت آن را ببینید.`;
+  if(data.volume_mesh.heads_only){$('saturatedCaption').textContent='سطح آب مبنا و پایان؛ سنگ‌بستر و حجم اشباع نمایش داده نمی‌شود.';}
   const heights = metrics.equivalent_water;
   if (heights) {
     $('remainingHeight').textContent = `${format(metrics.drainable_after_mcm, 2)} میلیون مترمکعب`;
@@ -483,10 +363,15 @@ async function buildScene() {
   const sequence = selectionSequence;
   const featureIndex = Number(aquiferSelect.value);
   const inputs=captureInputs();
-  let frozenInputs=[];
+  const frozenInputs=[aquiferSelect,baselineSelect,syMode,syInput,syFile,bedrockInput,karatThicknessInput,pixelWidthInput,pixelHeightInput,spatialMethodInput,spatialSmoothingInput,$('qualityInputFile'),$('climateInputFile'),$('subsidenceInputFile'),...document.querySelectorAll('[data-clear-layer]')].map(input=>[input,input.disabled]);
+  modelUpdating=true;
+  frozenInputs.forEach(([input])=>{input.disabled=true;});
   buildButton.disabled = true;
   setStatus("در حال درون‌یابی سطح آب و ساخت شکل سه‌بعدی…");
   try {
+    const cellWidth=Number(inputs.pixelWidth),cellHeight=Number(inputs.pixelHeight);
+    const splineSmoothing=Number(inputs.splineSmoothing);if(!Number.isFinite(splineSmoothing)||splineSmoothing<0)throw Error('هموارسازی Spline باید نامنفی باشد.');
+    if(!Number.isFinite(cellWidth)||!Number.isFinite(cellHeight)||cellWidth<1||cellHeight<1||cellWidth>1e6||cellHeight>1e6)throw Error('طول و عرض پیکسل را بین ۱ و ۱٬۰۰۰٬۰۰۰ متر وارد کنید.');
     const spatial = inputs.syMode === 'spatial';
     const sy = spatial || inputs.sy.trim() === "" ? null : Number(inputs.sy);
     if (sy !== null && (!Number.isFinite(sy) || sy <= 0 || sy >= 1)) {
@@ -496,20 +381,14 @@ async function buildScene() {
     const bedrockText = file ? await file.text() : "";
     if (spatial && !inputs.syFile) throw new Error('فایل CSV آبدهی ویژه را انتخاب کنید.');
     const syText = spatial ? await inputs.syFile.text() : '';
-    const karatThickness = isKarat(selectedSummary) && !file ? Number(inputs.karatThickness) : null;
-    if (karatThickness !== null &&
-        (!Number.isFinite(karatThickness) || inputs.karatThickness.trim() === "" ||
-         karatThickness < 20 || karatThickness > 300)) {
-      throw new Error("ضخامت اشباع فرضی کرات باید بین ۲۰ تا ۳۰۰ متر باشد. عمق کف از سطح زمین حداکثر ۳۰۰ متر است.");
-    }
+    const karatThickness=null;
     if(sequence!==selectionSequence)return;
-    modelUpdating=true;
-    frozenInputs=[aquiferSelect,baselineSelect,syMode,syInput,syFile,bedrockInput,karatThicknessInput].map(input=>[input,input.disabled]);
-    frozenInputs.forEach(([input])=>{input.disabled=true;});
     const data = await request("analyze", {
       feature_index: featureIndex,
       baseline_year: Number(inputs.baselineYear),
       sy,
+      cell_width_m:cellWidth,cell_height_m:cellHeight,
+      spatial_method:inputs.spatialMethod,spline_smoothing:splineSmoothing,
       sy_text: syText,
       karat_thickness_m: karatThickness,
       bedrock_text: bedrockText
@@ -523,7 +402,9 @@ async function buildScene() {
     if (sequence !== selectionSequence) return;
     modelUpdating=false;
     clearScenes();
-    data.input_files={bedrock:file?.name||null,sy:spatial?inputs.syFile.name:null};
+    document.querySelector('#sceneGeology h3').firstChild.textContent=data.volume_mesh.heads_only?'سطح آب در دو زمان':'افت سطح آب نسبت به سنگ‌بستر';
+    $('sceneGeologyTab').textContent=data.volume_mesh.heads_only?'سطح آب':'افت نسبت به سنگ‌بستر';
+    data.input_files={bedrock:file?.name||null,sy:spatial?inputs.syFile.name:null,quality:inputs.qualityFile?.name||null,climate:inputs.climateFile?.name||null,subsidence:inputs.subsidenceFile?.name||null};
     if (sceneCleanup) sceneCleanup();
     sceneCleanup = mountAquiferScenes({
       beforeCanvas: $("beforeCanvas"), afterCanvas: $("afterCanvas"), pixelCanvas: $("pixelCanvas"), data,
@@ -531,8 +412,9 @@ async function buildScene() {
     });
     sceneCleanup.setInteractionMode(document.querySelector('[data-interaction][aria-pressed="true"]')?.dataset.interaction);
     mapsCleanup=mountPlanMaps({data,waterRoot:$('waterPercentMap'),parameterRoot:$('parameterMaps')});
-    qualityCleanup=mountQualityTools({data,request});
-    managementCleanup=mountManagementTools({data,request,featureIndex});
+    qualityCleanup=mountQualityTools({data,request,sourceFile:inputs.qualityFile});
+    lifetimeCleanup=mountLifetimeTools({data,request,climateFile:inputs.climateFile});
+    managementCleanup=mountManagementTools({data,request,featureIndex,sourceFile:inputs.subsidenceFile});
     document.querySelectorAll('[data-scene-layer]').forEach(input => sceneCleanup.setLayer(input.dataset.sceneLayer, input.checked));
     updateMetrics(data);
     toolsCleanup=mountProfessionalTools({data,scene:sceneCleanup,request,featureIndex});
@@ -566,6 +448,7 @@ async function start() {
     const query = new URLSearchParams(location.search);
     const requestedName = query.get("name");
     const requestedMahdoude = query.get("mahdoude");
+    if(!requestedName){aquiferSelect.prepend(new Option('انتخاب آبخوان','',true,true));buildButton.disabled=true;setStatus('آبخوان را انتخاب کنید.','dirty');return;}
     const initial = catalog.find((item) => item.can_compare && item.name === requestedName &&
       (!requestedMahdoude || item.mahdoude === requestedMahdoude)) ||
       catalog.find((item) => item.can_compare && item.name === requestedName && requestedMahdoude &&
@@ -584,10 +467,19 @@ async function start() {
 
 aquiferSelect.addEventListener("change", selectAquifer);
 buildButton.addEventListener("click", buildScene);
+document.addEventListener('a3:user-layer-file',({detail})=>{
+  if(!selectedSummary||detail.aquifer?.name!==selectedSummary.name||detail.aquifer?.mahdoude!==selectedSummary.mahdoude)return;
+  const fields={quality:['qualityInputFile','qualityFile'],climate:['climateInputFile','climateFile'],subsidence:['subsidenceInputFile','subsidenceFile']},entry=fields[detail.kind];if(!entry)return;
+  const transfer=new DataTransfer();if(detail.file)transfer.items.add(detail.file);$(entry[0]).files=transfer.files;
+  if(appliedInputs)appliedInputs[entry[1]]=detail.file||null;
+});
+for(const id of ['qualityInputFile','climateInputFile','subsidenceInputFile'])$(id).addEventListener('change',invalidateResult);
 document.addEventListener('a3:apply-inputs',()=>{if(!buildButton.disabled)buildScene();});
 document.addEventListener('a3:discard-inputs',discardInputs);
 baselineSelect.addEventListener("change", invalidateResult);
 syInput.addEventListener("input", invalidateResult);
+for(const input of [pixelWidthInput,pixelHeightInput])input.addEventListener('input',()=>{updateGridSummary();invalidateResult();});
+spatialMethodInput.addEventListener('change',()=>{updateSpatialControls();invalidateResult();});spatialSmoothingInput.addEventListener('input',invalidateResult);
 karatThicknessInput.addEventListener("input", invalidateResult);
 bedrockInput.addEventListener("change", () => { updateKaratControls(); invalidateResult(); });
 syMode.addEventListener('change', () => { updateSyMode(); invalidateResult(); });
@@ -664,6 +556,8 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/aquifer3d-sw.js", { updateViaCache: 'none' }).catch(() => {});
 }
 
+const inputTemplates={sy:'longitude,latitude,Sy',bedrock:'lon,lat,bedrock_msl',quality:'longitude,latitude,ec,sar,year_persian,month_persian',climate:'water_year,precip_mm,temp_c',subsidence:'longitude,latitude,cumulative_mm,start_year,end_year'};
+document.querySelectorAll('[data-input-template]').forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();const key=button.dataset.inputTemplate,link=document.createElement('a');if(key==='quality'){link.href='/assets/templates/quality-template.csv';link.download='quality-template.csv';link.click();return;}const url=URL.createObjectURL(new Blob([inputTemplates[key]+'\r\n'],{type:'text/csv;charset=utf-8'}));link.href=url;link.download=key+'-template.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);});
 const cityToggle=$('a3CitiesToggle');
 cityToggle.checked=window.HydroCities.enabled;
 cityToggle.onchange=()=>window.HydroCities.setEnabled(cityToggle.checked);

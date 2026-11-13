@@ -1,0 +1,19 @@
+........................................................................ [ 94%]
+....                                                                     [100%]
+============================== warnings summary ===============================
+.cache\task-venv\Lib\site-packages\starlette\_utils.py:39: 23 warnings
+tests/test_runtime_assets.py: 2 warnings
+tests/test_asset_version.py: 4 warnings
+  D:\Pooya\w\GitHub\HydroCodeIR\GroundwaterLevelMonitoring\.cache\task-venv\Lib\site-packages\starlette\_utils.py:39: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or (callable(obj) and asyncio.iscoroutinefunction(obj.__call__))
+
+.cache\task-venv\Lib\site-packages\fastapi\routing.py:233: 19 warnings
+  D:\Pooya\w\GitHub\HydroCodeIR\GroundwaterLevelMonitoring\.cache\task-venv\Lib\site-packages\fastapi\routing.py:233: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+tests/test_aquifer_lifetime.py::test_rectangular_geotiff_has_independent_axis_sizes_and_preserves_nodata
+  D:\Pooya\w\GitHub\HydroCodeIR\GroundwaterLevelMonitoring\tests\test_aquifer_lifetime.py:392: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    values=list(image.getdata())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+76 passed, 49 warnings in 7.33s
